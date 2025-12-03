@@ -1,98 +1,194 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# 🛒 E-Commerce Backend (NestJS)
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+A modular, scalable, and production-ready **E-commerce Backend API** built using **NestJS**, following clean architecture, DTO validation, and role-based access control. This project demonstrates real-world backend engineering skills suitable for internships, final-year projects, and portfolio presentation.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+---
 
-## Description
+## 📌 **Project Overview**
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+This backend powers a complete e-commerce system, supporting:
 
-## Project setup
+* User authentication & authorization
+* Product management
+* Shopping cart functionality
+* Order placement & tracking
+* Admin & Super Admin roles
+* Email/Mailer support
 
-```bash
-$ npm install
+Built with NestJS and a service-driven architecture, the project follows industry standards for scalability, maintainability, and readability.
+
+---
+
+## 🚀 **Tech Stack**
+
+* **NestJS** (Backend Framework)
+* **TypeORM** (Database ORM)
+* **PostgreSQL / MySQL** (Database)
+* **JWT Authentication**
+* **BCrypt** (Password hashing)
+* **Mailer Module** (Email services)
+* **Class-Validator & DTOs**
+
+---
+
+## ✨ **Core Features**
+
+### 🔐 Authentication & Authorization
+
+* User Registration & Login
+* JWT-based authentication
+* Role-based Access Control (User, Admin, Super Admin)
+
+### 👤 User Module
+
+* Update profile
+* View profile
+* Secure user data handling
+
+### 🛍️ Product Module
+
+* Add/Edit/Delete products (Admin)
+* View product list
+* Get product by ID
+
+### 🛒 Cart Module
+
+* Add items to cart
+* Remove items
+* Update quantities
+* Fetch user cart
+
+### 📦 Order Module
+
+* Place an order
+* Track orders
+* User order history
+* Admin order management
+
+### 👑 Super Admin Module
+
+* Manage admin users
+* Full system-level access
+
+### ✉️ Mailer Module
+
+* Email notifications (order confirmation, admin actions)
+
+---
+
+## 📁 Folder Structure
+
+```
+src/
+ ├── auth/
+ ├── user/
+ ├── admin/
+ ├── super-admin/
+ ├── products/
+ ├── cart/
+ ├── orders/
+ ├── mailer/
+ ├── app.module.ts
+ └── main.ts
 ```
 
-## Compile and run the project
+---
 
-```bash
-# development
-$ npm run start
+## 📡 API Endpoints (Overview)
 
-# watch mode
-$ npm run start:dev
+### **Auth**
 
-# production mode
-$ npm run start:prod
+* POST `/auth/register`
+* POST `/auth/login`
+
+### **User**
+
+* GET `/user/me`
+* PUT `/user/update`
+
+### **Products**
+
+* GET `/products`
+* GET `/products/:id`
+* POST `/products` (Admin)
+* PATCH `/products/:id` (Admin)
+* DELETE `/products/:id` (Admin)
+
+### **Cart**
+
+* POST `/cart/add`
+* GET `/cart`
+* DELETE `/cart/remove/:id`
+
+### **Orders**
+
+* POST `/orders`
+* GET `/orders/user`
+* GET `/orders/all` (Admin)
+
+---
+
+## 🔧 Installation & Setup
+
+### 1️⃣ Clone the Repository
+
+```
+git clone <repository-url>
+cd ecommerce-backend
 ```
 
-## Run tests
+### 2️⃣ Install Dependencies
 
-```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+```
+npm install
 ```
 
-## Deployment
+### 3️⃣ Configure Environment Variables
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+Create a `.env` file:
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+```
+DB_HOST=localhost
+DB_PORT=5432
+DB_USER=your_user
+DB_PASS=your_password
+DB_NAME=ecommerce
+JWT_SECRET=your_secret_key
+MAIL_HOST=your_mail_host
+MAIL_USER=your_mail_user
+MAIL_PASS=your_mail_pass
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+### 4️⃣ Run the Project
 
-## Resources
+```
+npm run start:dev
+```
 
-Check out a few resources that may come in handy when working with NestJS:
+---
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+## 📈 Future Improvements
 
-## Support
+* Add payment integration (Stripe / SSLCommerz)
+* Add Swagger API Documentation
+* Add product pagination
+* Improve logging & global exception filter
+* Add unit & e2e tests
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+---
 
-## Stay in touch
+## 🤝 Contribution
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+Pull requests are welcome! For major changes, please open an issue first.
 
-## License
+---
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+## 📫 Contact
+
+**Developer:** Mashudh Ahmed
+
+Feel free to reach out for collaboration or internship opportunities.
+
+---
+
+### ⭐ If you like this project, consider starring the repository!

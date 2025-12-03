@@ -1,9 +1,3 @@
-# 🛒 E-Commerce Backend (NestJS)
-
-A modular, scalable, and production-ready **E-commerce Backend API** built using **NestJS**, following clean architecture, DTO validation, and role-based access control. This project demonstrates real-world backend engineering skills suitable for internships, final-year projects, and portfolio presentation.
-
----
-
 ## 📌 **Project Overview**
 
 This backend powers a complete e-commerce system, supporting:

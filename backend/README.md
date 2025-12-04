@@ -9,8 +9,6 @@ This backend powers a complete e-commerce system, supporting:
 * Admin & Super Admin roles
 * Email/Mailer support
 
-Built with NestJS and a service-driven architecture, the project follows industry standards for scalability, maintainability, and readability.
-
 ---
 
 ## 🚀 **Tech Stack**
@@ -179,7 +177,8 @@ Pull requests are welcome! For major changes, please open an issue first.
 
 ## 📫 Contact
 
-**Developer:** Mashudh Ahmed
+* **Developer:** [Mashudh Ahmed](https://www.linkedin.com/in/mashudhahmed)
+* **📧 Mail:** mashudh.ahmed@outlook.com
 
 Feel free to reach out for collaboration or internship opportunities.
 

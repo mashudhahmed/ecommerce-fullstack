@@ -2,40 +2,33 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
-import { InjectRepository } from '@nestjs/typeorm';
-import { User } from '../user/user.entity';
-import { Repository } from 'typeorm';
-import { TokenBlacklistService } from './token-blacklist.service';
+import { UserService } from '../user/user.service';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
-    config: ConfigService, 
-    @InjectRepository(User) private usersRepo: Repository<User>,
-    private blacklistService: TokenBlacklistService, // ✅ ADD this
+    private configService: ConfigService,
+    private userService: UserService,
   ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
-      secretOrKey: config.get('JWT_SECRET'),
-      passReqToCallback: true, // ✅ ADD this to access request
+      ignoreExpiration: false,
+      secretOrKey: configService.get('jwt.secret'),
     });
   }
 
-  async validate(req: any, payload: any) {
-    // ✅ CHECK if token is blacklisted
-    const token = ExtractJwt.fromAuthHeaderAsBearerToken()(req);
-    const isBlacklisted = await this.blacklistService.isTokenBlacklisted(token);
-    
-    if (isBlacklisted) {
-      throw new UnauthorizedException('Token has been invalidated');
+  async validate(payload: any) {
+    const user = await this.userService.findById(payload.sub);
+
+    if (!user) {
+      throw new UnauthorizedException('User not found');
     }
 
-    // attach full user object (without password) to req.user
-    const user = await this.usersRepo.findOne({ where: { id: payload.sub } });
-    if (!user) return null;
-    
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { password, ...rest } = user as any;
-    return rest;
+    return {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      name: user.name,
+    };
   }
 }

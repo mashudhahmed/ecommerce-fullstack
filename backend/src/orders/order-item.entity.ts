@@ -1,18 +1,26 @@
 import { Entity, PrimaryGeneratedColumn, ManyToOne, Column } from 'typeorm';
 import { Order } from './order.entity';
-import { Product } from 'src/products/products.entity';
+import { Product } from '../products/products.entity';
+import { Expose } from 'class-transformer';
 
-@Entity()
+@Entity('order_items')
 export class OrderItem {
-  @PrimaryGeneratedColumn() id: number;
+  @PrimaryGeneratedColumn()
+  @Expose()
+  id!: number;
 
-  @ManyToOne(() => Order, (o:Order) => o.items, { onDelete: 'CASCADE' })
-  order: Order;
+  @ManyToOne(() => Order, (o) => o.items, { onDelete: 'CASCADE' })
+  order!: Order;
 
-  @ManyToOne(() => Product, (p: Product) => p.orderItems, { eager: true })
-  product: Product;
+  @ManyToOne(() => Product, { eager: true })
+  @Expose()
+  product!: Product;
 
-  @Column('int') quantity: number;
+  @Column('int')
+  @Expose()
+  quantity!: number;
 
-  @Column('decimal', { precision: 10, scale: 2 }) price: number;
+  @Column('decimal', { precision: 10, scale: 2 })
+  @Expose()
+  price!: number;
 }

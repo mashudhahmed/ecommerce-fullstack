@@ -1,20 +1,58 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, CreateDateColumn } from 'typeorm';
-import { User } from 'src/user/user.entity';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  OneToMany,
+  CreateDateColumn,
+  UpdateDateColumn,
+} from 'typeorm';
+import { User } from '../user/user.entity';
 import { OrderItem } from './order-item.entity';
+import { Expose } from 'class-transformer';
 
-@Entity()
+export enum OrderStatus {
+  PENDING = 'pending',
+  PROCESSING = 'processing',
+  SHIPPED = 'shipped',
+  DELIVERED = 'delivered',
+  CANCELLED = 'cancelled',
+}
+
+@Entity('orders')
 export class Order {
-  @PrimaryGeneratedColumn() id: number;
+  @PrimaryGeneratedColumn()
+  @Expose()
+  id!: number;
 
-  @ManyToOne(() => User, (u:User) => u.id, { eager: true})
-  user: User;
+  @ManyToOne(() => User, (u) => u.orders, { eager: true })
+  @Expose()
+  user!: User;
 
-  @OneToMany(() => OrderItem, (oi) => oi.order, { cascade: true, eager: true })
-  items: OrderItem[];
+  @OneToMany(() => OrderItem, (oi) => oi.order, {
+    cascade: true,
+    eager: true,
+  })
+  @Expose()
+  items!: OrderItem[];
 
-  @Column('decimal', { precision: 12, scale: 2 }) total: number;
+  @Column('decimal', { precision: 12, scale: 2 })
+  @Expose()
+  total!: number;
 
-  @Column({ default: 'pending' }) status: string;
+  @Column({ type: 'enum', enum: OrderStatus, default: OrderStatus.PENDING })
+  @Expose()
+  status!: OrderStatus;
 
-  @CreateDateColumn() createdAt: Date;
+  @Column({ nullable: true })
+  @Expose()
+  shippingAddress?: string;
+
+  @CreateDateColumn()
+  @Expose()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  @Expose()
+  updatedAt!: Date;
 }

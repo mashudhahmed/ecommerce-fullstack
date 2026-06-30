@@ -1,38 +1,69 @@
-import { Body, Controller, Get, Patch, Post, Request, UseGuards, Param } from '@nestjs/common';
-import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
-import { Roles } from 'src/common/decorator/roles.decorator';
-import { RolesGuard } from 'src/common/guards/roles.guards';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Body,
+  Param,
+  UseGuards,
+  Request,
+  ParseIntPipe,
+} from '@nestjs/common';
 import { OrdersService } from './orders.service';
 import { CreateOrderDto } from './dto/create-order.dto';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../common/guards/roles.guards';
+import { Roles } from '../common/decorator/roles.decorator';
+import { OrderStatus } from './order.entity';
 
 @Controller('orders')
 export class OrdersController {
-  constructor(private svc: OrdersService) {}
+  constructor(private readonly ordersService: OrdersService) {}
 
   @UseGuards(JwtAuthGuard)
   @Post()
-  create(@Request() req, @Body() dto: CreateOrderDto) {
-    return this.svc.create(req.user.sub || req.user.id, dto);
+  create(@Request() req, @Body() createOrderDto: CreateOrderDto) {
+    return this.ordersService.create(req.user.id, createOrderDto);
   }
 
   @UseGuards(JwtAuthGuard)
   @Get('my')
-  myOrders(@Request() req) {
-    return this.svc.findByUser(req.user.sub || req.user.id);
+  getMyOrders(@Request() req) {
+    return this.ordersService.findByUser(req.user.id);
   }
 
-  // admin route to see all orders
+  @UseGuards(JwtAuthGuard)
+  @Get('my/summary')
+  getMyOrderSummary(@Request() req) {
+    return this.ordersService.getOrderSummary(req.user.id);
+  }
+
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin', 'superadmin')
   @Get()
-  allOrders() {
-    return this.svc.findAll();
+  getAllOrders() {
+    return this.ordersService.findAll();
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get(':id')
+  getOrder(@Param('id', ParseIntPipe) id: number, @Request() req) {
+    return this.ordersService.findOne(id);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin', 'superadmin')
   @Patch(':id/status')
-  updateStatus(@Param('id') id: number, @Body('status') status: string) {
-    return this.svc.updateStatus(id, status);
+  updateOrderStatus(
+    @Param('id', ParseIntPipe) id: number,
+    @Body('status') status: OrderStatus,
+  ) {
+    return this.ordersService.updateStatus(id, status);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch(':id/cancel')
+  cancelOrder(@Param('id', ParseIntPipe) id: number, @Request() req) {
+    return this.ordersService.cancelOrder(id);
   }
 }

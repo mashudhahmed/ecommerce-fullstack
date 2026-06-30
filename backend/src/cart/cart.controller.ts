@@ -1,39 +1,74 @@
-import { Body, Controller, Delete, Get, Patch, Post, Request, UseGuards, Param } from '@nestjs/common';
-import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  UseGuards,
+  Request,
+  ParseIntPipe,
+} from '@nestjs/common';
 import { CartService } from './cart.service';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { Throttle } from '@nestjs/throttler';
 
 @Controller('cart')
 @UseGuards(JwtAuthGuard)
 export class CartController {
-  constructor(private svc: CartService) {}
+  constructor(private readonly cartService: CartService) {}
 
-  // Add item to cart
   @Post()
-  add(@Request() req, @Body() body: { productId: number; quantity: number }) {
-    return this.svc.addToCart(req.user.sub || req.user.id, body.productId, body.quantity);
+  @Throttle({ default: { limit: 10, ttl: 60 } })
+  addToCart(
+    @Request() req,
+    @Body('productId', ParseIntPipe) productId: number,
+    @Body('quantity', ParseIntPipe) quantity: number,
+  ) {
+    return this.cartService.addToCart(req.user.id, productId, quantity);
   }
 
-  // Get user's cart
   @Get()
-  get(@Request() req) {
-    return this.svc.getCart(req.user.sub || req.user.id);
+  getCart(@Request() req) {
+    return this.cartService.getCart(req.user.id);
   }
 
-  // Update item quantity by product ID
+  @Get('summary')
+  getCartSummary(@Request() req) {
+    return this.cartService.getCartSummary(req.user.id);
+  }
+
+  @Get('total')
+  getCartTotal(@Request() req) {
+    return this.cartService.getCartTotal(req.user.id);
+  }
+
+  @Get('count')
+  getCartItemCount(@Request() req) {
+    return this.cartService.getCartItemCount(req.user.id);
+  }
+
   @Patch()
-  update(@Request() req, @Body() body: { productId: number; quantity: number }) {
-    return this.svc.updateQuantity(req.user.sub || req.user.id, body.productId, body.quantity);
+  @Throttle({ default: { limit: 10, ttl: 60 } })
+  updateQuantity(
+    @Request() req,
+    @Body('productId', ParseIntPipe) productId: number,
+    @Body('quantity', ParseIntPipe) quantity: number,
+  ) {
+    return this.cartService.updateQuantity(req.user.id, productId, quantity);
   }
 
-  // Remove specific item from cart by product ID
   @Delete('item/:productId')
-  removeItem(@Request() req, @Param('productId') productId: number) {
-    return this.svc.removeItem(req.user.sub || req.user.id, productId);
+  removeItem(
+    @Request() req,
+    @Param('productId', ParseIntPipe) productId: number,
+  ) {
+    return this.cartService.removeItem(req.user.id, productId);
   }
 
-  // Clear entire cart
   @Delete()
   clearCart(@Request() req) {
-    return this.svc.clearCart(req.user.sub || req.user.id);
+    return this.cartService.clearCart(req.user.id);
   }
 }

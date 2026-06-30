@@ -1,162 +1,211 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  Logger,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CartItem } from './cart.entity';
-import { Product } from 'src/products/products.entity';
-import { User } from 'src/user/user.entity';
+import { Product } from '../products/products.entity';
+import { User } from '../user/user.entity';
 
 @Injectable()
 export class CartService {
+  private readonly logger = new Logger(CartService.name);
+
   constructor(
-    @InjectRepository(CartItem) private repo: Repository<CartItem>,
-    @InjectRepository(Product) private prodRepo: Repository<Product>,
-    @InjectRepository(User) private userRepo: Repository<User>
+    @InjectRepository(CartItem)
+    private readonly cartRepository: Repository<CartItem>,
+    @InjectRepository(Product)
+    private readonly productRepository: Repository<Product>,
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
   ) {}
 
-  async addToCart(userId: number, productId: number, quantity: number) {
-    // Validate quantity
+  async addToCart(
+    userId: number,
+    productId: number,
+    quantity: number,
+  ): Promise<CartItem> {
     if (quantity <= 0) {
       throw new BadRequestException('Quantity must be greater than 0');
     }
 
-    const user = await this.userRepo.findOne({ where: { id: userId } });
-    if (!user) throw new NotFoundException('User not found');
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+    });
 
-    const product = await this.prodRepo.findOne({ where: { id: productId } });
-    if (!product) throw new NotFoundException('Product not found');
-
-    // Check stock availability
-    if (product.stock < quantity) {
-      throw new BadRequestException(`Insufficient stock. Only ${product.stock} items available`);
+    if (!user) {
+      throw new NotFoundException('User not found');
     }
 
-    let item = await this.repo.findOne({ 
-      where: { user: { id: userId }, product: { id: productId } },
-      relations: ['product']
+    const product = await this.productRepository.findOne({
+      where: { id: productId },
     });
-    
-    if (item) {
-      // Check if updated quantity exceeds stock
-      const newTotalQuantity = item.quantity + quantity;
-      if (product.stock < newTotalQuantity) {
+
+    if (!product) {
+      throw new NotFoundException('Product not found');
+    }
+
+    if (product.stock < quantity) {
+      throw new BadRequestException(
+        `Insufficient stock. Only ${product.stock} items available`,
+      );
+    }
+
+    let cartItem = await this.cartRepository.findOne({
+      where: {
+        user: { id: userId },
+        product: { id: productId },
+      },
+    });
+
+    if (cartItem) {
+      const newQuantity = cartItem.quantity + quantity;
+      if (product.stock < newQuantity) {
         throw new BadRequestException(
-          `Insufficient stock. Cannot add ${quantity} more items. ` +
-          `You already have ${item.quantity} in cart, only ${product.stock - item.quantity} more available`
+          `Insufficient stock. You can only add ${product.stock - cartItem.quantity} more items`,
         );
       }
-      item.quantity = newTotalQuantity;
-      return this.repo.save(item);
+      cartItem.quantity = newQuantity;
+    } else {
+      cartItem = this.cartRepository.create({
+        user,
+        product,
+        quantity,
+      });
     }
-    
-    item = this.repo.create({ user, product, quantity });
-    return this.repo.save(item);
+
+    const savedItem = await this.cartRepository.save(cartItem);
+    this.logger.log(
+      `${quantity} of product ${productId} added to cart for user ${userId}`,
+    );
+    return savedItem;
   }
 
-  async getCart(userId: number) {
-    return this.repo.find({ 
+  async getCart(userId: number): Promise<CartItem[]> {
+    return this.cartRepository.find({
       where: { user: { id: userId } },
-      relations: ['product'],
-      select: {
-        id: true,
-        quantity: true,
-        product: {
-          id: true,
-          title: true,
-          price: true,
-          description: true,
-          stock: true
-        }
-      }
+      order: { id: 'ASC' },
     });
   }
 
-  async updateQuantity(userId: number, productId: number, quantity: number) {
+  async updateQuantity(
+    userId: number,
+    productId: number,
+    quantity: number,
+  ): Promise<CartItem | null> {
     if (quantity < 0) {
       throw new BadRequestException('Quantity cannot be negative');
     }
 
     if (quantity === 0) {
-      // If quantity is 0, remove the item
-      return this.removeItem(userId, productId);
+      await this.removeItem(userId, productId);
+      return null;
     }
 
-    const item = await this.repo.findOne({
-      where: { user: { id: userId }, product: { id: productId } },
-      relations: ['product']
+    const cartItem = await this.cartRepository.findOne({
+      where: {
+        user: { id: userId },
+        product: { id: productId },
+      },
     });
 
-    if (!item) {
+    if (!cartItem) {
       throw new NotFoundException('Cart item not found');
     }
 
-    // Check stock availability
-    if (item.product.stock < quantity) {
-      throw new BadRequestException(`Insufficient stock. Only ${item.product.stock} items available`);
+    const product = await this.productRepository.findOne({
+      where: { id: productId },
+    });
+
+    if (product && product.stock < quantity) {
+      throw new BadRequestException(
+        `Insufficient stock. Only ${product.stock} items available`,
+      );
     }
 
-    item.quantity = quantity;
-    return this.repo.save(item);
+    cartItem.quantity = quantity;
+    const updatedItem = await this.cartRepository.save(cartItem);
+    this.logger.log(
+      `Cart item ${cartItem.id} quantity updated to ${quantity} for user ${userId}`,
+    );
+    return updatedItem;
   }
 
-  async removeItem(userId: number, productId: number) {
-    const result = await this.repo.delete({
+  async removeItem(userId: number, productId: number): Promise<void> {
+    const result = await this.cartRepository.delete({
       user: { id: userId },
-      product: { id: productId }
+      product: { id: productId },
     });
 
     if (result.affected === 0) {
       throw new NotFoundException('Cart item not found');
     }
 
-    return { message: 'Item removed from cart successfully' };
+    this.logger.log(`Cart item removed for user ${userId}, product ${productId}`);
   }
 
-  async clearCart(userId: number) {
-    const result = await this.repo.delete({
-      user: { id: userId }
+  async clearCart(userId: number): Promise<void> {
+    await this.cartRepository.delete({
+      user: { id: userId },
     });
-
-    return { 
-      message: 'Cart cleared successfully',
-      itemsRemoved: result.affected 
-    };
+    this.logger.log(`Cart cleared for user ${userId}`);
   }
 
-  // Get cart total
-  async getCartTotal(userId: number) {
-    const cartItems = await this.repo.find({
-      where: { user: { id: userId } },
-      relations: ['product']
-    });
+  async getCartTotal(userId: number): Promise<{
+    total: number;
+    itemCount: number;
+    items: any[];
+  }> {
+    const cartItems = await this.getCart(userId);
 
-    const total = cartItems.reduce((sum, item) => {
-      return sum + (item.quantity * parseFloat(item.product.price.toString()));
-    }, 0);
+    let total = 0;
+    const items = cartItems.map((item) => {
+      const subtotal = item.product.price * item.quantity;
+      total += subtotal;
+      return {
+        id: item.id,
+        product: {
+          id: item.product.id,
+          title: item.product.title,
+          price: item.product.price,
+        },
+        quantity: item.quantity,
+        subtotal,
+      };
+    });
 
     return {
-      total: Math.round(total * 100) / 100, // Round to 2 decimal places
+      total: Math.round(total * 100) / 100,
       itemCount: cartItems.length,
-      currency: 'BDT' // You can make this dynamic
+      items,
     };
   }
 
-  // Get cart item count
-  async getCartItemCount(userId: number) {
-    const count = await this.repo.count({
-      where: { user: { id: userId } }
+  async getCartItemCount(userId: number): Promise<{ count: number }> {
+    const count = await this.cartRepository.count({
+      where: { user: { id: userId } },
     });
-
     return { count };
   }
 
-  // Optional: Get cart summary (items + total)
-  async getCartSummary(userId: number) {
+  async getCartSummary(userId: number): Promise<{
+    items: CartItem[];
+    total: number;
+    itemCount: number;
+  }> {
     const cartItems = await this.getCart(userId);
-    const total = await this.getCartTotal(userId);
+    const total = cartItems.reduce(
+      (sum, item) => sum + item.subtotal,
+      0,
+    );
 
     return {
       items: cartItems,
-      summary: total
+      total: Math.round(total * 100) / 100,
+      itemCount: cartItems.length,
     };
   }
 }

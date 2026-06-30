@@ -1,23 +1,65 @@
-import { Entity, PrimaryGeneratedColumn, Column, OneToMany, ManyToOne } from 'typeorm';
-import { OrderItem } from 'src/orders/order-item.entity';
-import { User } from 'src/user/user.entity';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  OneToMany,
+  ManyToOne,
+  CreateDateColumn,
+  UpdateDateColumn,
+} from 'typeorm';
+import { OrderItem } from '../orders/order-item.entity';
+import { User } from '../user/user.entity';
+import { Expose } from 'class-transformer';
 
-@Entity()
+@Entity('products')
 export class Product {
-  @PrimaryGeneratedColumn() id: number;
+  @PrimaryGeneratedColumn()
+  @Expose()
+  id!: number;
 
-  @Column() title: string;
+  @Column()
+  @Expose()
+  title!: string;
 
-  @Column('decimal', { precision: 10, scale: 2 }) price: number;
+  @Column('decimal', { precision: 10, scale: 2 })
+  @Expose()
+  price!: number;
 
-  @Column({ default: '' }) description: string;
+  @Column({ default: '' })
+  @Expose()
+  description!: string;
 
-  @Column({ default: 0 }) stock: number;
+  @Column({ default: 0 })
+  @Expose()
+  stock!: number;
 
-  // optional: the user (seller or admin) who created the product
+  @Column({ nullable: true })
+  @Expose()
+  imageUrl?: string;
+
   @ManyToOne(() => User, (u) => u.id, { nullable: true })
-  owner: User;
+  @Expose()
+  owner?: User;
 
-  @OneToMany(() => OrderItem, (oi:OrderItem) => oi.product)
-  orderItems: OrderItem[];
+  @OneToMany(() => OrderItem, (oi) => oi.product)
+  orderItems!: OrderItem[];
+
+  @CreateDateColumn()
+  @Expose()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  @Expose()
+  updatedAt!: Date;
+
+  isInStock(quantity: number): boolean {
+    return this.stock >= quantity;
+  }
+
+  reduceStock(quantity: number): void {
+    if (!this.isInStock(quantity)) {
+      throw new Error(`Insufficient stock for product ${this.title}`);
+    }
+    this.stock -= quantity;
+  }
 }

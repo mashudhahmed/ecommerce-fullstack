@@ -1,24 +1,32 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
 import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class MailerService {
   private transporter: nodemailer.Transporter;
-  constructor(private cfg: ConfigService) {
+  private readonly logger = new Logger(MailerService.name);
+
+  constructor(private configService: ConfigService) {
     this.transporter = nodemailer.createTransport({
-      host: cfg.get('SMTP_HOST'),
-      port: Number(cfg.get('SMTP_PORT')),
+      host: this.configService.get('email.host'),
+      port: this.configService.get('email.port'),
       secure: false,
       auth: {
-        user: cfg.get('SMTP_USER'),
-        pass: cfg.get('SMTP_PASS')
-      }
+        user: this.configService.get('email.user'),
+        pass: this.configService.get('email.pass'),
+      },
+      tls: {
+        rejectUnauthorized: false,
+      },
     });
   }
 
-  // ✅ NEW: Verification email for account registration
-  async sendVerificationEmail(to: string, verificationCode: string, userName: string) {
+  async sendVerificationEmail(
+    to: string,
+    verificationCode: string,
+    userName: string,
+  ) {
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2 style="color: #333;">Verify Your Email Address</h2>
@@ -39,7 +47,7 @@ export class MailerService {
 
         <div style="background: #fff3cd; padding: 15px; border-radius: 5px; margin-top: 20px;">
           <p style="margin: 0; color: #856404;">
-            <strong>Note:</strong> This code will expire in 24 hours. 
+            <strong>Note:</strong> This code will expire in 24 hours.
           </p>
         </div>
         
@@ -49,24 +57,7 @@ export class MailerService {
       </div>
     `;
 
-    return this.transporter.sendMail({
-      from: `"HealthScope" <${this.transporter.options.auth.user}>`,
-      to,
-      subject: 'Verify Your Email Address - Account Activation',
-      html,
-    });
-  }
-
-  // Existing email methods...
-  async sendOrderConfirmation(to: string, order: any) {
-    const itemsHtml = (order.items || []).map(it => `<li>${it.product.title} x ${it.quantity} — ${it.price}</li>`).join('');
-    const html = `<h3>Order #${order.id}</h3><p>Total: ${order.total}</p><ul>${itemsHtml}</ul>`;
-    return this.transporter.sendMail({
-      from: this.transporter.options.auth.user,
-      to,
-      subject: `Order Confirmation #${order.id}`,
-      html
-    });
+    return this.sendMail(to, 'Verify Your Email Address', html);
   }
 
   async sendWelcomeEmail(to: string, userName: string) {
@@ -82,12 +73,7 @@ export class MailerService {
       </div>
     `;
 
-    return this.transporter.sendMail({
-      from: `"HealthScope" <${this.transporter.options.auth.user}>`,
-      to,
-      subject: `Welcome to Our Store, ${userName}!`,
-      html,
-    });
+    return this.sendMail(to, `Welcome to Our Store, ${userName}!`, html);
   }
 
   async sendPasswordResetCode(to: string, resetCode: string, userName: string) {
@@ -111,19 +97,13 @@ export class MailerService {
 
         <div style="background: #fff3cd; padding: 15px; border-radius: 5px; margin-top: 20px;">
           <p style="margin: 0; color: #856404;">
-            <strong>Security Note:</strong> This code will expire in 15 minutes. 
-            If you didn't request this, please ignore this email.
+            <strong>Security Note:</strong> This code will expire in 15 minutes.
           </p>
         </div>
       </div>
     `;
 
-    return this.transporter.sendMail({
-      from: `"HealthScope" <${this.transporter.options.auth.user}>`,
-      to,
-      subject: 'Password Reset Code - Valid for 15 minutes',
-      html,
-    });
+    return this.sendMail(to, 'Password Reset Code', html);
   }
 
   async sendLoginNotification(to: string, userName: string) {
@@ -137,18 +117,23 @@ export class MailerService {
           <strong>Date & Time:</strong> ${loginTime}
         </div>
         <p>If this wasn't you, please contact support immediately.</p>
-        <div style="margin-top: 20px; padding: 15px; background: #fff3cd; border-radius: 5px;">
-          <p style="margin: 0; color: #856404;">Security Tip: Always use strong, unique passwords!</p>
-        </div>
       </div>
     `;
 
-    return this.transporter.sendMail({
-      from: `"HealthScope" <${this.transporter.options.auth.user}>`,
-      to,
-      subject: 'Login Notification - Your Account Was Accessed',
-      html,
-    });
+    return this.sendMail(to, 'Login Notification', html);
+  }
+
+  async sendPasswordChangedConfirmation(to: string, userName: string) {
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #333;">Password Changed Successfully</h2>
+        <p>Hello ${userName},</p>
+        <p>Your password has been successfully changed.</p>
+        <p>If you didn't make this change, please contact support immediately.</p>
+      </div>
+    `;
+
+    return this.sendMail(to, 'Password Changed Successfully', html);
   }
 
   async sendAccountDeletionEmail(to: string, userName: string) {
@@ -157,31 +142,109 @@ export class MailerService {
         <h2 style="color: #333;">Account Successfully Deleted</h2>
         <p>Hello ${userName},</p>
         <p>Your account has been successfully deleted from our system.</p>
-        <div style="background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 15px 0;">
-          <p><strong>Email:</strong> ${to}</p>
-          <p><strong>Deletion Date:</strong> ${new Date().toLocaleDateString()}</p>
-        </div>
-        <p>We're sorry to see you go. If this was a mistake or you'd like to recreate your account, 
-           you can always register again.</p>
-        <p>Thank you for being part of our community.</p>
+        <p>We're sorry to see you go. If this was a mistake, you can always register again.</p>
       </div>
     `;
 
-    return this.transporter.sendMail({
-      from: `"HealthScope" <${this.transporter.options.auth.user}>`,
-      to,
-      subject: 'Account Deletion Confirmation',
-      html,
-    });
+    return this.sendMail(to, 'Account Deletion Confirmation', html);
   }
 
-  async sendCustomEmail(to: string, subject: string, htmlContent: string, textContent?: string) {
-    return this.transporter.sendMail({
-      from: `"HealthScope" <${this.transporter.options.auth.user}>`,
-      to,
-      subject,
-      html: htmlContent,
-      text: textContent,
-    });
+  async sendOrderConfirmation(to: string, order: any) {
+    const itemsHtml = (order.items || [])
+      .map(
+        (item) =>
+          `<li>${item.product.title} x ${item.quantity} — $${item.price}</li>`,
+      )
+      .join('');
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2>Order Confirmation #${order.id}</h2>
+        <p><strong>Total:</strong> $${order.total}</p>
+        <h3>Items:</h3>
+        <ul>${itemsHtml}</ul>
+        <p>Thank you for your order!</p>
+      </div>
+    `;
+
+    return this.sendMail(to, `Order Confirmation #${order.id}`, html);
+  }
+
+  /**
+   * Send order status update email
+   */
+  async sendOrderStatusUpdate(to: string, order: any, status: string) {
+    const itemsHtml = (order.items || [])
+      .map(
+        (item) =>
+          `<li>${item.product?.title || 'Product'} x ${item.quantity} — $${item.price}</li>`,
+      )
+      .join('');
+
+    const statusColors = {
+      pending: '#ffc107',
+      processing: '#17a2b8',
+      shipped: '#007bff',
+      delivered: '#28a745',
+      cancelled: '#dc3545',
+    };
+
+    const statusColor = statusColors[status] || '#6c757d';
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #333;">Order Status Update</h2>
+        <p>Hello ${order.user?.name || 'Customer'},</p>
+        <p>Your order <strong>#${order.id}</strong> status has been updated.</p>
+        
+        <div style="text-align: center; margin: 30px 0;">
+          <div style="display: inline-block; padding: 15px 30px; background: ${statusColor}; color: white; border-radius: 5px; font-size: 20px; font-weight: bold;">
+            ${status.toUpperCase()}
+          </div>
+        </div>
+
+        <div style="background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 15px 0;">
+          <p><strong>Order Total:</strong> $${order.total}</p>
+          <p><strong>Order Date:</strong> ${new Date(order.createdAt).toLocaleDateString()}</p>
+        </div>
+
+        <h3>Items:</h3>
+        <ul style="list-style: none; padding: 0;">
+          ${itemsHtml}
+        </ul>
+
+        <p style="margin-top: 20px;">Thank you for shopping with us!</p>
+        
+        <div style="background: #f8f9fa; padding: 10px; border-radius: 5px; margin-top: 20px; font-size: 12px; color: #666;">
+          <p>If you have any questions about your order, please contact our support team.</p>
+        </div>
+      </div>
+    `;
+
+    return this.sendMail(to, `Order Status Update - #${order.id}`, html);
+  }
+
+  /**
+   * Send a custom email
+   */
+  async sendCustomEmail(to: string, subject: string, html: string, text?: string) {
+    return this.sendMail(to, subject, html);
+  }
+
+  async sendMail(to: string, subject: string, html: string) {
+    try {
+      const info = await this.transporter.sendMail({
+        from: `"HealthScope" <${this.configService.get('email.user')}>`,
+        to,
+        subject,
+        html,
+      });
+      this.logger.log(`Email sent to ${to}: ${subject}`);
+      return info;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to send email to ${to}: ${errorMessage}`);
+      throw error;
+    }
   }
 }

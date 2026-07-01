@@ -1,3 +1,4 @@
+// user/user.entity.ts
 import {
   Entity,
   PrimaryGeneratedColumn,
@@ -5,6 +6,7 @@ import {
   OneToMany,
   CreateDateColumn,
   UpdateDateColumn,
+  DeleteDateColumn,
 } from 'typeorm';
 import { Exclude, Expose } from 'class-transformer';
 import { Order } from '../orders/order.entity';
@@ -23,8 +25,9 @@ export class User {
   @Expose()
   email!: string;
 
+  // ✅ select: false - Password hash NEVER returned by default
   @Exclude()
-  @Column()
+  @Column({ select: false })
   password!: string;
 
   @Exclude()
@@ -51,6 +54,19 @@ export class User {
   @Column({ type: 'timestamp', nullable: true })
   resetCodeExpiry: Date | null = null;
 
+  @Exclude()
+  @Column({ type: 'varchar', length: 64, nullable: true })
+  resetTokenHash: string | null = null;
+
+  @Exclude()
+  @Column({ type: 'timestamp', nullable: true })
+  resetTokenExpiry: Date | null = null;
+
+  // ✅ Soft delete support
+  @Exclude()
+  @DeleteDateColumn()
+  deletedAt?: Date;
+
   @OneToMany(() => Order, (order) => order.user)
   @Expose()
   orders!: Order[];
@@ -62,6 +78,10 @@ export class User {
   @UpdateDateColumn()
   @Expose()
   updatedAt!: Date;
+
+  // ============================================================
+  // HELPER METHODS
+  // ============================================================
 
   isSuperAdmin(): boolean {
     return this.role === 'superadmin';

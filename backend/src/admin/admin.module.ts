@@ -1,16 +1,10 @@
 import { Module } from '@nestjs/common';
 import { AdminController } from './admin.controller';
-import { ProductsModule } from 'src/products/products.module';
-import { OrdersModule } from 'src/orders/orders.module';
-import { AuthModule } from 'src/auth/auth.module';
+import { ProductsModule } from '../products/products.module';
+import { OrdersModule } from '../orders/orders.module';
 
 @Module({
-  imports: [
-    ProductsModule,
-    OrdersModule,
-    AuthModule, 
-  ],
+  imports: [ProductsModule, OrdersModule],
   controllers: [AdminController],
 })
 export class AdminModule {}
-

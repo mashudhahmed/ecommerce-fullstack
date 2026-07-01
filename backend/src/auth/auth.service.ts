@@ -15,6 +15,15 @@ import { LoginDto } from './dto/login.dto';
 
 @Injectable()
 export class AuthService {
+  refresh(rawRefreshToken: any, arg1: { userAgent: string | undefined; ipAddress: string | undefined; }) {
+    throw new Error('Method not implemented.');
+  }
+  getCurrentUser(sub: number) {
+    throw new Error('Method not implemented.');
+  }
+  changePassword(sub: number, currentPassword: string, newPassword: string) {
+    throw new Error('Method not implemented.');
+  }
   private readonly logger = new Logger(AuthService.name);
 
   constructor(
@@ -200,9 +209,14 @@ export class AuthService {
     const user = await this.userService.verifyResetCode(email, code);
 
     const verificationToken = this.userService.generateSixDigitCode();
+    const tokenHash = this.hashResetVerificationToken(verificationToken);
     const expiry = new Date(Date.now() + 10 * 60 * 1000);
 
-    await this.userService.updateResetCode(email, verificationToken, expiry);
+    await this.userService.setPasswordResetToken(
+      user.email,
+      tokenHash,
+      expiry,
+    );
 
     return {
       message: 'Code verified successfully',
@@ -213,17 +227,19 @@ export class AuthService {
   async resetPassword(verificationToken: string, newPassword: string) {
     this.logger.log(`Resetting password with token: ${verificationToken}`);
 
-    const user = await this.userService.findByResetCode(verificationToken);
+    const tokenHash = this.hashResetVerificationToken(verificationToken);
+    const user = await this.userService.findByResetTokenHash(tokenHash);
 
     if (!user) {
       throw new BadRequestException('Invalid verification token');
     }
 
-    if (user.resetCodeExpiry && user.resetCodeExpiry < new Date()) {
+    if (user.resetTokenExpiry && user.resetTokenExpiry < new Date()) {
       throw new BadRequestException('Verification token expired');
     }
 
-    await this.userService.resetPassword(user.email, newPassword);
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await this.userService.resetPassword(user.email, hashedPassword);
 
     try {
       await this.mailerService.sendPasswordChangedConfirmation(
@@ -237,6 +253,11 @@ export class AuthService {
     }
 
     return { message: 'Password reset successfully' };
+  }
+
+  private hashResetVerificationToken(token: string): string {
+    const crypto = require('crypto');
+    return crypto.createHash('sha256').update(token).digest('hex');
   }
 
   async createAdmin(createUserDto: CreateUserDto) {

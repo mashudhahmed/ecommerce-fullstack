@@ -10,6 +10,7 @@ import {
 import { OrderItem } from '../orders/order-item.entity';
 import { User } from '../user/user.entity';
 import { Expose } from 'class-transformer';
+import { Category } from '../categories/category.entity';
 
 @Entity('products')
 export class Product {
@@ -37,7 +38,11 @@ export class Product {
   @Expose()
   imageUrl?: string;
 
-  @ManyToOne(() => User, (u) => u.id, { nullable: true })
+  @Column({ default: true })
+  @Expose()
+  isActive!: boolean;
+
+  @ManyToOne(() => User, (u) => u.products, { nullable: true, eager: true })
   @Expose()
   owner?: User;
 
@@ -52,6 +57,22 @@ export class Product {
   @Expose()
   updatedAt!: Date;
 
+  // Add after stock field:
+@Column({ type: 'decimal', precision: 3, scale: 2, default: 0 })
+@Expose()
+averageRating!: number;
+
+@Column({ default: 0 })
+@Expose()
+totalReviews!: number;
+
+// Add category relationship:
+@ManyToOne(() => Category, (category) => category.products, { nullable: true })
+@Expose()
+category?: Category;
+
+
+  // Helper methods
   isInStock(quantity: number): boolean {
     return this.stock >= quantity;
   }

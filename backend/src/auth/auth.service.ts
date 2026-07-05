@@ -1,329 +1,670 @@
+// src/auth/auth.service.ts
 import {
   Injectable,
   UnauthorizedException,
   BadRequestException,
-  Logger,
   ConflictException,
+  Logger,
   NotFoundException,
+  ForbiddenException,
 } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository, LessThan } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
 import { UserService } from '../user/user.service';
 import { MailerService } from '../mailer/mailer.service';
-import { CreateUserDto } from './dto/register.dto';
+import { RefreshToken } from './refresh-token.entity';
+import { RegisterUserDto } from './dto/register-user.dto';
+import { RegisterVendorDto } from './dto/register-vendor.dto';
 import { LoginDto } from './dto/login.dto';
+import { User, UserRole } from '../user/user.entity';
+
+export const BCRYPT_ROUNDS = 12;
+export const ACCESS_TOKEN_TTL_SECONDS = 15 * 60; // 15 minutes
+export const REFRESH_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 days
+
+export interface TokenPair {
+  accessToken: string;
+  refreshToken: string;
+  accessTokenExpiresIn: number;
+  refreshTokenExpiresIn: number;
+}
 
 @Injectable()
 export class AuthService {
-  refresh(rawRefreshToken: any, arg1: { userAgent: string | undefined; ipAddress: string | undefined; }) {
-    throw new Error('Method not implemented.');
-  }
-  getCurrentUser(sub: number) {
-    throw new Error('Method not implemented.');
-  }
-  changePassword(sub: number, currentPassword: string, newPassword: string) {
-    throw new Error('Method not implemented.');
-  }
   private readonly logger = new Logger(AuthService.name);
 
   constructor(
     private readonly userService: UserService,
     private readonly jwtService: JwtService,
     private readonly mailerService: MailerService,
+    private readonly configService: ConfigService,
+    @InjectRepository(RefreshToken)
+    private readonly refreshTokenRepo: Repository<RefreshToken>,
   ) {}
 
-  async register(createUserDto: CreateUserDto) {
-    this.logger.log(`Registering user: ${createUserDto.email}`);
+  // ============================================================
+  // REGISTRATION - USER
+  // ============================================================
+  async registerUser(dto: RegisterUserDto) {
+    this.logger.log(`📝 User registration attempt: ${dto.email}`);
 
-    const verificationCode = this.userService.generateSixDigitCode();
-    const expiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
-
-    const user = await this.userService.create(createUserDto);
-    await this.userService.updateVerificationCode(
-      user.email,
-      verificationCode,
-      expiry,
-    );
-
-    try {
-      await this.mailerService.sendVerificationEmail(
-        user.email,
-        verificationCode,
-        user.name,
-      );
-      this.logger.log(`Verification email sent to: ${user.email}`);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this.logger.error('Failed to send verification email', errorMessage);
+    // Check if user exists
+    const existingUser = await this.userService.findByEmail(dto.email);
+    if (existingUser) {
+      throw new ConflictException('Email already registered');
     }
 
+    // Hash password
+    const hashedPassword = await bcrypt.hash(dto.password, BCRYPT_ROUNDS);
+
+    // Create user
+    const user = await this.userService.create({
+      name: dto.name,
+      email: dto.email,
+      password: hashedPassword,
+      role: UserRole.USER,
+      isVerified: false,
+    });
+
+    // Generate verification code
+    const verificationCode = this.userService.generateSixDigitCode();
+    const expiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    await this.userService.updateVerificationCode(user.email, verificationCode, expiry);
+
+    // Send verification email (fire and forget)
+    this.fireAndForget(
+      this.mailerService.sendVerificationEmail(user.email, verificationCode, user.name),
+      `verification email to ${user.email}`,
+    );
+
     return {
+      success: true,
       message: 'Registration successful. Please check your email for verification code.',
       userId: user.id,
+      email: user.email,
       requiresVerification: true,
     };
   }
 
-  async verifyEmail(email: string, code: string) {
-    this.logger.log(`Verifying email for: ${email}`);
+  // ============================================================
+  // REGISTRATION - VENDOR
+  // ============================================================
+  async registerVendor(dto: RegisterVendorDto) {
+    this.logger.log(`📝 Vendor registration attempt: ${dto.email}`);
 
-    const user = await this.userService.verifyUser(email, code);
-
-    try {
-      await this.mailerService.sendWelcomeEmail(user.email, user.name);
-      this.logger.log(`Welcome email sent to: ${user.email}`);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this.logger.error('Failed to send welcome email', errorMessage);
+    // Check if user exists
+    const existingUser = await this.userService.findByEmail(dto.email);
+    if (existingUser) {
+      throw new ConflictException('Email already registered');
     }
 
-    const token = this.generateToken(user);
+    // Hash password
+    const hashedPassword = await bcrypt.hash(dto.password, BCRYPT_ROUNDS);
+
+    // Create vendor user
+    const user = await this.userService.create({
+      name: dto.name,
+      email: dto.email,
+      password: hashedPassword,
+      role: UserRole.VENDOR,
+      isVerified: false,
+      isVendorApproved: false,
+      isVendorRejected: false,
+      vendorBusinessName: dto.businessName,
+      vendorBusinessDescription: dto.businessDescription,
+      vendorPhoneNumber: dto.phoneNumber,
+      vendorAddress: dto.address,
+      vendorBusinessRegistration: dto.businessRegistration,
+    });
+
+    // Generate verification code
+    const verificationCode = this.userService.generateSixDigitCode();
+    const expiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    await this.userService.updateVerificationCode(user.email, verificationCode, expiry);
+
+    // Send verification email
+    this.fireAndForget(
+      this.mailerService.sendVerificationEmail(user.email, verificationCode, user.name),
+      `verification email to ${user.email}`,
+    );
+
+    // Notify admins about new vendor registration
+    this.fireAndForget(
+      this.mailerService.sendVendorRegistrationNotification(user),
+      `vendor registration notification`,
+    );
 
     return {
-      message: 'Email verified successfully!',
-      access_token: token,
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-      },
+      success: true,
+      message: 'Vendor registration successful. Please check your email for verification code. Your account will be reviewed by admins.',
+      userId: user.id,
+      email: user.email,
+      requiresVerification: true,
+      requiresApproval: true,
     };
   }
 
-  async resendVerificationCode(email: string) {
-    this.logger.log(`Resending verification code for: ${email}`);
+  // ============================================================
+  // LOGIN
+  // ============================================================
+  async login(dto: LoginDto, meta: { userAgent?: string; ipAddress?: string }): Promise<{
+    message: string;
+    tokens: TokenPair;
+    user: any;
+  }> {
+    this.logger.log(`🔐 Login attempt: ${dto.email}`);
 
-    const user = await this.userService.findByEmail(email);
-    
-    if (!user || user.isVerified) {
-      return { message: 'If the account exists and is not verified, a new code has been sent' };
+    // Find user with password
+    const user = await this.userService.findByEmailWithPassword(dto.email);
+
+    if (!user) {
+      throw new UnauthorizedException('Invalid email or password');
     }
 
-    const newVerificationCode = this.userService.generateSixDigitCode();
-    const expiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
-    
-    await this.userService.updateVerificationCode(email, newVerificationCode, expiry);
-
-    try {
-      await this.mailerService.sendVerificationEmail(user.email, newVerificationCode, user.name);
-      this.logger.log(`Verification code resent to: ${user.email}`);
-      return { message: 'Verification code sent successfully' };
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this.logger.error('Failed to send verification code', errorMessage);
-      throw new BadRequestException('Failed to send verification code');
-    }
-  }
-
-  async login(loginDto: LoginDto) {
-    this.logger.log(`Login attempt: ${loginDto.email}`);
-
-    const user = await this.userService.findByEmailOrFail(loginDto.email);
-
-    if (!user.isVerified) {
-      throw new BadRequestException(
-        'Please verify your email before logging in. Check your email for verification code.',
-      );
-    }
-
-    const isPasswordValid = await bcrypt.compare(
-      loginDto.password,
-      user.password,
-    );
-
+    // Verify password
+    const isPasswordValid = await bcrypt.compare(dto.password, user.password);
     if (!isPasswordValid) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException('Invalid email or password');
     }
 
-    const token = this.generateToken(user);
-
-    try {
-      await this.mailerService.sendLoginNotification(user.email, user.name);
-      this.logger.log(`Login notification sent to: ${user.email}`);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this.logger.error('Failed to send login notification', errorMessage);
+    // Check if email is verified
+    if (!user.isVerified) {
+      throw new UnauthorizedException('Please verify your email before logging in.');
     }
+
+    // Check vendor approval status
+    if (user.role === UserRole.VENDOR) {
+      if (user.isVendorRejected) {
+        throw new ForbiddenException('Your vendor account has been rejected. Please contact support.');
+      }
+      if (!user.isVendorApproved) {
+        throw new ForbiddenException('Your vendor account is pending admin approval.');
+      }
+    }
+
+    // Issue tokens
+    const tokens = await this.issueTokenPair(user, meta);
+
+    // Send login notification
+    this.fireAndForget(
+      this.mailerService.sendLoginNotification(user.email, user.name),
+      `login notification to ${user.email}`,
+    );
 
     return {
       message: 'Login successful',
-      access_token: token,
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-      },
+      tokens,
+      user: this.toPublicUser(user),
     };
   }
 
-  // ✅ ADD THIS METHOD
-  async logout(token: string) {
-    this.logger.log(`Logging out user`);
-    return { message: 'Logged out successfully' };
+  // ============================================================
+  // REFRESH TOKEN
+  // ============================================================
+  async refresh(rawRefreshToken: string, meta: { userAgent?: string; ipAddress?: string }): Promise<{
+    tokens: TokenPair;
+    user: any;
+  }> {
+    if (!rawRefreshToken) {
+      throw new UnauthorizedException('Refresh token required');
+    }
+
+    const tokenHash = this.hashToken(rawRefreshToken);
+    const stored = await this.refreshTokenRepo.findOne({
+      where: { tokenHash },
+    });
+
+    // Validate refresh token
+    if (!stored || stored.revoked || stored.expiresAt < new Date()) {
+      throw new UnauthorizedException('Invalid or expired session. Please login again.');
+    }
+
+    // Revoke old refresh token
+    stored.revoked = true;
+    await this.refreshTokenRepo.save(stored);
+
+    // Get user
+    const user = await this.userService.findByIdOrFail(stored.userId);
+
+    // Issue new tokens
+    const tokens = await this.issueTokenPair(user, meta);
+
+    return { tokens, user: this.toPublicUser(user) };
   }
 
-  // ✅ ADD THIS METHOD
-  async logoutAll(userId: number) {
-    this.logger.log(`Logging out all sessions for user: ${userId}`);
-    return { 
-      message: 'Logged out from all sessions successfully',
-      sessionsEnded: 1
+  // ============================================================
+  // VERIFY EMAIL
+  // ============================================================
+  async verifyEmail(email: string, code: string): Promise<{
+    message: string;
+    tokens: TokenPair;
+    user: any;
+  }> {
+    this.logger.log(`📧 Verifying email for: ${email}`);
+
+    // Verify user
+    const user = await this.userService.verifyUser(email, code);
+
+    // Send welcome email
+    this.fireAndForget(
+      this.mailerService.sendWelcomeEmail(user.email, user.name),
+      `welcome email to ${user.email}`,
+    );
+
+    // Issue tokens
+    const tokens = await this.issueTokenPair(user, {});
+
+    return {
+      message: 'Email verified successfully!',
+      tokens,
+      user: this.toPublicUser(user),
     };
   }
 
-  async requestPasswordReset(email: string) {
-    this.logger.log(`Password reset requested for: ${email}`);
+  // ============================================================
+  // RESEND VERIFICATION CODE
+  // ============================================================
+  async resendVerificationCode(email: string) {
+    this.logger.log(`📧 Resending verification code for: ${email}`);
 
     const user = await this.userService.findByEmail(email);
 
-    if (!user) {
-      return { message: 'If the email exists, a reset code has been sent' };
+    // Generic response for security (don't reveal if user exists)
+    if (!user || user.isVerified) {
+      return { 
+        message: 'If the account exists and is not verified, a new code has been sent' 
+      };
     }
 
-    const resetCode = this.userService.generateSixDigitCode();
-    const expiry = new Date(Date.now() + 15 * 60 * 1000);
+    // Generate new code
+    const code = this.userService.generateSixDigitCode();
+    const expiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    await this.userService.updateVerificationCode(email, code, expiry);
 
-    await this.userService.updateResetCode(email, resetCode, expiry);
+    // Send email
+    this.fireAndForget(
+      this.mailerService.sendVerificationEmail(user.email, code, user.name),
+      `verification resend to ${user.email}`,
+    );
 
-    try {
-      await this.mailerService.sendPasswordResetCode(
-        user.email,
-        resetCode,
-        user.name,
-      );
-      this.logger.log(`Password reset code sent to: ${user.email}`);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this.logger.error('Failed to send reset code', errorMessage);
-      throw new BadRequestException('Failed to send reset code');
-    }
-
-    return { message: 'Password reset code sent successfully' };
+    return { message: 'Verification code sent successfully' };
   }
 
-  async verifyResetCode(email: string, code: string) {
-    this.logger.log(`Verifying reset code for: ${email}`);
+  // ============================================================
+  // TOKEN ISSUANCE
+  // ============================================================
+  private async issueTokenPair(
+    user: User,
+    meta: { userAgent?: string; ipAddress?: string },
+  ): Promise<TokenPair> {
+    // Generate access token
+    const accessToken = this.jwtService.sign(
+      { 
+        sub: user.id, 
+        email: user.email, 
+        role: user.role,
+        isVerified: user.isVerified,
+        isVendorApproved: user.isVendorApproved,
+      },
+      { expiresIn: ACCESS_TOKEN_TTL_SECONDS },
+    );
 
-    const user = await this.userService.verifyResetCode(email, code);
+    // Generate refresh token
+    const rawRefreshToken = crypto.randomBytes(40).toString('hex');
+    const tokenHash = this.hashToken(rawRefreshToken);
+    const expiresAt = new Date(Date.now() + REFRESH_TOKEN_TTL_SECONDS * 1000);
 
-    const verificationToken = this.userService.generateSixDigitCode();
-    const tokenHash = this.hashResetVerificationToken(verificationToken);
-    const expiry = new Date(Date.now() + 10 * 60 * 1000);
-
-    await this.userService.setPasswordResetToken(
-      user.email,
-      tokenHash,
-      expiry,
+    // Store refresh token
+    await this.refreshTokenRepo.save(
+      this.refreshTokenRepo.create({
+        tokenHash,
+        userId: user.id,
+        expiresAt,
+        userAgent: meta.userAgent,
+        ipAddress: meta.ipAddress,
+      }),
     );
 
     return {
+      accessToken,
+      refreshToken: rawRefreshToken,
+      accessTokenExpiresIn: ACCESS_TOKEN_TTL_SECONDS,
+      refreshTokenExpiresIn: REFRESH_TOKEN_TTL_SECONDS,
+    };
+  }
+
+  // ============================================================
+  // CHANGE PASSWORD
+  // ============================================================
+  async changePassword(userId: number, currentPassword: string, newPassword: string) {
+    this.logger.log(`🔐 Password change attempt for user: ${userId}`);
+
+    // Get user with password
+    const user = await this.userService.findByIdWithPassword(userId);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Verify current password
+    const isPasswordValid = await bcrypt.compare(currentPassword, user.password);
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Current password is incorrect');
+    }
+
+    // Hash new password
+    const hashedNewPassword = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+    await this.userService.updatePassword(user.id, hashedNewPassword);
+
+    // Revoke all sessions
+    await this.logoutAll(userId);
+
+    // Send confirmation email
+    this.fireAndForget(
+      this.mailerService.sendPasswordChangedConfirmation(user.email, user.name),
+      `password changed email to ${user.email}`,
+    );
+
+    return { message: 'Password changed successfully' };
+  }
+
+  // ============================================================
+  // PASSWORD RESET FLOW
+  // ============================================================
+  async requestPasswordReset(email: string) {
+    this.logger.log(`🔑 Password reset requested for: ${email}`);
+
+    const genericResponse = {
+      message: 'If the email exists, a reset code has been sent',
+    };
+
+    const user = await this.userService.findByEmail(email);
+    if (!user) return genericResponse;
+
+    // Generate reset code
+    const resetCode = this.userService.generateSixDigitCode();
+    const expiry = new Date(Date.now() + 15 * 60 * 1000);
+    await this.userService.updateResetCode(email, resetCode, expiry);
+
+    // Send reset code email
+    this.fireAndForget(
+      this.mailerService.sendPasswordResetCode(user.email, resetCode, user.name),
+      `reset code to ${user.email}`,
+    );
+
+    return genericResponse;
+  }
+
+  async verifyResetCode(email: string, code: string) {
+    this.logger.log(`🔑 Verifying reset code for: ${email}`);
+
+    // Verify code
+    await this.userService.verifyResetCode(email, code);
+
+    // Generate verification token
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = this.hashToken(rawToken);
+    const expiry = new Date(Date.now() + 10 * 60 * 1000);
+
+    await this.userService.setPasswordResetToken(email, tokenHash, expiry);
+
+    return {
       message: 'Code verified successfully',
-      verificationToken,
+      verificationToken: rawToken,
     };
   }
 
   async resetPassword(verificationToken: string, newPassword: string) {
-    this.logger.log(`Resetting password with token: ${verificationToken}`);
+    this.logger.log(`🔐 Resetting password with token`);
 
-    const tokenHash = this.hashResetVerificationToken(verificationToken);
+    const tokenHash = this.hashToken(verificationToken);
     const user = await this.userService.findByResetTokenHash(tokenHash);
 
     if (!user) {
       throw new BadRequestException('Invalid verification token');
     }
-
     if (user.resetTokenExpiry && user.resetTokenExpiry < new Date()) {
       throw new BadRequestException('Verification token expired');
     }
 
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
     await this.userService.resetPassword(user.email, hashedPassword);
 
-    try {
-      await this.mailerService.sendPasswordChangedConfirmation(
-        user.email,
-        user.name,
-      );
-      this.logger.log(`Password changed confirmation sent to: ${user.email}`);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this.logger.error('Failed to send password changed email', errorMessage);
-    }
+    // Revoke all sessions
+    await this.logoutAll(user.id);
+
+    // Send confirmation
+    this.fireAndForget(
+      this.mailerService.sendPasswordChangedConfirmation(user.email, user.name),
+      `password changed email to ${user.email}`,
+    );
 
     return { message: 'Password reset successfully' };
   }
 
-  private hashResetVerificationToken(token: string): string {
-    const crypto = require('crypto');
-    return crypto.createHash('sha256').update(token).digest('hex');
+  // ============================================================
+  // LOGOUT
+  // ============================================================
+  async logout(rawRefreshToken: string | undefined) {
+    if (!rawRefreshToken) {
+      return { message: 'Logged out successfully' };
+    }
+    const tokenHash = this.hashToken(rawRefreshToken);
+    await this.refreshTokenRepo.update({ tokenHash }, { revoked: true });
+    return { message: 'Logged out successfully' };
   }
 
-  async createAdmin(createUserDto: CreateUserDto) {
-    this.logger.log(`Creating admin: ${createUserDto.email}`);
+  async logoutAll(userId: number) {
+    const result = await this.refreshTokenRepo.update(
+      { userId, revoked: false },
+      { revoked: true },
+    );
+    return {
+      message: 'Logged out from all sessions successfully',
+      sessionsEnded: result.affected ?? 0,
+    };
+  }
 
-    const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
+  // ============================================================
+  // GET CURRENT USER
+  // ============================================================
+  async getCurrentUser(userId: number) {
+    const user = await this.userService.findByIdOrFail(userId);
+    return this.toPublicUser(user);
+  }
 
-    const user = await this.userService.create({
-      name: createUserDto.name,
-      email: createUserDto.email,
-      password: hashedPassword,
-      role: 'admin',
-      isVerified: true,
+  // ============================================================
+  // VENDOR APPROVAL
+  // ============================================================
+  async approveVendor(vendorId: number, adminId: number) {
+    this.logger.log(`✅ Approving vendor: ${vendorId} by admin: ${adminId}`);
+
+    const vendor = await this.userService.findByIdOrFail(vendorId);
+
+    if (vendor.role !== UserRole.VENDOR) {
+      throw new BadRequestException('User is not a vendor');
+    }
+
+    if (vendor.isVendorApproved) {
+      throw new BadRequestException('Vendor is already approved');
+    }
+
+    if (vendor.isVendorRejected) {
+      throw new BadRequestException('Vendor has been rejected. Cannot approve.');
+    }
+
+    // Approve vendor
+    await this.userService.update(vendor.id, {
+      isVendorApproved: true,
+      isVendorRejected: false,
+      vendorRejectionReason: null,
     });
 
-    try {
-      await this.mailerService.sendWelcomeEmail(user.email, user.name);
-      this.logger.log(`Admin welcome email sent to: ${user.email}`);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this.logger.error('Failed to send admin welcome email', errorMessage);
+    // Send approval email
+    this.fireAndForget(
+      this.mailerService.sendVendorApprovalEmail(vendor.email, vendor.name),
+      `vendor approval email to ${vendor.email}`,
+    );
+
+    // Refresh user data
+    const updatedVendor = await this.userService.findByIdOrFail(vendorId);
+
+    return {
+      message: 'Vendor approved successfully',
+      vendor: this.toPublicUser(updatedVendor),
+    };
+  }
+
+  async rejectVendor(vendorId: number, adminId: number, reason?: string) {
+    this.logger.log(`❌ Rejecting vendor: ${vendorId} by admin: ${adminId}`);
+
+    const vendor = await this.userService.findByIdOrFail(vendorId);
+
+    if (vendor.role !== UserRole.VENDOR) {
+      throw new BadRequestException('User is not a vendor');
     }
+
+    if (vendor.isVendorApproved) {
+      throw new BadRequestException('Vendor is already approved');
+    }
+
+    if (vendor.isVendorRejected) {
+      throw new BadRequestException('Vendor is already rejected');
+    }
+
+    // Reject vendor - Actually update the status
+    await this.userService.update(vendor.id, {
+      isVendorApproved: false,
+      isVendorRejected: true,
+      vendorRejectionReason: reason || 'No reason provided',
+    });
+
+    // Send rejection email
+    this.fireAndForget(
+      this.mailerService.sendVendorRejectionEmail(vendor.email, vendor.name, reason),
+      `vendor rejection email to ${vendor.email}`,
+    );
+
+    return {
+      message: 'Vendor rejected successfully',
+    };
+  }
+
+  async getPendingVendors() {
+    return this.userService.findPendingVendors();
+  }
+
+  // ============================================================
+  // ADMIN MANAGEMENT (Super Admin Only)
+  // ============================================================
+  async createAdmin(dto: RegisterUserDto) {
+    // Check if user exists
+    const existingUser = await this.userService.findByEmail(dto.email);
+    if (existingUser) {
+      throw new ConflictException('Email already registered');
+    }
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(dto.password, BCRYPT_ROUNDS);
+
+    // Create admin
+    const user = await this.userService.create({
+      name: dto.name,
+      email: dto.email,
+      password: hashedPassword,
+      role: UserRole.ADMIN,
+      isVerified: true,
+      isVendorApproved: false,
+      isVendorRejected: false,
+    });
+
+    // Send welcome email
+    this.fireAndForget(
+      this.mailerService.sendWelcomeEmail(user.email, user.name),
+      `admin welcome email to ${user.email}`,
+    );
 
     return {
       message: 'Admin created successfully',
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: 'admin',
-      },
+      user: this.toPublicUser(user),
     };
   }
 
   async listAllUsers() {
-    this.logger.log('Listing all users');
     return this.userService.findAll();
   }
 
   async deleteUser(id: number) {
-    this.logger.log(`Deleting user with ID: ${id}`);
-    
     const user = await this.userService.findByIdOrFail(id);
-    const userEmail = user.email;
-    const userName = user.name;
-    
+
+    // Prevent deleting super admin
+    if (user.role === UserRole.SUPER_ADMIN) {
+      throw new ForbiddenException('Cannot delete superadmin account');
+    }
+
+    // Delete user
     await this.userService.delete(id);
 
-    try {
-      await this.mailerService.sendAccountDeletionEmail(userEmail, userName);
-      this.logger.log(`Account deletion email sent to: ${userEmail}`);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this.logger.error('Failed to send deletion email', errorMessage);
-    }
+    // Revoke all refresh tokens
+    await this.refreshTokenRepo.update(
+      { userId: id, revoked: false },
+      { revoked: true },
+    );
+
+    // Send deletion email
+    this.fireAndForget(
+      this.mailerService.sendAccountDeletionEmail(user.email, user.name),
+      `deletion email to ${user.email}`,
+    );
 
     return { message: 'User deleted successfully' };
   }
 
-  private generateToken(user: any): string {
-    const payload = {
-      sub: user.id,
+  // ============================================================
+  // CLEANUP
+  // ============================================================
+  async purgeExpiredRefreshTokens() {
+    const result = await this.refreshTokenRepo.delete({
+      expiresAt: LessThan(new Date()),
+    });
+    this.logger.log(`🧹 Purged ${result.affected} expired refresh tokens`);
+    return result;
+  }
+
+  // ============================================================
+  // HELPERS
+  // ============================================================
+  private hashToken(raw: string): string {
+    return crypto.createHash('sha256').update(raw).digest('hex');
+  }
+
+  private toPublicUser(user: User) {
+    return {
+      id: user.id,
+      name: user.name,
       email: user.email,
       role: user.role,
+      isVerified: user.isVerified,
+      isVendorApproved: user.isVendorApproved,
+      isVendorRejected: user.isVendorRejected,
+      vendorBusinessName: user.vendorBusinessName,
+      vendorBusinessDescription: user.vendorBusinessDescription,
+      vendorPhoneNumber: user.vendorPhoneNumber,
+      vendorAddress: user.vendorAddress,
+      vendorBusinessRegistration: user.vendorBusinessRegistration,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
     };
+  }
 
-    return this.jwtService.sign(payload);
+  private fireAndForget(promise: Promise<unknown>, label: string) {
+    promise.catch((err) => {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      this.logger.error(`❌ Failed to send ${label}`, msg);
+    });
   }
 }

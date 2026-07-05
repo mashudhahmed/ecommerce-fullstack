@@ -8,20 +8,27 @@ import { User } from '../user/user.entity';
 import { UserModule } from '../user/user.module';
 import { MailerModule } from '../mailer/mailer.module';
 import { JwtStrategy } from './jwt.strategy';
+import { RefreshToken } from './refresh-token.entity';
 
 @Module({
   imports: [
     UserModule,
     MailerModule,
-    TypeOrmModule.forFeature([User]),
+    TypeOrmModule.forFeature([User, RefreshToken]),
     JwtModule.registerAsync({
       imports: [ConfigModule],
-      useFactory: (configService: ConfigService) => ({
-        secret: configService.get('jwt.secret'),
-        signOptions: {
-          expiresIn: configService.get('jwt.expiresIn'),
-        },
-      }),
+      useFactory: (configService: ConfigService) => {
+        const secret = configService.get('jwt.secret');
+        if (!secret) {
+          throw new Error('JWT_SECRET is not defined in environment variables');
+        }
+        return {
+          secret,
+          signOptions: {
+            expiresIn: configService.get('jwt.expiresIn'),
+          },
+        };
+      },
       inject: [ConfigService],
     }),
   ],

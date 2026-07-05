@@ -3,10 +3,11 @@ import { ApiProperty } from '@nestjs/swagger';
 
 const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).+$/;
 
-export class ResetPasswordDto {
-  @ApiProperty({ example: 'verification-token-here' })
+export class ChangePasswordDto {
+  @ApiProperty({ example: 'CurrentPassword123!' })
   @IsString()
-  verificationToken!: string;
+  @MinLength(6)
+  currentPassword!: string;
 
   @ApiProperty({ example: 'NewPassword123!' })
   @IsString()

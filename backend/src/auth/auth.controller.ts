@@ -1,4 +1,4 @@
-// auth/auth.controller.ts
+// src/auth/auth.controller.ts
 import {
   Controller,
   Post,
@@ -12,20 +12,40 @@ import {
   HttpStatus,
   Req,
   Res,
+  Patch,
+  Query,
+  ValidationPipe,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { Throttle, SkipThrottle } from '@nestjs/throttler';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
-import { RolesGuard } from '../common/guards/roles.guards';
-import { Roles } from '../common/decorator/roles.decorator';
-import { CreateUserDto } from './dto/register.dto';
+import { RolesGuard } from '../common/guards/roles.guard';
+import { Roles } from '../common/decorators/roles.decorator';
+import { RegisterUserDto } from './dto/register-user.dto';
+import { RegisterVendorDto } from './dto/register-vendor.dto';
 import { LoginDto } from './dto/login.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
+import { VerifyEmailDto } from './dto/verify-email.dto';
+import { VerifyResetCodeDto } from './dto/verify-reset-code.dto';
+import { UserRole } from '../user/user.entity';
 
 const isProd = process.env.NODE_ENV === 'production';
 const ACCESS_COOKIE = 'access_token';
 const REFRESH_COOKIE = 'refresh_token';
 
+// ✅ FIX: must match the ACTUAL mounted route. The app has a global
+// prefix of `api/v1` (see main.ts: app.setGlobalPrefix(`${apiPrefix}/${apiVersion}`)),
+// so AuthController's refresh endpoint really lives at
+// `/api/v1/auth/refresh` — NOT `/api/auth/refresh`. A cookie's `path`
+// only gets sent on requests whose URL starts with that path, so the
+// old value meant the browser silently never attached the refresh
+// cookie to the real refresh request, and it always 401'd.
+const REFRESH_COOKIE_PATH = '/api/v1/auth/refresh';
+
+@ApiTags('Authentication')
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
@@ -33,7 +53,6 @@ export class AuthController {
   // ============================================================
   // COOKIE HELPERS
   // ============================================================
-
   private setAuthCookies(res: Response, tokens: any) {
     const baseOpts = {
       httpOnly: true,
@@ -49,58 +68,79 @@ export class AuthController {
 
     res.cookie(REFRESH_COOKIE, tokens.refreshToken, {
       ...baseOpts,
-      path: '/api/auth/refresh',
+      path: REFRESH_COOKIE_PATH, // ✅ FIX (was '/api/auth/refresh')
       maxAge: tokens.refreshTokenExpiresIn * 1000,
     });
   }
 
   private clearAuthCookies(res: Response) {
     res.clearCookie(ACCESS_COOKIE, { path: '/' });
-    res.clearCookie(REFRESH_COOKIE, { path: '/api/auth/refresh' });
+    res.clearCookie(REFRESH_COOKIE, { path: REFRESH_COOKIE_PATH }); // ✅ FIX (was '/api/auth/refresh')
   }
 
   private requestMeta(req: Request) {
     return {
       userAgent: req.headers['user-agent'],
-      ipAddress: req.ip,
+      ipAddress: req.ip || req.socket.remoteAddress,
     };
   }
 
   // ============================================================
-  // AUTH ROUTES
+  // REGISTRATION
   // ============================================================
-
-  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @ApiOperation({ summary: 'Register a new user (customer)' })
+  @ApiResponse({ status: 201, description: 'User registered successfully' })
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('register')
-  async register(@Body() dto: CreateUserDto) {
-    return this.authService.register(dto);
+  async registerUser(@Body(new ValidationPipe()) dto: RegisterUserDto) {
+    return this.authService.registerUser(dto);
   }
 
-  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @ApiOperation({ summary: 'Register a new vendor' })
+  @ApiResponse({ status: 201, description: 'Vendor registered successfully' })
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @Post('register/vendor')
+  async registerVendor(@Body(new ValidationPipe()) dto: RegisterVendorDto) {
+    return this.authService.registerVendor(dto);
+  }
+
+  // ============================================================
+  // EMAIL VERIFICATION
+  // ============================================================
+  @ApiOperation({ summary: 'Verify email with code' })
+  @ApiResponse({ status: 200, description: 'Email verified successfully' })
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Post('verify-email')
   async verifyEmail(
-    @Body() body: { email: string; code: string },
+    @Body(new ValidationPipe()) dto: VerifyEmailDto,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const result = await this.authService.verifyEmail(body.email, body.code);
+    const result = await this.authService.verifyEmail(dto.email, dto.code);
     this.setAuthCookies(res, result.tokens);
     return { message: result.message, user: result.user };
   }
 
-  @Throttle({ default: { limit: 3, ttl: 60_000 } })
+  @ApiOperation({ summary: 'Resend verification code' })
+  @ApiResponse({ status: 200, description: 'Verification code sent' })
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
   @Post('resend-verification')
   async resendVerification(@Body() body: { email: string }) {
     return this.authService.resendVerificationCode(body.email);
   }
 
-  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  // ============================================================
+  // LOGIN / LOGOUT
+  // ============================================================
+  @ApiOperation({ summary: 'Login to the application' })
+  @ApiResponse({ status: 200, description: 'Login successful' })
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Post('login')
   async login(
-    @Body() dto: LoginDto,
+    @Body(new ValidationPipe()) dto: LoginDto,
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const result = await this.authService.login(dto);
+    const result = await this.authService.login(dto, this.requestMeta(req));
     this.setAuthCookies(res, result.tokens);
     return { message: result.message, user: result.user };
   }
@@ -112,39 +152,36 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ) {
     const rawRefreshToken = req.cookies?.[REFRESH_COOKIE];
-    const result = (this.authService.refresh(
+    const result = await this.authService.refresh(
       rawRefreshToken,
-      this.requestMeta(req)
-    )) as unknown as {
-      tokens: {
-        accessToken: string;
-        refreshToken: string;
-        accessTokenExpiresIn: number;
-        refreshTokenExpiresIn: number;
-      };
-      user: unknown;
-    };
-
+      this.requestMeta(req),
+    );
     this.setAuthCookies(res, result.tokens);
     return { user: result.user };
   }
 
+  @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @Get('me')
   async me(@Req() req: Request & { user: { sub: number } }) {
     return this.authService.getCurrentUser(req.user.sub);
   }
 
+  @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @Post('logout')
   @HttpCode(HttpStatus.OK)
-  async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+  async logout(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     const rawRefreshToken = req.cookies?.[REFRESH_COOKIE];
     const result = await this.authService.logout(rawRefreshToken);
     this.clearAuthCookies(res);
     return result;
   }
 
+  @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @Post('logout-all')
   @HttpCode(HttpStatus.OK)
@@ -157,64 +194,83 @@ export class AuthController {
     return result;
   }
 
+  // ============================================================
+  // PASSWORD MANAGEMENT
+  // ============================================================
+  @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @Post('change-password')
   @HttpCode(HttpStatus.OK)
   async changePassword(
     @Req() req: Request & { user: { sub: number } },
-    @Body() body: { currentPassword: string; newPassword: string },
+    @Body(new ValidationPipe()) dto: ChangePasswordDto,
   ) {
     return this.authService.changePassword(
       req.user.sub,
-      body.currentPassword,
-      body.newPassword,
+      dto.currentPassword,
+      dto.newPassword,
     );
   }
 
-  // ============================================================
-  // PASSWORD RESET
-  // ============================================================
-
-  @Throttle({ default: { limit: 3, ttl: 60_000 } })
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
   @Post('forgot-password')
   async forgotPassword(@Body() body: { email: string }) {
     return this.authService.requestPasswordReset(body.email);
   }
 
-  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('verify-reset-code')
-  async verifyResetCode(@Body() body: { email: string; code: string }) {
-    return this.authService.verifyResetCode(body.email, body.code);
+  async verifyResetCode(@Body(new ValidationPipe()) dto: VerifyResetCodeDto) {
+    return this.authService.verifyResetCode(dto.email, dto.code);
   }
 
-  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('reset-password')
-  async resetPassword(@Body() body: { verificationToken: string; newPassword: string }) {
-    return this.authService.resetPassword(body.verificationToken, body.newPassword);
+  async resetPassword(@Body(new ValidationPipe()) dto: ResetPasswordDto) {
+    return this.authService.resetPassword(
+      dto.verificationToken,
+      dto.newPassword,
+    );
   }
 
   // ============================================================
-  // ADMIN ROUTES
+  // VENDOR MANAGEMENT (Admin/SuperAdmin only)
   // ============================================================
-
+  @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('superadmin')
-  @Post('admin')
-  async createAdmin(@Body() dto: CreateUserDto) {
-    return this.authService.createAdmin(dto);
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Get('vendors/pending')
+  async getPendingVendors() {
+    return this.authService.getPendingVendors();
   }
 
+  @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('superadmin')
-  @Get('users')
-  async listAllUsers() {
-    return this.authService.listAllUsers();
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Patch('vendors/:id/approve')
+  async approveVendor(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: Request & { user: { sub: number } },
+  ) {
+    return this.authService.approveVendor(id, req.user.sub);
   }
 
+  @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('superadmin')
-  @Delete('users/:id')
-  async deleteUser(@Param('id', ParseIntPipe) id: number) {
-    return this.authService.deleteUser(id);
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Patch('vendors/:id/reject')
+  async rejectVendor(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: { reason?: string },
+    @Req() req: Request & { user: { sub: number } },
+  ) {
+    return this.authService.rejectVendor(id, req.user.sub, body.reason);
   }
+
+  // ============================================================
+  // ADMIN ROUTES - ✅ REMOVED DUPLICATES
+  // These are now in SuperadminController
+  // ============================================================
+  // NOTE: POST /admin, GET /users, DELETE /users/:id
+  // have been moved to superadmin.controller.ts
 }

@@ -1,4 +1,3 @@
-// src/auth/dto/register.dto.ts
 import {
   IsEmail,
   IsString,
@@ -14,7 +13,7 @@ import { UserRole } from '../../user/user.entity';
 
 const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).+$/;
 
-export class CreateUserDto {
+export class RegisterUserDto {
   @ApiProperty({ example: 'John Doe' })
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()

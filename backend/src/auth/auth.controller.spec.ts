@@ -1,7 +1,6 @@
-// user/user.controller.spec.ts
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthController } from './auth.controller';
-import { describe, beforeEach, it } from 'node:test';
+import { AuthService } from './auth.service';
 
 describe('AuthController', () => {
   let controller: AuthController;
@@ -9,22 +8,25 @@ describe('AuthController', () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AuthController],
+      providers: [
+        {
+          provide: AuthService,
+          useValue: {
+            registerUser: jest.fn(),
+            login: jest.fn(),
+            verifyEmail: jest.fn(),
+            refresh: jest.fn(),
+            logout: jest.fn(),
+            getCurrentUser: jest.fn(),
+          },
+        },
+      ],
     }).compile();
 
     controller = module.get<AuthController>(AuthController);
   });
 
   it('should be defined', () => {
-    expect(controller).toBeDefined(); // ✅ This should work
+    expect(controller).toBeDefined();
   });
 });
-function expect<T>(actual: T) {
-  return {
-    toBeDefined: () => {
-      if (actual === undefined) {
-        throw new Error('Expected value to be defined');
-      }
-    },
-  };
-}
-

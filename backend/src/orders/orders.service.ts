@@ -1,15 +1,17 @@
+// src/orders/orders.service.ts
 import {
   Injectable,
   NotFoundException,
   BadRequestException,
   Logger,
+  ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { Order, OrderStatus } from './order.entity';
 import { OrderItem } from './order-item.entity';
 import { Product } from '../products/products.entity';
-import { User } from '../user/user.entity';
+import { User, UserRole } from '../user/user.entity';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { MailerService } from '../mailer/mailer.service';
 
@@ -24,12 +26,13 @@ export class OrdersService {
     private readonly orderItemRepository: Repository<OrderItem>,
     @InjectRepository(Product)
     private readonly productRepository: Repository<Product>,
-    @InjectRepository(User)
-    private readonly userRepository: Repository<User>,
     private readonly dataSource: DataSource,
     private readonly mailerService: MailerService,
   ) {}
 
+  // ============================================================
+  // CREATE ORDER
+  // ============================================================
   async create(userId: number, createOrderDto: CreateOrderDto): Promise<Order> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -44,17 +47,21 @@ export class OrdersService {
         throw new NotFoundException('User not found');
       }
 
+      if (!user.isVerified) {
+        throw new BadRequestException('Please verify your email before placing orders');
+      }
+
       let total = 0;
       const orderItems: OrderItem[] = [];
 
       for (const item of createOrderDto.items) {
         const product = await queryRunner.manager.findOne(Product, {
-          where: { id: item.productId },
+          where: { id: item.productId, isActive: true },
         });
 
         if (!product) {
           throw new NotFoundException(
-            `Product with ID ${item.productId} not found`,
+            `Product with ID ${item.productId} not found or inactive`,
           );
         }
 
@@ -64,13 +71,13 @@ export class OrdersService {
           );
         }
 
-        const itemTotal = product.price * item.quantity;
+        const itemTotal = Number(product.price) * item.quantity;
         total += itemTotal;
 
         const orderItem = new OrderItem();
         orderItem.product = product;
         orderItem.quantity = item.quantity;
-        orderItem.price = product.price;
+        orderItem.price = Number(product.price);
 
         orderItems.push(orderItem);
 
@@ -96,13 +103,10 @@ export class OrdersService {
       const completeOrder = await this.findOne(savedOrder.id);
 
       // Send order confirmation email
-      try {
-        await this.mailerService.sendOrderConfirmation(user.email, completeOrder);
-        this.logger.log(`Order confirmation sent to ${user.email}`);
-      } catch (error) {
-        const trace = error instanceof Error ? error.stack : String(error);
-        this.logger.error('Failed to send order confirmation', trace);
-      }
+      this.fireAndForget(
+        this.mailerService.sendOrderConfirmation(user.email, completeOrder),
+        `order confirmation to ${user.email}`,
+      );
 
       this.logger.log(`Order created: ${savedOrder.id} by user ${userId}`);
       return completeOrder;
@@ -114,12 +118,18 @@ export class OrdersService {
     }
   }
 
+  // ============================================================
+  // FIND ALL (Admin/SuperAdmin)
+  // ============================================================
   async findAll(): Promise<Order[]> {
     return this.orderRepository.find({
       order: { createdAt: 'DESC' },
     });
   }
 
+  // ============================================================
+  // FIND ONE
+  // ============================================================
   async findOne(id: number): Promise<Order> {
     const order = await this.orderRepository.findOne({
       where: { id },
@@ -132,6 +142,9 @@ export class OrdersService {
     return order;
   }
 
+  // ============================================================
+  // FIND BY USER
+  // ============================================================
   async findByUser(userId: number): Promise<Order[]> {
     return this.orderRepository.find({
       where: { user: { id: userId } },
@@ -139,7 +152,30 @@ export class OrdersService {
     });
   }
 
-  async updateStatus(id: number, status: OrderStatus): Promise<Order> {
+  // ============================================================
+  // FIND BY VENDOR (Orders containing vendor's products)
+  // ============================================================
+  async findByVendor(vendorId: number): Promise<Order[]> {
+    const orders = await this.orderRepository
+      .createQueryBuilder('order')
+      .leftJoinAndSelect('order.items', 'items')
+      .leftJoinAndSelect('items.product', 'product')
+      .leftJoinAndSelect('product.owner', 'owner')
+      .where('owner.id = :vendorId', { vendorId })
+      .orderBy('order.createdAt', 'DESC')
+      .getMany();
+
+    // Filter orders to only show items from this vendor
+    return orders.map((order) => ({
+      ...order,
+      items: order.items.filter((item) => item.product.owner?.id === vendorId),
+    }));
+  }
+
+  // ============================================================
+  // UPDATE STATUS (Admin/SuperAdmin)
+  // ============================================================
+  async updateStatus(id: number, status: OrderStatus, userId: number): Promise<Order> {
     const order = await this.findOne(id);
 
     if (!Object.values(OrderStatus).includes(status)) {
@@ -149,45 +185,45 @@ export class OrdersService {
     order.status = status;
     const updatedOrder = await this.orderRepository.save(order);
 
-    this.logger.log(`Order ${id} status updated to ${status}`);
+    this.logger.log(`Order ${id} status updated to ${status} by user ${userId}`);
 
     // Send status update email
-    try {
-      await this.mailerService.sendOrderStatusUpdate(
-        order.user.email,
-        order,
-        status,
-      );
-    } catch (error) {
-      const trace = error instanceof Error ? error.stack : String(error);
-      this.logger.error('Failed to send status update email', trace);
-    }
+    this.fireAndForget(
+      this.mailerService.sendOrderStatusUpdate(order.user.email, order, status),
+      `status update to ${order.user.email}`,
+    );
 
     return updatedOrder;
   }
 
-  async cancelOrder(id: number): Promise<Order> {
+  // ============================================================
+  // CANCEL ORDER
+  // ============================================================
+  async cancelOrder(id: number, userId: number, userRole: UserRole): Promise<Order> {
     const order = await this.findOne(id);
+
+    // Check if user owns the order or is admin/superadmin
+    const isAdmin = [UserRole.ADMIN, UserRole.SUPER_ADMIN].includes(userRole);
+    if (!isAdmin && order.user.id !== userId) {
+      throw new ForbiddenException('You can only cancel your own orders');
+    }
 
     if (order.status === OrderStatus.CANCELLED) {
       throw new BadRequestException('Order is already cancelled');
     }
 
-    if (
-      order.status === OrderStatus.DELIVERED ||
-      order.status === OrderStatus.SHIPPED
-    ) {
+    if ([OrderStatus.DELIVERED, OrderStatus.SHIPPED].includes(order.status)) {
       throw new BadRequestException(
         `Cannot cancel order with status ${order.status}`,
       );
     }
 
-    // Restore stock
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
     try {
+      // Restore stock
       for (const item of order.items) {
         const product = await queryRunner.manager.findOne(Product, {
           where: { id: item.product.id },
@@ -204,7 +240,7 @@ export class OrdersService {
 
       await queryRunner.commitTransaction();
 
-      this.logger.log(`Order ${id} cancelled successfully`);
+      this.logger.log(`Order ${id} cancelled successfully by user ${userId}`);
       return cancelledOrder;
     } catch (error) {
       await queryRunner.rollbackTransaction();
@@ -214,13 +250,21 @@ export class OrdersService {
     }
   }
 
-  async getOrderSummary(userId: number): Promise<any> {
+  // ============================================================
+  // GET ORDER SUMMARY FOR USER
+  // ============================================================
+  async getOrderSummary(userId: number): Promise<{
+    totalOrders: number;
+    totalSpent: number;
+    pendingOrders: number;
+    recentOrders: Order[];
+  }> {
     const orders = await this.findByUser(userId);
 
     const totalOrders = orders.length;
     const totalSpent = orders
       .filter((o) => o.status !== OrderStatus.CANCELLED)
-      .reduce((sum, o) => sum + parseFloat(o.total.toString()), 0);
+      .reduce((sum, o) => sum + Number(o.total), 0);
 
     const pendingOrders = orders.filter(
       (o) => o.status === OrderStatus.PENDING,
@@ -232,5 +276,87 @@ export class OrdersService {
       pendingOrders,
       recentOrders: orders.slice(0, 5),
     };
+  }
+
+  // ============================================================
+  // GET VENDOR ORDER SUMMARY
+  // ============================================================
+  async getVendorOrderSummary(vendorId: number): Promise<{
+    totalOrders: number;
+    totalRevenue: number;
+    pendingOrders: number;
+    processingOrders: number;
+    shippedOrders: number;
+    deliveredOrders: number;
+    cancelledOrders: number;
+  }> {
+    const orders = await this.findByVendor(vendorId);
+
+    const totalOrders = orders.length;
+    const totalRevenue = orders
+      .filter((o) => o.status !== OrderStatus.CANCELLED)
+      .reduce((sum, o) => sum + Number(o.total), 0);
+
+    const pendingOrders = orders.filter((o) => o.status === OrderStatus.PENDING).length;
+    const processingOrders = orders.filter((o) => o.status === OrderStatus.PROCESSING).length;
+    const shippedOrders = orders.filter((o) => o.status === OrderStatus.SHIPPED).length;
+    const deliveredOrders = orders.filter((o) => o.status === OrderStatus.DELIVERED).length;
+    const cancelledOrders = orders.filter((o) => o.status === OrderStatus.CANCELLED).length;
+
+    return {
+      totalOrders,
+      totalRevenue,
+      pendingOrders,
+      processingOrders,
+      shippedOrders,
+      deliveredOrders,
+      cancelledOrders,
+    };
+  }
+
+  // ============================================================
+  // GET ADMIN STATS
+  // ============================================================
+  async getAdminStats(): Promise<{
+    totalOrders: number;
+    totalRevenue: number;
+    pendingOrders: number;
+    processingOrders: number;
+    shippedOrders: number;
+    deliveredOrders: number;
+    cancelledOrders: number;
+  }> {
+    const orders = await this.findAll();
+
+    const totalOrders = orders.length;
+    const totalRevenue = orders
+      .filter((o) => o.status !== OrderStatus.CANCELLED)
+      .reduce((sum, o) => sum + Number(o.total), 0);
+
+    const pendingOrders = orders.filter((o) => o.status === OrderStatus.PENDING).length;
+    const processingOrders = orders.filter((o) => o.status === OrderStatus.PROCESSING).length;
+    const shippedOrders = orders.filter((o) => o.status === OrderStatus.SHIPPED).length;
+    const deliveredOrders = orders.filter((o) => o.status === OrderStatus.DELIVERED).length;
+    const cancelledOrders = orders.filter((o) => o.status === OrderStatus.CANCELLED).length;
+
+    return {
+      totalOrders,
+      totalRevenue,
+      pendingOrders,
+      processingOrders,
+      shippedOrders,
+      deliveredOrders,
+      cancelledOrders,
+    };
+  }
+
+  // ============================================================
+  // HELPER: Fire and Forget
+  // ============================================================
+  private fireAndForget(promise: Promise<unknown>, label: string) {
+    promise.catch((err) => {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      this.logger.error(`❌ Failed to send ${label}`, msg);
+    });
   }
 }

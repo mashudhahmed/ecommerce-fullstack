@@ -1,4 +1,3 @@
-// user/user.entity.ts
 import {
   Entity,
   PrimaryGeneratedColumn,
@@ -7,9 +6,18 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   DeleteDateColumn,
+  Index,
 } from 'typeorm';
 import { Exclude, Expose } from 'class-transformer';
 import { Order } from '../orders/order.entity';
+import { Product } from '../products/products.entity';
+
+export enum UserRole {
+  USER = 'user',
+  VENDOR = 'vendor',
+  ADMIN = 'admin',
+  SUPER_ADMIN = 'superadmin',
+}
 
 @Entity('users')
 export class User {
@@ -17,26 +25,65 @@ export class User {
   @Expose()
   id!: number;
 
-  @Column()
+  @Column({ length: 100 })
   @Expose()
   name!: string;
 
   @Column({ unique: true })
+  @Index()
   @Expose()
   email!: string;
 
-  // ✅ select: false - Password hash NEVER returned by default
   @Exclude()
   @Column({ select: false })
   password!: string;
 
-  @Exclude()
-  @Column({ default: 'user' })
-  role!: string;
+  @Column({
+    type: 'enum',
+    enum: UserRole,
+    default: UserRole.USER,
+  })
+  @Expose()
+  role!: UserRole;
 
-  @Exclude()
-  @Column({ type: 'boolean', default: false })
+  @Column({ default: false })
+  @Expose()
   isVerified!: boolean;
+
+  @Column({ default: false })
+  @Expose()
+  isVendorApproved!: boolean;
+
+  @Column({ default: false })
+  @Expose()
+  isVendorRejected!: boolean;
+
+  // Widened to accept null: the column is nullable at the DB level, and
+  // approveVendor()/rejectVendor() explicitly clear or set this value,
+  // so the TS type needs to match what TypeORM actually returns/accepts.
+  @Column({ nullable: true, type: 'text' })
+  @Expose()
+  vendorRejectionReason?: string | null;
+
+  @Column({ nullable: true })
+  @Expose()
+  vendorBusinessName?: string;
+
+  @Column({ nullable: true, type: 'text' })
+  @Expose()
+  vendorBusinessDescription?: string;
+
+  @Column({ nullable: true })
+  @Expose()
+  vendorPhoneNumber?: string;
+
+  @Column({ nullable: true, type: 'text' })
+  @Expose()
+  vendorAddress?: string;
+
+  @Column({ nullable: true })
+  @Expose()
+  vendorBusinessRegistration?: string;
 
   @Exclude()
   @Column({ type: 'varchar', length: 6, nullable: true })
@@ -62,7 +109,6 @@ export class User {
   @Column({ type: 'timestamp', nullable: true })
   resetTokenExpiry: Date | null = null;
 
-  // ✅ Soft delete support
   @Exclude()
   @DeleteDateColumn()
   deletedAt?: Date;
@@ -70,6 +116,10 @@ export class User {
   @OneToMany(() => Order, (order) => order.user)
   @Expose()
   orders!: Order[];
+
+  @OneToMany(() => Product, (product) => product.owner)
+  @Expose()
+  products!: Product[];
 
   @CreateDateColumn()
   @Expose()
@@ -79,15 +129,32 @@ export class User {
   @Expose()
   updatedAt!: Date;
 
-  // ============================================================
-  // HELPER METHODS
-  // ============================================================
-
+  // Helper methods
   isSuperAdmin(): boolean {
-    return this.role === 'superadmin';
+    return this.role === UserRole.SUPER_ADMIN;
   }
 
   isAdmin(): boolean {
-    return this.role === 'admin' || this.role === 'superadmin';
+    return this.role === UserRole.ADMIN || this.role === UserRole.SUPER_ADMIN;
+  }
+
+  isVendor(): boolean {
+    return this.role === UserRole.VENDOR;
+  }
+
+  isCustomer(): boolean {
+    return this.role === UserRole.USER;
+  }
+
+  canApproveVendors(): boolean {
+    return this.isAdmin() || this.isSuperAdmin();
+  }
+
+  canManageProducts(): boolean {
+    return this.isVendor() || this.isAdmin() || this.isSuperAdmin();
+  }
+
+  canManageUsers(): boolean {
+    return this.isAdmin() || this.isSuperAdmin();
   }
 }

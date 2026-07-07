@@ -1,12 +1,12 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
-import { User } from './user.entity';
+import { User, UserRole } from './user.entity';
 import { ConfigService } from '@nestjs/config';
 
 @Injectable()
-export class SuperAdminSeeder {
+export class SuperAdminSeeder implements OnApplicationBootstrap {
   private readonly logger = new Logger(SuperAdminSeeder.name);
 
   constructor(
@@ -15,18 +15,12 @@ export class SuperAdminSeeder {
     private readonly configService: ConfigService,
   ) {}
 
+  async onApplicationBootstrap() {
+    await this.seed();
+  }
+
   async seed() {
     try {
-      // Check if superadmin already exists
-      const superAdminExists = await this.userRepository.findOne({
-        where: { role: 'superadmin' },
-      });
-
-      if (superAdminExists) {
-        this.logger.log('✅ SuperAdmin already exists');
-        return superAdminExists;
-      }
-
       const email = this.configService.get<string>('superAdmin.email');
       const password = this.configService.get<string>('superAdmin.password');
 
@@ -36,7 +30,17 @@ export class SuperAdminSeeder {
         return null;
       }
 
-      // Check if email already exists (in case of duplicate)
+      // Check if superadmin already exists
+      const existingSuperAdmin = await this.userRepository.findOne({
+        where: { role: UserRole.SUPER_ADMIN },
+      });
+
+      if (existingSuperAdmin) {
+        this.logger.log('✅ SuperAdmin already exists');
+        return existingSuperAdmin;
+      }
+
+      // Check if email already exists
       const existingUser = await this.userRepository.findOne({
         where: { email },
       });
@@ -52,8 +56,9 @@ export class SuperAdminSeeder {
         name: 'Super Administrator',
         email,
         password: hashedPassword,
-        role: 'superadmin',
+        role: UserRole.SUPER_ADMIN,
         isVerified: true,
+        isVendorApproved: false,
       });
 
       const savedAdmin = await this.userRepository.save(superAdmin);
@@ -65,13 +70,7 @@ export class SuperAdminSeeder {
 
       return savedAdmin;
     } catch (error) {
-      // Check if it's a duplicate key error (23505)
-      if (
-        typeof error === 'object' &&
-        error !== null &&
-        'code' in error &&
-        (error as { code?: string }).code === '23505'
-      ) {
+      if (error instanceof Error && 'code' in error && error.code === '23505') {
         this.logger.log('✅ SuperAdmin already exists (duplicate email)');
         return null;
       }

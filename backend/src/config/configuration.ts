@@ -1,4 +1,7 @@
 export default () => ({
+  app: {
+    frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3000',
+  },
   port: parseInt(process.env.PORT || '3000', 10),
   database: {
     host: process.env.DATABASE_HOST || 'localhost',
@@ -18,10 +21,13 @@ export default () => ({
   email: {
     host: process.env.SMTP_HOST,
     port: parseInt(process.env.SMTP_PORT || '587', 10),
+    secure: process.env.SMTP_SECURE === 'true',
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
+    fromName: process.env.SMTP_FROM_NAME || 'E-Commerce Store',
+    adminEmails: process.env.ADMIN_NOTIFICATION_EMAILS,
   },
   cors: {
-    origin: process.env.CORS_ORIGIN?.split(',') || ['http://localhost:3001'],
+    origin: process.env.CORS_ORIGIN?.split(',') || ['http://localhost:3000', 'http://localhost:3001'],
   },
 });

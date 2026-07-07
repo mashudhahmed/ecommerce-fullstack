@@ -1,3 +1,4 @@
+// src/orders/order.entity.ts
 import {
   Entity,
   PrimaryGeneratedColumn,
@@ -47,6 +48,19 @@ export class Order {
   @Column({ nullable: true })
   @Expose()
   shippingAddress?: string;
+
+  // ✅ Added missing columns
+  @Column({ nullable: true, type: 'timestamp' })
+  @Expose()
+  cancelledAt?: Date;
+
+  @Column({ nullable: true })
+  @Expose()
+  cancellationReason?: string;
+
+  @ManyToOne(() => User, { nullable: true })
+  @Expose()
+  cancelledBy?: User;
 
   @CreateDateColumn()
   @Expose()

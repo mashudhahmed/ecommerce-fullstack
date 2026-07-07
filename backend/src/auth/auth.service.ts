@@ -17,6 +17,7 @@ import * as crypto from 'crypto';
 import { UserService } from '../user/user.service';
 import { MailerService } from '../mailer/mailer.service';
 import { RefreshToken } from './refresh-token.entity';
+import { LoginAttemptService } from './login-attempt.service';
 import { RegisterUserDto } from './dto/register-user.dto';
 import { RegisterVendorDto } from './dto/register-vendor.dto';
 import { LoginDto } from './dto/login.dto';
@@ -42,6 +43,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly mailerService: MailerService,
     private readonly configService: ConfigService,
+    private readonly loginAttemptService: LoginAttemptService,
     @InjectRepository(RefreshToken)
     private readonly refreshTokenRepo: Repository<RefreshToken>,
   ) {}
@@ -149,8 +151,9 @@ export class AuthService {
   }
 
   // ============================================================
-  // LOGIN
+  // LOGIN WITH ATTEMPT TRACKING
   // ============================================================
+  
   async login(dto: LoginDto, meta: { userAgent?: string; ipAddress?: string }): Promise<{
     message: string;
     tokens: TokenPair;
@@ -158,18 +161,52 @@ export class AuthService {
   }> {
     this.logger.log(`🔐 Login attempt: ${dto.email}`);
 
+    // ✅ Check if account is locked
+    const isLocked = await this.loginAttemptService.isAccountLocked(
+      dto.email,
+      meta.ipAddress || 'unknown',
+    );
+
+    if (isLocked) {
+      const remainingMinutes = await this.loginAttemptService.getLockoutRemainingMinutes(
+        dto.email,
+        meta.ipAddress || 'unknown',
+      );
+      throw new UnauthorizedException(
+        `Too many failed attempts. Please try again in ${remainingMinutes} minutes.`,
+      );
+    }
+
     // Find user with password
     const user = await this.userService.findByEmailWithPassword(dto.email);
 
     if (!user) {
+      await this.loginAttemptService.recordAttempt(
+        dto.email,
+        meta.ipAddress || 'unknown',
+        false,
+        meta.userAgent,
+      );
       throw new UnauthorizedException('Invalid email or password');
     }
 
     // Verify password
     const isPasswordValid = await bcrypt.compare(dto.password, user.password);
     if (!isPasswordValid) {
+      await this.loginAttemptService.recordAttempt(
+        dto.email,
+        meta.ipAddress || 'unknown',
+        false,
+        meta.userAgent,
+      );
       throw new UnauthorizedException('Invalid email or password');
     }
+
+    // ✅ Clear attempts on successful login
+    await this.loginAttemptService.clearAttempts(
+      dto.email,
+      meta.ipAddress || 'unknown',
+    );
 
     // Check if email is verified
     if (!user.isVerified) {
@@ -309,6 +346,7 @@ export class AuthService {
         role: user.role,
         isVerified: user.isVerified,
         isVendorApproved: user.isVendorApproved,
+        isVendorRejected: user.isVendorRejected,
       },
       { expiresIn: ACCESS_TOKEN_TTL_SECONDS },
     );
@@ -478,7 +516,46 @@ export class AuthService {
   }
 
   // ============================================================
-  // VENDOR APPROVAL
+  // VENDOR MANAGEMENT - GET PENDING VENDORS
+  // ============================================================
+  async getPendingVendors() {
+    this.logger.log('📋 Fetching pending vendors');
+    return this.userService.findPendingVendors();
+  }
+
+  // ============================================================
+  // VENDOR MANAGEMENT - GET APPROVED VENDORS
+  // ============================================================
+  async getApprovedVendors() {
+    this.logger.log('📋 Fetching approved vendors');
+    return this.userService.findApprovedVendors();
+  }
+
+  // ============================================================
+  // VENDOR MANAGEMENT - GET VENDOR BY ID
+  // ============================================================
+  async getVendorById(vendorId: number) {
+    this.logger.log(`📋 Fetching vendor: ${vendorId}`);
+    const vendor = await this.userService.findByIdOrFail(vendorId);
+    
+    if (vendor.role !== UserRole.VENDOR) {
+      throw new BadRequestException('User is not a vendor');
+    }
+
+    return this.toPublicUser(vendor);
+  }
+
+  // ============================================================
+  // VENDOR MANAGEMENT - GET ALL VENDORS
+  // ============================================================
+  async getAllVendors() {
+    this.logger.log('📋 Fetching all vendors');
+    const vendors = await this.userService.findByRole(UserRole.VENDOR);
+    return vendors.map((v) => this.toPublicUser(v));
+  }
+
+  // ============================================================
+  // VENDOR MANAGEMENT - APPROVE VENDOR
   // ============================================================
   async approveVendor(vendorId: number, adminId: number) {
     this.logger.log(`✅ Approving vendor: ${vendorId} by admin: ${adminId}`);
@@ -519,6 +596,9 @@ export class AuthService {
     };
   }
 
+  // ============================================================
+  // VENDOR MANAGEMENT - REJECT VENDOR
+  // ============================================================
   async rejectVendor(vendorId: number, adminId: number, reason?: string) {
     this.logger.log(`❌ Rejecting vendor: ${vendorId} by admin: ${adminId}`);
 
@@ -536,7 +616,7 @@ export class AuthService {
       throw new BadRequestException('Vendor is already rejected');
     }
 
-    // Reject vendor - Actually update the status
+    // Reject vendor
     await this.userService.update(vendor.id, {
       isVendorApproved: false,
       isVendorRejected: true,
@@ -554,8 +634,173 @@ export class AuthService {
     };
   }
 
-  async getPendingVendors() {
-    return this.userService.findPendingVendors();
+  // ============================================================
+  // VENDOR MANAGEMENT - RESUBMIT VENDOR APPLICATION
+  // ============================================================
+  async resubmitVendorApplication(vendorId: number) {
+    this.logger.log(`🔄 Resubmitting vendor application: ${vendorId}`);
+
+    const vendor = await this.userService.findByIdOrFail(vendorId);
+
+    if (vendor.role !== UserRole.VENDOR) {
+      throw new BadRequestException('User is not a vendor');
+    }
+
+    if (vendor.isVendorApproved) {
+      throw new BadRequestException('Vendor is already approved');
+    }
+
+    if (!vendor.isVendorRejected) {
+      throw new BadRequestException('Vendor application is not rejected');
+    }
+
+    // Reset rejection status
+    await this.userService.update(vendor.id, {
+      isVendorRejected: false,
+      vendorRejectionReason: null,
+      isVendorApproved: false,
+    });
+
+    // Notify admins about resubmission
+    const updatedVendor = await this.userService.findByIdOrFail(vendorId);
+    this.fireAndForget(
+      this.mailerService.sendVendorRegistrationNotification(updatedVendor),
+      `vendor resubmission notification`,
+    );
+
+    return {
+      message: 'Vendor application resubmitted successfully',
+      vendor: this.toPublicUser(updatedVendor),
+    };
+  }
+
+  // ============================================================
+  // VENDOR MANAGEMENT - GET VENDOR STATISTICS
+  // ============================================================
+  async getVendorStatistics() {
+    this.logger.log('📊 Fetching vendor statistics');
+
+    const [
+      totalVendors,
+      pendingVendors,
+      approvedVendors,
+      rejectedVendors,
+    ] = await Promise.all([
+      this.userService.countByRole(UserRole.VENDOR),
+      this.userService.countPendingVendors(),
+      this.userService.countByRole(UserRole.VENDOR).then(count => 
+        this.userService.findApprovedVendors().then(vendors => vendors.length)
+      ),
+      this.userService.findByRole(UserRole.VENDOR).then(vendors => 
+        vendors.filter(v => v.isVendorRejected).length
+      ),
+    ]);
+
+    return {
+      totalVendors,
+      pendingVendors,
+      approvedVendors,
+      rejectedVendors,
+      approvalRate: totalVendors > 0 ? (approvedVendors / totalVendors) * 100 : 0,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  // ============================================================
+  // VENDOR MANAGEMENT - BULK APPROVE VENDORS
+  // ============================================================
+  async bulkApproveVendors(vendorIds: number[], adminId: number) {
+    this.logger.log(`✅ Bulk approving ${vendorIds.length} vendors by admin: ${adminId}`);
+
+    const results = {
+      success: [] as number[],
+      failed: [] as { id: number; error: string }[],
+    };
+
+    for (const vendorId of vendorIds) {
+      try {
+        const result = await this.approveVendor(vendorId, adminId);
+        results.success.push(vendorId);
+      } catch (error: any) {
+        results.failed.push({
+          id: vendorId,
+          error: error.message || 'Unknown error',
+        });
+      }
+    }
+
+    return {
+      message: `Approved ${results.success.length} vendors, ${results.failed.length} failed`,
+      results,
+    };
+  }
+
+  // ============================================================
+  // VENDOR MANAGEMENT - BULK REJECT VENDORS
+  // ============================================================
+  async bulkRejectVendors(
+    vendorIds: number[],
+    adminId: number,
+    reason?: string,
+  ) {
+    this.logger.log(`❌ Bulk rejecting ${vendorIds.length} vendors by admin: ${adminId}`);
+
+    const results = {
+      success: [] as number[],
+      failed: [] as { id: number; error: string }[],
+    };
+
+    for (const vendorId of vendorIds) {
+      try {
+        const result = await this.rejectVendor(vendorId, adminId, reason);
+        results.success.push(vendorId);
+      } catch (error: any) {
+        results.failed.push({
+          id: vendorId,
+          error: error.message || 'Unknown error',
+        });
+      }
+    }
+
+    return {
+      message: `Rejected ${results.success.length} vendors, ${results.failed.length} failed`,
+      results,
+    };
+  }
+
+  // ============================================================
+  // VENDOR MANAGEMENT - SEARCH VENDORS
+  // ============================================================
+  async searchVendors(query: string) {
+    this.logger.log(`🔍 Searching vendors with query: ${query}`);
+
+    if (!query || query.length < 2) {
+      return [];
+    }
+
+    const vendors = await this.userService.searchUsers(query);
+    return vendors
+      .filter((v) => v.role === UserRole.VENDOR)
+      .map((v) => this.toPublicUser(v));
+  }
+
+  // ============================================================
+  // VENDOR MANAGEMENT - GET VENDOR BY BUSINESS NAME
+  // ============================================================
+  async getVendorByBusinessName(businessName: string) {
+    this.logger.log(`🔍 Finding vendor by business name: ${businessName}`);
+
+    const user = await this.userService.findOne({
+      vendorBusinessName: businessName,
+      role: UserRole.VENDOR,
+      isVendorApproved: true,
+    });
+
+    if (!user) {
+      throw new NotFoundException(`Vendor with business name "${businessName}" not found`);
+    }
+
+    return this.toPublicUser(user);
   }
 
   // ============================================================

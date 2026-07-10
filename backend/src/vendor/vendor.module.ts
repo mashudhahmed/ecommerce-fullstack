@@ -19,9 +19,10 @@ import { OrdersModule } from '../orders/orders.module';
     UserModule,
     ProductsModule,
     OrdersModule,
+    // CacheModule, MonitoringModule, EventsModule are @Global()
   ],
   controllers: [VendorController],
   providers: [VendorService],
-  exports: [VendorService], // ✅ Ensure VendorService is exported
+  exports: [VendorService],
 })
 export class VendorModule {}

@@ -1,21 +1,20 @@
 // src/notifications/notification.service.ts
-import { Injectable, Logger, Inject, Optional } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, LessThan } from 'typeorm';
 import { Notification, NotificationType, NotificationChannel } from './notification.entity';
 import { User } from '../user/user.entity';
 import { MailerService } from '../mailer/mailer.service';
 import { UserService } from '../user/user.service';
 import { ConfigService } from '@nestjs/config';
 
-// Optional Twilio integration – will gracefully fallback if not installed
+// Optional Twilio integration
 let twilioClient: any = null;
 try {
-  // Dynamic import to avoid breaking if twilio is not installed
   const twilio = require('twilio');
   twilioClient = twilio;
 } catch {
-  // Twilio not installed – SMS will be logged instead of sent
+  // Twilio not installed
 }
 
 @Injectable()
@@ -25,21 +24,39 @@ export class NotificationService {
   private readonly twilioAuthToken: string;
   private readonly twilioPhoneNumber: string;
 
+  // ============================================================
+  // RATE LIMITING CONFIG
+  // ============================================================
+  private readonly rateLimits = new Map<string, { count: number; resetAt: Date }>();
+  private readonly rateLimitConfig = {
+    [NotificationChannel.EMAIL]: { limit: 50, window: 60 * 60 * 1000 },
+    [NotificationChannel.SMS]: { limit: 10, window: 60 * 60 * 1000 },
+    [NotificationChannel.PUSH]: { limit: 100, window: 60 * 60 * 1000 },
+    [NotificationChannel.IN_APP]: { limit: 1000, window: 60 * 60 * 1000 },
+  };
+
+  // ============================================================
+  // RETRY CONFIG
+  // ============================================================
+  private readonly MAX_RETRY_ATTEMPTS = 3;
+  private readonly RETRY_DELAYS = [1000, 5000, 15000]; // 1s, 5s, 15s
+
   constructor(
     @InjectRepository(Notification)
     private readonly notificationRepo: Repository<Notification>,
+    @InjectRepository(User)
+    private readonly userRepo: Repository<User>,
     private readonly mailerService: MailerService,
     private readonly userService: UserService,
     private readonly configService: ConfigService,
   ) {
-    // Load Twilio config if available
     this.twilioAccountSid = this.configService.get('twilio.accountSid') || '';
     this.twilioAuthToken = this.configService.get('twilio.authToken') || '';
     this.twilioPhoneNumber = this.configService.get('twilio.phoneNumber') || '';
   }
 
   // ============================================================
-  // CREATE NOTIFICATION
+  // CREATE NOTIFICATION WITH RATE LIMITING
   // ============================================================
   async create(
     userId: number,
@@ -49,6 +66,12 @@ export class NotificationService {
     content: string,
     data?: Record<string, any>,
   ): Promise<Notification> {
+    // ✅ Rate limiting check
+    if (!this.checkRateLimit(userId, channel)) {
+      this.logger.warn(`Rate limit exceeded for user ${userId}, channel ${channel}`);
+      throw new Error(`Rate limit exceeded for ${channel} notifications`);
+    }
+
     const notification = this.notificationRepo.create({
       userId,
       type,
@@ -56,13 +79,16 @@ export class NotificationService {
       title,
       content,
       data,
+      read: false,
+      deliveryStatus: 'pending',
+      deliveryAttempts: 0,
     });
 
     const saved = await this.notificationRepo.save(notification);
     this.logger.log(`Notification created: ${type} for user ${userId}`);
 
-    // Deliver immediately (fire and forget)
-    this.deliver(saved).catch((err) => {
+    // ✅ Deliver with retry mechanism
+    this.deliverWithRetry(saved).catch((err) => {
       this.logger.error(`Failed to deliver notification ${saved.id}: ${err.message}`);
     });
 
@@ -70,7 +96,75 @@ export class NotificationService {
   }
 
   // ============================================================
-  // DELIVER NOTIFICATION (route to appropriate channel)
+  // ✅ DELIVERY WITH RETRY MECHANISM
+  // ============================================================
+  private async deliverWithRetry(
+    notification: Notification,
+    attempt: number = 0,
+  ): Promise<void> {
+    try {
+      await this.deliver(notification);
+      
+      // ✅ Mark as delivered
+      notification.deliveryStatus = 'delivered';
+      notification.deliveredAt = new Date();
+      notification.deliveryAttempts = attempt + 1;
+      await this.notificationRepo.save(notification);
+      
+      this.logger.log(`Notification ${notification.id} delivered successfully`);
+    } catch (error: any) {
+      notification.deliveryAttempts = attempt + 1;
+      
+      if (attempt < this.MAX_RETRY_ATTEMPTS) {
+        // ✅ Retry with exponential backoff
+        const delay = this.RETRY_DELAYS[attempt] || 10000;
+        this.logger.warn(
+          `Notification ${notification.id} failed (attempt ${attempt + 1}/${this.MAX_RETRY_ATTEMPTS}), retrying in ${delay}ms`
+        );
+        
+        await this.sleep(delay);
+        return this.deliverWithRetry(notification, attempt + 1);
+      } else {
+        // ✅ Mark as failed after all retries
+        notification.deliveryStatus = 'failed';
+        notification.deliveryError = error.message;
+        await this.notificationRepo.save(notification);
+        
+        this.logger.error(`Notification ${notification.id} failed after ${this.MAX_RETRY_ATTEMPTS} attempts`);
+      }
+    }
+  }
+
+  private sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  // ============================================================
+  // ✅ RATE LIMITING CHECK
+  // ============================================================
+  private checkRateLimit(userId: number, channel: NotificationChannel): boolean {
+    const config = this.rateLimitConfig[channel];
+    if (!config) return true;
+
+    const key = `${userId}:${channel}`;
+    const now = new Date();
+    const current = this.rateLimits.get(key);
+
+    if (!current || current.resetAt < now) {
+      this.rateLimits.set(key, { count: 1, resetAt: new Date(now.getTime() + config.window) });
+      return true;
+    }
+
+    if (current.count >= config.limit) {
+      return false;
+    }
+
+    current.count++;
+    return true;
+  }
+
+  // ============================================================
+  // DELIVER NOTIFICATION
   // ============================================================
   private async deliver(notification: Notification): Promise<void> {
     switch (notification.channel) {
@@ -84,7 +178,6 @@ export class NotificationService {
         await this.sendPush(notification);
         break;
       case NotificationChannel.IN_APP:
-        // Already saved to database – no additional delivery needed
         this.logger.debug(`In-app notification ${notification.id} saved`);
         break;
       default:
@@ -93,17 +186,15 @@ export class NotificationService {
   }
 
   // ============================================================
-  // SEND EMAIL – implemented
+  // SEND EMAIL
   // ============================================================
   private async sendEmail(notification: Notification): Promise<void> {
     try {
-      const user = await this.userService.findById(notification.userId);
+      const user = await this.findUserById(notification.userId);
       if (!user) {
-        this.logger.warn(`User ${notification.userId} not found for email notification`);
-        return;
+        throw new Error(`User ${notification.userId} not found`);
       }
 
-      // Use MailerService to send the email
       await this.mailerService.sendMail(
         user.email,
         notification.title,
@@ -112,39 +203,31 @@ export class NotificationService {
 
       this.logger.log(`Email sent to ${user.email} for notification ${notification.id}`);
     } catch (error: any) {
-      this.logger.error(`Failed to send email for notification ${notification.id}: ${error.message}`);
-      // Re-throw so caller can handle
+      this.logger.error(`Failed to send email: ${error.message}`);
       throw error;
     }
   }
 
   // ============================================================
-  // SEND SMS – implemented with Twilio (optional)
+  // SEND SMS
   // ============================================================
   private async sendSMS(notification: Notification): Promise<void> {
     try {
-      const user = await this.userService.findById(notification.userId);
+      const user = await this.findUserById(notification.userId);
       if (!user) {
-        this.logger.warn(`User ${notification.userId} not found for SMS notification`);
-        return;
+        throw new Error(`User ${notification.userId} not found`);
       }
 
-      // ✅ FIX: Use vendorPhoneNumber (exists on User entity)
       const phoneNumber = user.vendorPhoneNumber;
       if (!phoneNumber) {
-        this.logger.warn(`User ${notification.userId} has no phone number for SMS`);
-        return;
+        throw new Error(`User ${notification.userId} has no phone number`);
       }
 
-      // Check if Twilio is configured
       if (!this.twilioAccountSid || !this.twilioAuthToken || !this.twilioPhoneNumber) {
-        this.logger.warn(
-          `Twilio not configured – SMS would be sent to ${phoneNumber}: ${notification.content}`,
-        );
+        this.logger.warn(`Twilio not configured – SMS would be sent to ${phoneNumber}`);
         return;
       }
 
-      // Send SMS via Twilio
       if (twilioClient) {
         const client = twilioClient(this.twilioAccountSid, this.twilioAuthToken);
         await client.messages.create({
@@ -152,48 +235,39 @@ export class NotificationService {
           to: phoneNumber,
           from: this.twilioPhoneNumber,
         });
-        this.logger.log(`SMS sent to ${phoneNumber} for notification ${notification.id}`);
+        this.logger.log(`SMS sent to ${phoneNumber}`);
       } else {
-        this.logger.warn('Twilio library not installed – SMS not sent');
+        throw new Error('Twilio library not installed');
       }
     } catch (error: any) {
-      this.logger.error(`Failed to send SMS for notification ${notification.id}: ${error.message}`);
-      // Don't re-throw – SMS failures shouldn't break the flow
+      this.logger.error(`Failed to send SMS: ${error.message}`);
+      throw error;
     }
   }
 
   // ============================================================
-  // SEND PUSH – placeholder
+  // SEND PUSH (placeholder - implement FCM)
   // ============================================================
   private async sendPush(notification: Notification): Promise<void> {
     try {
-      // Integrate with Firebase Cloud Messaging (FCM) or similar
-      // This would require storing device tokens per user
+      // ✅ Implement Firebase Cloud Messaging here
       this.logger.log(`Push notification would be sent for ${notification.id}`);
-      // Placeholder – implement when needed
     } catch (error: any) {
-      this.logger.error(`Failed to send push for notification ${notification.id}: ${error.message}`);
+      this.logger.error(`Failed to send push: ${error.message}`);
+      throw error;
     }
   }
 
   // ============================================================
-  // MARK AS READ
+  // FIND USER BY ID
   // ============================================================
-  async markAsRead(id: number, userId: number): Promise<void> {
-    const result = await this.notificationRepo.update(
-      { id, userId },
-      { read: true, readAt: new Date() },
-    );
-
-    if (result.affected === 0) {
-      this.logger.warn(`Notification ${id} not found for user ${userId}`);
-    } else {
-      this.logger.log(`Notification ${id} marked as read by user ${userId}`);
-    }
+  private async findUserById(id: number): Promise<User | null> {
+    if (!id) return null;
+    return this.userRepo.findOne({ where: { id } });
   }
 
   // ============================================================
-  // GET USER NOTIFICATIONS (paginated)
+  // GET USER NOTIFICATIONS
   // ============================================================
   async getUserNotifications(
     userId: number,
@@ -235,12 +309,28 @@ export class NotificationService {
   }
 
   // ============================================================
-  // GET UNREAD COUNT (for UI badges)
+  // GET UNREAD COUNT
   // ============================================================
   async getUnreadCount(userId: number): Promise<number> {
     return this.notificationRepo.count({
       where: { userId, read: false },
     });
+  }
+
+  // ============================================================
+  // MARK AS READ
+  // ============================================================
+  async markAsRead(id: number, userId: number): Promise<void> {
+    const result = await this.notificationRepo.update(
+      { id, userId },
+      { read: true, readAt: new Date() },
+    );
+
+    if (result.affected === 0) {
+      this.logger.warn(`Notification ${id} not found for user ${userId}`);
+    } else {
+      this.logger.log(`Notification ${id} marked as read`);
+    }
   }
 
   // ============================================================
@@ -251,7 +341,7 @@ export class NotificationService {
       { userId, read: false },
       { read: true, readAt: new Date() },
     );
-    this.logger.log(`Marked ${result.affected} notifications as read for user ${userId}`);
+    this.logger.log(`Marked ${result.affected} notifications as read`);
   }
 
   // ============================================================
@@ -260,81 +350,33 @@ export class NotificationService {
   async deleteNotification(id: number, userId: number): Promise<void> {
     const result = await this.notificationRepo.delete({ id, userId });
     if (result.affected === 0) {
-      this.logger.warn(`Notification ${id} not found for user ${userId}`);
+      this.logger.warn(`Notification ${id} not found`);
     } else {
-      this.logger.log(`Notification ${id} deleted by user ${userId}`);
+      this.logger.log(`Notification ${id} deleted`);
     }
   }
 
   // ============================================================
-  // DELETE ALL NOTIFICATIONS FOR USER
+  // DELETE ALL NOTIFICATIONS
   // ============================================================
   async deleteAllNotifications(userId: number): Promise<void> {
     const result = await this.notificationRepo.delete({ userId });
-    this.logger.log(`Deleted ${result.affected} notifications for user ${userId}`);
+    this.logger.log(`Deleted ${result.affected} notifications`);
   }
 
   // ============================================================
-  // CREATE ORDER CONFIRMATION NOTIFICATION (convenience)
+  // ✅ CLEANUP EXPIRED NOTIFICATIONS (FIXED)
   // ============================================================
-  async sendOrderConfirmation(
-    userId: number,
-    orderId: number,
-    total: number,
-  ): Promise<Notification> {
-    return this.create(
-      userId,
-      NotificationType.ORDER_CONFIRMATION,
-      NotificationChannel.EMAIL,
-      `Order #${orderId} Confirmed`,
-      `Your order #${orderId} for $${total.toFixed(2)} has been confirmed.`,
-      { orderId, total },
-    );
-  }
+  async cleanupOldNotifications(days: number = 30): Promise<number> {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - days);
 
-  // ============================================================
-  // CREATE ORDER STATUS UPDATE NOTIFICATION (convenience)
-  // ============================================================
-  async sendOrderStatusUpdate(
-    userId: number,
-    orderId: number,
-    status: string,
-  ): Promise<Notification> {
-    return this.create(
-      userId,
-      NotificationType.ORDER_SHIPPED,
-      NotificationChannel.EMAIL,
-      `Order #${orderId} Updated`,
-      `Your order #${orderId} status has been updated to: ${status.toUpperCase()}.`,
-      { orderId, status },
-    );
-  }
+    const result = await this.notificationRepo.delete({
+      createdAt: LessThan(cutoff),
+      read: true,
+    });
 
-  // ============================================================
-  // CREATE VENDOR APPROVAL NOTIFICATION (convenience)
-  // ============================================================
-  async sendVendorApproved(userId: number): Promise<Notification> {
-    return this.create(
-      userId,
-      NotificationType.VENDOR_APPROVED,
-      NotificationChannel.EMAIL,
-      'Vendor Account Approved!',
-      'Congratulations! Your vendor account has been approved. You can now start listing products.',
-      {},
-    );
-  }
-
-  // ============================================================
-  // CREATE VENDOR REJECTION NOTIFICATION (convenience)
-  // ============================================================
-  async sendVendorRejected(userId: number, reason?: string): Promise<Notification> {
-    return this.create(
-      userId,
-      NotificationType.VENDOR_REJECTED,
-      NotificationChannel.EMAIL,
-      'Vendor Account Update',
-      `Your vendor application has been reviewed. ${reason ? `Reason: ${reason}` : 'Please contact support for details.'}`,
-      { reason },
-    );
+    this.logger.log(`Cleaned up ${result.affected} old notifications`);
+    return result.affected || 0;  // ✅ Return number, not DeleteResult
   }
 }

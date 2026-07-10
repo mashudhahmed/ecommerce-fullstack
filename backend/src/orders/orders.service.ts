@@ -15,7 +15,8 @@ import { User, UserRole } from '../user/user.entity';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { MailerService } from '../mailer/mailer.service';
 import { EventsGateway } from '../events/events.gateway';
-import { IdempotencyService } from './idempotency.service'; // ✅ Added
+import { IdempotencyService } from './idempotency.service';
+import { PaginationDto } from '../common/dto/pagination.dto';
 
 @Injectable()
 export class OrdersService {
@@ -31,12 +32,9 @@ export class OrdersService {
     private readonly dataSource: DataSource,
     private readonly mailerService: MailerService,
     private readonly eventsGateway: EventsGateway,
-    private readonly idempotencyService: IdempotencyService, // ✅ Added
+    private readonly idempotencyService: IdempotencyService,
   ) {}
 
-  // ============================================================
-  // CREATE ORDER
-  // ============================================================
   async create(userId: number, createOrderDto: CreateOrderDto): Promise<Order> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -85,7 +83,6 @@ export class OrdersService {
 
         orderItems.push(orderItem);
 
-        // Reduce stock
         product.stock -= item.quantity;
         await queryRunner.manager.save(product);
       }
@@ -106,13 +103,11 @@ export class OrdersService {
 
       const completeOrder = await this.findOne(savedOrder.id);
 
-      // Send order confirmation email
       this.fireAndForget(
         this.mailerService.sendOrderConfirmation(user.email, completeOrder),
         `order confirmation to ${user.email}`,
       );
 
-      // Emit WebSocket event
       this.eventsGateway.notifyUser(
         userId.toString(),
         'order_created',
@@ -129,10 +124,6 @@ export class OrdersService {
     }
   }
 
-  // ============================================================
-  // CREATE ORDER WITH IDEMPOTENCY – NEW METHOD
-  // ============================================================
-
   async createWithIdempotency(
     userId: number,
     createOrderDto: CreateOrderDto,
@@ -147,21 +138,42 @@ export class OrdersService {
     );
   }
 
-  // ============================================================
-  // FIND ALL (Admin/SuperAdmin)
-  // ============================================================
+  async findAllPaginated(page: number = 1, limit: number = 20): Promise<{
+    data: Order[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  }> {
+    const skip = (page - 1) * limit;
+
+    const [data, total] = await this.orderRepository.findAndCount({
+      relations: ['user', 'items', 'items.product'],
+      order: { createdAt: 'DESC' },
+      skip,
+      take: limit,
+    });
+
+    return {
+      data,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
   async findAll(): Promise<Order[]> {
     return this.orderRepository.find({
+      relations: ['user', 'items', 'items.product'],
       order: { createdAt: 'DESC' },
     });
   }
 
-  // ============================================================
-  // FIND ONE
-  // ============================================================
   async findOne(id: number): Promise<Order> {
     const order = await this.orderRepository.findOne({
       where: { id },
+      relations: ['user', 'items', 'items.product', 'items.product.owner'],
     });
 
     if (!order) {
@@ -171,25 +183,21 @@ export class OrdersService {
     return order;
   }
 
-  // ============================================================
-  // FIND BY USER
-  // ============================================================
   async findByUser(userId: number): Promise<Order[]> {
     return this.orderRepository.find({
       where: { user: { id: userId } },
+      relations: ['items', 'items.product'],
       order: { createdAt: 'DESC' },
     });
   }
 
-  // ============================================================
-  // FIND BY VENDOR
-  // ============================================================
   async findByVendor(vendorId: number): Promise<Order[]> {
     const orders = await this.orderRepository
       .createQueryBuilder('order')
       .leftJoinAndSelect('order.items', 'items')
       .leftJoinAndSelect('items.product', 'product')
       .leftJoinAndSelect('product.owner', 'owner')
+      .leftJoinAndSelect('order.user', 'user')
       .where('owner.id = :vendorId', { vendorId })
       .orderBy('order.createdAt', 'DESC')
       .getMany();
@@ -200,9 +208,6 @@ export class OrdersService {
     }));
   }
 
-  // ============================================================
-  // UPDATE STATUS
-  // ============================================================
   async updateStatus(id: number, status: OrderStatus, userId: number): Promise<Order> {
     const order = await this.findOne(id);
 
@@ -215,13 +220,11 @@ export class OrdersService {
 
     this.logger.log(`Order ${id} status updated to ${status} by user ${userId}`);
 
-    // Send status update email
     this.fireAndForget(
       this.mailerService.sendOrderStatusUpdate(order.user.email, order, status),
       `status update to ${order.user.email}`,
     );
 
-    // Emit WebSocket event
     this.eventsGateway.notifyUser(
       order.user.id.toString(),
       'order_status_updated',
@@ -231,9 +234,6 @@ export class OrdersService {
     return updatedOrder;
   }
 
-  // ============================================================
-  // CANCEL ORDER
-  // ============================================================
   async cancelOrder(id: number, userId: number, userRole: UserRole): Promise<Order> {
     const order = await this.findOne(id);
 
@@ -290,9 +290,6 @@ export class OrdersService {
     }
   }
 
-  // ============================================================
-  // GET ORDER SUMMARY FOR USER
-  // ============================================================
   async getOrderSummary(userId: number): Promise<{
     totalOrders: number;
     totalSpent: number;
@@ -318,9 +315,6 @@ export class OrdersService {
     };
   }
 
-  // ============================================================
-  // GET VENDOR ORDER SUMMARY
-  // ============================================================
   async getVendorOrderSummary(vendorId: number): Promise<{
     totalOrders: number;
     totalRevenue: number;
@@ -354,9 +348,6 @@ export class OrdersService {
     };
   }
 
-  // ============================================================
-  // GET ADMIN STATS
-  // ============================================================
   async getAdminStats(): Promise<{
     totalOrders: number;
     totalRevenue: number;
@@ -390,13 +381,10 @@ export class OrdersService {
     };
   }
 
-  // ============================================================
-  // HELPER: Fire and Forget (for email sending)
-  // ============================================================
   private fireAndForget(promise: Promise<unknown>, label: string) {
     promise.catch((err) => {
       const msg = err instanceof Error ? err.message : 'Unknown error';
-      this.logger.error(`❌ Failed to send ${label}`, msg);
+      this.logger.error(`Failed to send ${label}`, msg);
     });
   }
 }

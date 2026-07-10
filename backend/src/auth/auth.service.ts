@@ -18,8 +18,8 @@ import { UserService } from '../user/user.service';
 import { MailerService } from '../mailer/mailer.service';
 import { RefreshToken } from './refresh-token.entity';
 import { LoginAttemptService } from './login-attempt.service';
-import { TwoFactorService } from './two-factor.service';          // ✅ Added
-import { TwoFactor } from './two-factor.entity';                 // ✅ Added
+import { TwoFactorService } from './two-factor.service';
+import { TwoFactor } from './two-factor.entity';
 import { RegisterUserDto } from './dto/register-user.dto';
 import { RegisterVendorDto } from './dto/register-vendor.dto';
 import { LoginDto } from './dto/login.dto';
@@ -50,9 +50,9 @@ export class AuthService {
     @InjectRepository(RefreshToken)
     private readonly refreshTokenRepo: Repository<RefreshToken>,
     private readonly eventsGateway: EventsGateway,
-    private readonly twoFactorService: TwoFactorService,          // ✅ Injected
+    private readonly twoFactorService: TwoFactorService,
     @InjectRepository(TwoFactor)
-    private readonly twoFactorRepo: Repository<TwoFactor>,        // ✅ Injected
+    private readonly twoFactorRepo: Repository<TwoFactor>,
   ) {}
 
   // ============================================================
@@ -234,7 +234,7 @@ export class AuthService {
     }
 
     // ============================================================
-    // ✅ TWO-FACTOR AUTHENTICATION CHECK (NEW)
+    // TWO-FACTOR AUTHENTICATION CHECK
     // ============================================================
     const twoFactor = await this.twoFactorRepo.findOne({
       where: { userId: user.id, isEnabled: true },
@@ -250,7 +250,6 @@ export class AuthService {
         throw new UnauthorizedException('Invalid 2FA token');
       }
     }
-    // ============================================================
 
     // Issue tokens
     const tokens = await this.issueTokenPair(user, meta);

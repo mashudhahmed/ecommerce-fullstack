@@ -20,7 +20,7 @@ import type { Request, Response } from 'express';
 import { Throttle, SkipThrottle } from '@nestjs/throttler';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
-import { TwoFactorService } from './two-factor.service'; // ✅ Added
+import { TwoFactorService } from './two-factor.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -32,14 +32,11 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
 import { VerifyResetCodeDto } from './dto/verify-reset-code.dto';
 import { UserRole } from '../user/user.entity';
-// 2FA DTOs
 import { EnableTwoFactorDto, VerifyTwoFactorDto, DisableTwoFactorDto } from './dto/enable-2fa.dto';
 
 const isProd = process.env.NODE_ENV === 'production';
 const ACCESS_COOKIE = 'access_token';
 const REFRESH_COOKIE = 'refresh_token';
-
-// ✅ Must match the actual mounted route (global prefix: api/v1)
 const REFRESH_COOKIE_PATH = '/api/v1/auth/refresh';
 
 @ApiTags('Authentication')
@@ -47,7 +44,7 @@ const REFRESH_COOKIE_PATH = '/api/v1/auth/refresh';
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
-    private readonly twoFactorService: TwoFactorService, // ✅ Injected
+    private readonly twoFactorService: TwoFactorService,
   ) {}
 
   // ============================================================
@@ -268,8 +265,35 @@ export class AuthController {
   }
 
   // ============================================================
-  // TWO-FACTOR AUTHENTICATION (2FA) ENDPOINTS – ✅ Added
+  // TWO-FACTOR AUTHENTICATION (2FA) ENDPOINTS
   // ============================================================
+
+  // ✅ NEW: Request 2FA code via email
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Post('2fa/request-code')
+  @ApiOperation({ summary: 'Request 2FA code via email' })
+  @ApiResponse({ status: 200, description: 'Code sent successfully' })
+  async requestTwoFactorCode(
+    @Req() req: Request & { user: { sub: number } },
+  ) {
+    return this.twoFactorService.sendTwoFactorCode(req.user.sub);
+  }
+
+  // ✅ NEW: Verify 2FA code from email
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Post('2fa/verify-email')
+  @ApiOperation({ summary: 'Verify 2FA code from email' })
+  @ApiResponse({ status: 200, description: 'Code verified successfully' })
+  async verifyEmailOTP(
+    @Req() req: Request & { user: { sub: number } },
+    @Body(new ValidationPipe()) dto: VerifyTwoFactorDto,
+  ) {
+    const valid = await this.twoFactorService.verifyEmailOTP(req.user.sub, dto.token);
+    return { valid, message: '2FA code verified successfully' };
+  }
+
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @Post('2fa/generate')
@@ -298,7 +322,7 @@ export class AuthController {
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @Post('2fa/verify')
-  @ApiOperation({ summary: 'Verify TOTP token (for login flow)' })
+  @ApiOperation({ summary: 'Verify 2FA token (for login flow)' })
   @ApiResponse({ status: 200, description: 'Token validation result' })
   async verifyTwoFactor(
     @Req() req: Request & { user: { sub: number } },

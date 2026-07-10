@@ -17,12 +17,14 @@ import { LoginAttemptService } from './login-attempt.service';
 import { TwoFactor } from './two-factor.entity';
 import { TwoFactorService } from './two-factor.service';
 import { EventsModule } from '../events/events.module';   // ✅ Import EventsModule
+import { MonitoringModule } from '../monitoring/monitoring.module';
 
 @Module({
   imports: [
     UserModule,
     MailerModule,
-    EventsModule,   // ✅ This provides EventsGateway
+    EventsModule, 
+    MonitoringModule,
     TypeOrmModule.forFeature([
       User,
       RefreshToken,

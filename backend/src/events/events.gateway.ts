@@ -1,4 +1,4 @@
-// src/events/events.gateway.ts
+// backend/src/events/events.gateway.ts
 import {
   WebSocketGateway,
   WebSocketServer,
@@ -15,7 +15,7 @@ import { parse } from 'cookie';
 
 @WebSocketGateway({
   cors: {
-    origin: '*', // Will be overridden by config
+    origin: '*',
     credentials: true,
   },
   namespace: '/',
@@ -30,7 +30,8 @@ export class EventsGateway
 
   private readonly logger = new Logger(EventsGateway.name);
   private readonly connectedClients = new Map<string, Set<string>>();
-  private readonly userRooms = new Map<string, string>(); // userId -> room name
+  private readonly userRooms = new Map<string, string>();
+  private isShuttingDown = false;
 
   constructor(
     private readonly jwtService: JwtService,
@@ -38,20 +39,23 @@ export class EventsGateway
   ) {}
 
   // ============================================================
-  // INIT – Configure CORS from config
+  // INIT
   // ============================================================
   afterInit(server: Server) {
     const corsOrigin = this.configService.get<string>('cors.origin') || '*';
     this.logger.log(`WebSocket Gateway initialized with CORS origin: ${corsOrigin}`);
-    // Dynamically update CORS if needed (socket.io already configured via decorator)
   }
 
   // ============================================================
-  // CONNECTION – Authenticate and join user room
+  // CONNECTION
   // ============================================================
   async handleConnection(client: Socket) {
+    if (this.isShuttingDown) {
+      client.disconnect();
+      return;
+    }
+
     try {
-      // Extract token from multiple sources
       const token = this.extractToken(client);
 
       if (!token) {
@@ -60,7 +64,6 @@ export class EventsGateway
         return;
       }
 
-      // Verify JWT
       const payload = this.jwtService.verify(token);
       const userId = payload.sub;
 
@@ -70,13 +73,11 @@ export class EventsGateway
         return;
       }
 
-      // Store client connection
       if (!this.connectedClients.has(userId)) {
         this.connectedClients.set(userId, new Set());
       }
       this.connectedClients.get(userId)?.add(client.id);
 
-      // Join user to their personal room (for efficient broadcasting)
       const room = `user:${userId}`;
       client.join(room);
       this.userRooms.set(client.id, room);
@@ -85,7 +86,6 @@ export class EventsGateway
         `Client ${client.id} connected for user ${userId} (Total: ${this.getTotalConnections()})`,
       );
 
-      // Send a welcome message (optional)
       client.emit('connected', { userId, timestamp: new Date().toISOString() });
     } catch (error: any) {
       this.logger.warn(
@@ -96,13 +96,11 @@ export class EventsGateway
   }
 
   // ============================================================
-  // DISCONNECT – Clean up resources
+  // DISCONNECT
   // ============================================================
   handleDisconnect(client: Socket) {
-    // Remove from user room mapping
     this.userRooms.delete(client.id);
 
-    // Remove from connected clients map
     for (const [userId, clients] of this.connectedClients) {
       if (clients.has(client.id)) {
         clients.delete(client.id);
@@ -119,14 +117,12 @@ export class EventsGateway
   }
 
   // ============================================================
-  // TOKEN EXTRACTION – from cookies, headers, or query
+  // TOKEN EXTRACTION
   // ============================================================
   private extractToken(client: Socket): string | null {
-    // 1. Try from handshake auth (client-side)
     const authToken = client.handshake.auth?.token;
     if (authToken) return authToken;
 
-    // 2. Try from cookies (if present)
     const cookies = client.handshake.headers.cookie;
     if (cookies) {
       const parsed = parse(cookies);
@@ -134,13 +130,11 @@ export class EventsGateway
       if (parsed['token']) return parsed['token'];
     }
 
-    // 3. Try from Authorization header
     const authHeader = client.handshake.headers.authorization;
     if (authHeader?.startsWith('Bearer ')) {
       return authHeader.slice(7);
     }
 
-    // 4. Try from query string (for testing)
     const queryToken = client.handshake.query?.token;
     if (queryToken && typeof queryToken === 'string') {
       return queryToken;
@@ -150,7 +144,7 @@ export class EventsGateway
   }
 
   // ============================================================
-  // BROADCAST TO SPECIFIC USER (by userId)
+  // NOTIFY USER
   // ============================================================
   notifyUser(userId: string | number, event: string, data: any): void {
     const room = `user:${userId}`;
@@ -159,7 +153,7 @@ export class EventsGateway
   }
 
   // ============================================================
-  // BROADCAST TO ALL CONNECTED CLIENTS (admin announcements)
+  // NOTIFY ALL
   // ============================================================
   notifyAll(event: string, data: any): void {
     this.server.emit(event, data);
@@ -167,7 +161,7 @@ export class EventsGateway
   }
 
   // ============================================================
-  // BROADCAST TO A ROOM (e.g., order updates for a vendor)
+  // NOTIFY ROOM
   // ============================================================
   notifyRoom(room: string, event: string, data: any): void {
     this.server.to(room).emit(event, data);
@@ -175,7 +169,7 @@ export class EventsGateway
   }
 
   // ============================================================
-  // GET CONNECTION STATS (for monitoring)
+  // GET CONNECTED CLIENTS
   // ============================================================
   getConnectedClients(): { total: number; users: string[] } {
     const users = Array.from(this.connectedClients.keys());
@@ -194,9 +188,8 @@ export class EventsGateway
   }
 
   // ============================================================
-  // MESSAGE HANDLERS (client -> server)
+  // MESSAGE HANDLERS
   // ============================================================
-
   @SubscribeMessage('ping')
   handlePing(client: Socket): { event: string; data: { pong: string; timestamp: string } } {
     return {
@@ -252,19 +245,35 @@ export class EventsGateway
   }
 
   // ============================================================
-  // GRACEFUL SHUTDOWN
+  // ✅ FIXED: GRACEFUL SHUTDOWN
   // ============================================================
   async onModuleDestroy() {
     this.logger.log('Closing WebSocket connections...');
-    if (this.server) {
-      await new Promise((resolve) => {
-        this.server.close(() => {
-          this.logger.log('WebSocket server closed');
-          resolve(null);
-        });
-      });
+    this.isShuttingDown = true;
+
+    // Disconnect all clients
+    for (const [userId, clients] of this.connectedClients) {
+      for (const clientId of clients) {
+        const socket = this.server.sockets.sockets.get(clientId);
+        if (socket) {
+          socket.disconnect(true);
+        }
+      }
     }
+
     this.connectedClients.clear();
     this.userRooms.clear();
+
+    // Close the server if it exists
+    if (this.server && typeof this.server.close === 'function') {
+      await new Promise<void>((resolve) => {
+        this.server.close(() => {
+          this.logger.log('WebSocket server closed');
+          resolve();
+        });
+      });
+    } else {
+      this.logger.log('WebSocket server already closed or not initialized');
+    }
   }
 }

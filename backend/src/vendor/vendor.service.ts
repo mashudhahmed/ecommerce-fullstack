@@ -7,16 +7,81 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource } from 'typeorm';
+import { Repository, DataSource, In, MoreThan } from 'typeorm';
 import { User, UserRole } from '../user/user.entity';
 import { Product } from '../products/products.entity';
 import { Order } from '../orders/order.entity';
 import { OrderItem } from '../orders/order-item.entity';
 import { UserService } from '../user/user.service';
+import { CacheService } from '../common/cache/cache.service';
+import { MetricsService } from '../monitoring/metrics.service';
+import { Trace } from '../common/decorators/tracing.decorator';
+import { QueryTimeout } from '../common/decorators/query-timeout.decorator';
+import { BULK_LIMITS } from '../common/constants/bulk-limits';
+import { AnalyticsUtils } from '../common/utils/analytics.utils';
+import { EventsService } from '../events/events.service';
+
+export interface BulkUploadResult {
+  success: number;
+  failed: number;
+  errors: {
+    row: number;
+    error: string;
+  }[];
+  created: {
+    id: number;
+    title: string;
+  }[];
+  skipped: {
+    row: number;
+    reason: string;
+  }[];
+}
+
+export interface BulkDeleteResult {
+  success: number[];
+  failed: {
+    id: number;
+    error: string;
+  }[];
+}
+
+export interface BulkActionResult {
+  success: number[];
+  failed: {
+    id: number;
+    error: string;
+  }[];
+}
+
+export interface VendorStats {
+  totalProducts: number;
+  totalOrders: number;
+  totalRevenue: number;
+  pendingOrders: number;
+  processingOrders: number;
+  shippedOrders: number;
+  deliveredOrders: number;
+  cancelledOrders: number;
+  averageOrderValue: number;
+}
+
+export interface VendorProfile {
+  id: number;
+  name: string;
+  email: string;
+  businessName?: string;
+  businessDescription?: string;
+  phoneNumber?: string;
+  address?: string;
+  createdAt: Date;
+  stats?: VendorStats;
+}
 
 @Injectable()
 export class VendorService {
   private readonly logger = new Logger(VendorService.name);
+  private readonly CACHE_TTL = 600;
 
   constructor(
     @InjectRepository(User)
@@ -29,17 +94,28 @@ export class VendorService {
     private readonly orderItemRepository: Repository<OrderItem>,
     private readonly userService: UserService,
     private readonly dataSource: DataSource,
+    private readonly cacheService: CacheService,
+    private readonly metricsService: MetricsService,
+    private readonly eventsService: EventsService,
   ) {}
 
-  // ============================================================
-  // PUBLIC VENDOR METHODS
-  // ============================================================
-
+  @Trace('vendor.getPublicVendors')
   async getPublicVendors(filters: {
     search?: string;
     sortBy?: string;
     sortOrder?: 'asc' | 'desc';
-  } = {}): Promise<any[]> {
+  } = {}): Promise<VendorProfile[]> {
+    const cacheKey = `vendors:public:${JSON.stringify(filters)}`;
+    const cached = await this.cacheService.get<VendorProfile[]>(cacheKey);
+    if (cached) {
+      this.logger.debug('Cache hit for public vendors');
+      this.metricsService.recordCacheHit('vendors:public');
+      return cached;
+    }
+
+    this.metricsService.recordCacheMiss('vendors:public');
+    const startTime = Date.now();
+
     const query = this.userRepository
       .createQueryBuilder('user')
       .where('user.role = :role', { role: UserRole.VENDOR })
@@ -61,10 +137,24 @@ export class VendorService {
     query.orderBy(`user.${sortField}`, sortOrder);
 
     const vendors = await query.getMany();
-    return vendors.map((v) => this.getVendorPublicProfile(v));
+    const result = vendors.map((v) => this.getVendorPublicProfile(v));
+
+    const duration = (Date.now() - startTime) / 1000;
+    this.metricsService.recordDbQuery('find', 'users', duration);
+    this.logger.debug(`Public vendors retrieved in ${duration}s`);
+
+    await this.cacheService.set(cacheKey, result, this.CACHE_TTL);
+    return result;
   }
 
+  @Trace('vendor.getPublicVendorDetails')
   async getPublicVendorDetails(id: number): Promise<any> {
+    const cacheKey = `vendor:public:${id}`;
+    const cached = await this.cacheService.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
     const vendor = await this.userRepository.findOne({
       where: {
         id,
@@ -81,17 +171,17 @@ export class VendorService {
 
     const stats = await this.getVendorStats(id);
 
-    return {
+    const result = {
       ...this.getVendorPublicProfile(vendor),
       stats,
       products: vendor.products?.filter((p) => p.isActive) || [],
     };
+
+    await this.cacheService.set(cacheKey, result, this.CACHE_TTL);
+    return result;
   }
 
-  // ============================================================
-  // VENDOR PROFILE METHODS
-  // ============================================================
-
+  @Trace('vendor.getVendorProfile')
   async getVendorProfile(vendorId: number): Promise<any> {
     const vendor = await this.userService.findByIdOrFail(vendorId);
 
@@ -113,6 +203,7 @@ export class VendorService {
     };
   }
 
+  @Trace('vendor.updateVendorProfile')
   async updateVendorProfile(vendorId: number, dto: any): Promise<any> {
     const vendor = await this.userService.findByIdOrFail(vendorId);
 
@@ -137,35 +228,38 @@ export class VendorService {
     }
 
     const updated = await this.userService.update(vendorId, updateData);
+
+    await this.cacheService.del(`vendor:profile:${vendorId}`);
+    await this.cacheService.invalidatePattern(`vendors:public:*`);
+
     return this.userService.getPublicProfile(updated);
   }
 
-  // ============================================================
-  // ✅ OPTIMIZED: VENDOR STATS - SINGLE QUERY (FIXED N+1)
-  // ============================================================
-  async getVendorStats(vendorId: number): Promise<{
-    totalProducts: number;
-    totalOrders: number;
-    totalRevenue: number;
-    pendingOrders: number;
-    processingOrders: number;
-    shippedOrders: number;
-    deliveredOrders: number;
-    cancelledOrders: number;
-    averageOrderValue: number;
-  }> {
-    // ✅ Single optimized query using QueryBuilder
+  @Trace('vendor.getVendorStats')
+  @QueryTimeout(15000)
+  async getVendorStats(vendorId: number): Promise<VendorStats> {
+    const cacheKey = `vendor:${vendorId}:stats`;
+    const cached = await this.cacheService.get<VendorStats>(cacheKey);
+    if (cached && typeof cached === 'object' && 'totalProducts' in cached) {
+      this.logger.debug(`Cache hit for vendor stats ${vendorId}`);
+      this.metricsService.recordCacheHit('vendor:stats');
+      return cached;
+    }
+
+    this.metricsService.recordCacheMiss('vendor:stats');
+    const startTime = Date.now();
+
     const result = await this.dataSource
       .createQueryBuilder()
       .select([
-        'COUNT(DISTINCT product.id) as "totalProducts"',
-        'COUNT(DISTINCT "order".id) as "totalOrders"',
-        'COALESCE(SUM("order".total), 0) as "totalRevenue"',
-        `COUNT(DISTINCT CASE WHEN "order".status = 'pending' THEN "order".id END) as "pendingOrders"`,
-        `COUNT(DISTINCT CASE WHEN "order".status = 'processing' THEN "order".id END) as "processingOrders"`,
-        `COUNT(DISTINCT CASE WHEN "order".status = 'shipped' THEN "order".id END) as "shippedOrders"`,
-        `COUNT(DISTINCT CASE WHEN "order".status = 'delivered' THEN "order".id END) as "deliveredOrders"`,
-        `COUNT(DISTINCT CASE WHEN "order".status = 'cancelled' THEN "order".id END) as "cancelledOrders"`,
+        'COUNT(DISTINCT product.id) as totalProducts',
+        'COUNT(DISTINCT "order".id) as totalOrders',
+        'COALESCE(SUM("order".total), 0) as totalRevenue',
+        `COUNT(DISTINCT CASE WHEN "order".status = 'pending' THEN "order".id END) as pendingOrders`,
+        `COUNT(DISTINCT CASE WHEN "order".status = 'processing' THEN "order".id END) as processingOrders`,
+        `COUNT(DISTINCT CASE WHEN "order".status = 'shipped' THEN "order".id END) as shippedOrders`,
+        `COUNT(DISTINCT CASE WHEN "order".status = 'delivered' THEN "order".id END) as deliveredOrders`,
+        `COUNT(DISTINCT CASE WHEN "order".status = 'cancelled' THEN "order".id END) as cancelledOrders`,
       ])
       .from(Product, 'product')
       .leftJoin('product.orderItems', 'orderItem')
@@ -176,7 +270,7 @@ export class VendorService {
     const totalOrders = Number(result?.totalOrders || 0);
     const totalRevenue = Number(result?.totalRevenue || 0);
 
-    return {
+    const stats: VendorStats = {
       totalProducts: Number(result?.totalProducts || 0),
       totalOrders,
       totalRevenue,
@@ -187,11 +281,16 @@ export class VendorService {
       cancelledOrders: Number(result?.cancelledOrders || 0),
       averageOrderValue: totalOrders > 0 ? totalRevenue / totalOrders : 0,
     };
+
+    const duration = (Date.now() - startTime) / 1000;
+    this.metricsService.recordDbQuery('aggregate', 'orders', duration);
+    this.logger.debug(`Vendor stats retrieved in ${duration}s`);
+
+    await this.cacheService.set(cacheKey, stats, this.CACHE_TTL);
+    return stats;
   }
 
-  // ============================================================
-  // ✅ OPTIMIZED: DASHBOARD STATS
-  // ============================================================
+  @Trace('vendor.getDashboardStats')
   async getDashboardStats(vendorId: number): Promise<any> {
     const stats = await this.getVendorStats(vendorId);
     const recentOrders = await this.getVendorOrders(vendorId, undefined, 1, 10);
@@ -202,62 +301,68 @@ export class VendorService {
     };
   }
 
-  // ============================================================
-  // ✅ OPTIMIZED: ADMIN VENDOR STATS
-  // ============================================================
+  @Trace('vendor.getAdminVendorStats')
+  @QueryTimeout(30000)
   async getAdminVendorStats(): Promise<any> {
+    const cacheKey = 'vendor:admin:stats';
+    const cached = await this.cacheService.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    const startTime = Date.now();
+
     const [stats, topVendors, vendorGrowth] = await Promise.all([
-      // Single query for all vendor counts
       this.dataSource
         .createQueryBuilder()
         .select([
-          'COUNT(*) as "totalVendors"',
-          `COUNT(CASE WHEN "isVendorApproved" = true AND "isVerified" = true THEN 1 END) as "activeVendors"`,
-          `COUNT(CASE WHEN "isVendorApproved" = false AND "isVerified" = true THEN 1 END) as "pendingVendors"`,
-          `COUNT(CASE WHEN "isVendorRejected" = true THEN 1 END) as "rejectedVendors"`,
-          `COUNT(CASE WHEN "isVendorApproved" = true AND "isVerified" = false THEN 1 END) as "suspendedVendors"`,
+          'COUNT(*) as totalVendors',
+          `COUNT(CASE WHEN isVendorApproved = true AND isVerified = true THEN 1 END) as activeVendors`,
+          `COUNT(CASE WHEN isVendorApproved = false AND isVerified = true THEN 1 END) as pendingVendors`,
+          `COUNT(CASE WHEN isVendorRejected = true THEN 1 END) as rejectedVendors`,
+          `COUNT(CASE WHEN isVendorApproved = true AND isVerified = false THEN 1 END) as suspendedVendors`,
         ])
         .from(User, 'user')
         .where('user.role = :role', { role: UserRole.VENDOR })
         .getRawOne(),
 
-      // Top vendors by revenue
       this.dataSource
         .createQueryBuilder()
         .select([
           'user.id as id',
           'user.name as name',
-          'user."vendorBusinessName" as "businessName"',
+          'user.vendorBusinessName as businessName',
           'COALESCE(SUM("order".total), 0) as revenue',
           'COUNT(DISTINCT "order".id) as orders',
+          'COUNT(DISTINCT product.id) as products',
         ])
         .from(User, 'user')
         .leftJoin('user.products', 'product')
         .leftJoin('product.orderItems', 'orderItem')
         .leftJoin('orderItem.order', 'order')
         .where('user.role = :role', { role: UserRole.VENDOR })
-        .andWhere('"order".status != :cancelled', { cancelled: 'cancelled' })
-        .groupBy('user.id, user.name, user."vendorBusinessName"')
+        .andWhere('user.isVendorApproved = true')
+        .andWhere('order.status != :cancelled', { cancelled: 'cancelled' })
+        .groupBy('user.id, user.name, user.vendorBusinessName')
         .orderBy('revenue', 'DESC')
         .limit(10)
         .getRawMany(),
 
-      // Vendor growth over time
       this.dataSource
         .createQueryBuilder()
         .select([
-          'DATE(user."createdAt") as date',
+          'DATE(user.createdAt) as date',
           'COUNT(*) as count',
         ])
         .from(User, 'user')
         .where('user.role = :role', { role: UserRole.VENDOR })
-        .groupBy('DATE(user."createdAt")')
+        .groupBy('DATE(user.createdAt)')
         .orderBy('date', 'ASC')
         .limit(30)
         .getRawMany(),
     ]);
 
-    return {
+    const result = {
       totalVendors: Number(stats?.totalVendors || 0),
       activeVendors: Number(stats?.activeVendors || 0),
       pendingVendors: Number(stats?.pendingVendors || 0),
@@ -266,19 +371,35 @@ export class VendorService {
       topVendors: topVendors || [],
       vendorGrowth: vendorGrowth || [],
     };
+
+    const duration = (Date.now() - startTime) / 1000;
+    this.metricsService.recordDbQuery('aggregate', 'users', duration);
+    this.logger.debug(`Admin vendor stats retrieved in ${duration}s`);
+
+    await this.cacheService.set(cacheKey, result, 300);
+    return result;
   }
 
-  // ============================================================
-  // VENDOR ORDER METHODS
-  // ============================================================
-
+  @Trace('vendor.getVendorOrders')
+  @QueryTimeout(20000)
   async getVendorOrders(
     vendorId: number,
     status?: string,
     page: number = 1,
     limit: number = 20,
   ): Promise<{ data: any[]; meta: any }> {
-    // Single query with pagination
+    const cacheKey = `vendor:${vendorId}:orders:${status || 'all'}:${page}:${limit}`;
+    const cached = await this.cacheService.get<{ data: any[]; meta: any }>(cacheKey);
+    
+    // ✅ FIX: Check if cached has the required properties
+    if (cached && typeof cached === 'object' && 'data' in cached && 'meta' in cached) {
+      this.metricsService.recordCacheHit('vendor:orders');
+      return cached;
+    }
+
+    this.metricsService.recordCacheMiss('vendor:orders');
+    const startTime = Date.now();
+
     const query = this.orderRepository
       .createQueryBuilder('order')
       .leftJoinAndSelect('order.user', 'user')
@@ -297,13 +418,12 @@ export class VendorService {
       .take(limit)
       .getManyAndCount();
 
-    // Filter items to only show vendor's products
     const filteredData = data.map((order) => ({
       ...order,
       items: order.items.filter((item) => item.product.owner?.id === vendorId),
     }));
 
-    return {
+    const result = {
       data: filteredData,
       meta: {
         total,
@@ -312,8 +432,16 @@ export class VendorService {
         totalPages: Math.ceil(total / limit),
       },
     };
+
+    const duration = (Date.now() - startTime) / 1000;
+    this.metricsService.recordDbQuery('find', 'orders', duration);
+    this.logger.debug(`Vendor orders retrieved in ${duration}s`);
+
+    await this.cacheService.set(cacheKey, result, 300);
+    return result;
   }
 
+  @Trace('vendor.getVendorOrderSummary')
   async getVendorOrderSummary(vendorId: number): Promise<any> {
     const stats = await this.getVendorStats(vendorId);
     const recentOrders = await this.getVendorOrders(vendorId, undefined, 1, 10);
@@ -324,16 +452,26 @@ export class VendorService {
     };
   }
 
-  // ============================================================
-  // VENDOR PRODUCT METHODS
-  // ============================================================
-
+  @Trace('vendor.getVendorProducts')
+  @QueryTimeout(15000)
   async getVendorProducts(
     vendorId: number,
     page: number = 1,
     limit: number = 20,
     inStock?: boolean,
-  ): Promise<{ data: any[]; meta: any }> {
+  ): Promise<{ data: Product[]; meta: any }> {
+    const cacheKey = `vendor:${vendorId}:products:${inStock !== undefined ? (inStock ? 'in-stock' : 'out-of-stock') : 'all'}:${page}:${limit}`;
+    const cached = await this.cacheService.get<{ data: Product[]; meta: any }>(cacheKey);
+    
+    // ✅ FIX: Check if cached has the required properties
+    if (cached && typeof cached === 'object' && 'data' in cached && 'meta' in cached) {
+      this.metricsService.recordCacheHit('vendor:products');
+      return cached;
+    }
+
+    this.metricsService.recordCacheMiss('vendor:products');
+    const startTime = Date.now();
+
     const query = this.productRepository
       .createQueryBuilder('product')
       .where('product.ownerId = :vendorId', { vendorId })
@@ -353,7 +491,7 @@ export class VendorService {
       .take(limit)
       .getManyAndCount();
 
-    return {
+    const result = {
       data,
       meta: {
         total,
@@ -362,66 +500,65 @@ export class VendorService {
         totalPages: Math.ceil(total / limit),
       },
     };
+
+    const duration = (Date.now() - startTime) / 1000;
+    this.metricsService.recordDbQuery('find', 'products', duration);
+
+    await this.cacheService.set(cacheKey, result, 300);
+    return result;
   }
 
+  @Trace('vendor.getProductStats')
   async getProductStats(vendorId: number): Promise<any> {
+    const cacheKey = `vendor:${vendorId}:product:stats`;
+    const cached = await this.cacheService.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
     const products = await this.productRepository.find({
       where: { owner: { id: vendorId } },
     });
 
-    const totalProducts = products.length;
-    const inStock = products.filter((p) => p.stock > 0).length;
-    const outOfStock = products.filter((p) => p.stock === 0).length;
-    const lowStock = products.filter((p) => p.stock > 0 && p.stock <= 5).length;
-    const totalStock = products.reduce((sum, p) => sum + p.stock, 0);
-
-    return {
-      totalProducts,
-      inStock,
-      outOfStock,
-      lowStock,
-      totalStock,
+    const result = {
+      totalProducts: products.length,
+      inStock: products.filter((p) => p.stock > 0).length,
+      outOfStock: products.filter((p) => p.stock === 0).length,
+      lowStock: products.filter((p) => p.stock > 0 && p.stock <= 5).length,
+      totalStock: products.reduce((sum, p) => sum + p.stock, 0),
     };
+
+    await this.cacheService.set(cacheKey, result, 300);
+    return result;
   }
 
-  async toggleProductStatus(
-    vendorId: number,
-    productId: number,
-    isActive: boolean,
-  ): Promise<Product> {
-    const product = await this.productRepository.findOne({
-      where: { id: productId, owner: { id: vendorId } },
-    });
+  @Trace('vendor.bulkUploadProducts')
+  @QueryTimeout(60000)
+  async bulkUploadProducts(vendorId: number, products: any[]): Promise<BulkUploadResult> {
+    const MAX_BULK = BULK_LIMITS.PRODUCTS.MAX_BULK_UPLOAD;
 
-    if (!product) {
-      throw new NotFoundException('Product not found or does not belong to vendor');
+    if (products.length > MAX_BULK) {
+      throw new BadRequestException(
+        `Maximum ${MAX_BULK} products can be uploaded at once. ` +
+        `You provided ${products.length}. Please split into smaller batches.`
+      );
     }
 
-    product.isActive = isActive;
-    const updated = await this.productRepository.save(product);
-    this.logger.log(`Product ${productId} status updated to ${isActive} by vendor ${vendorId}`);
-    return updated;
-  }
+    if (products.length === 0) {
+      throw new BadRequestException('No products provided for upload');
+    }
 
-  // ============================================================
-  // BULK UPLOAD
-  // ============================================================
-
-  async bulkUploadProducts(
-    vendorId: number,
-    products: any[],
-  ): Promise<any> {
     const vendor = await this.userService.findByIdOrFail(vendorId);
     if (vendor.role !== UserRole.VENDOR || !vendor.isVendorApproved) {
       throw new ForbiddenException('Vendor is not approved');
     }
 
-    const result = {
+    const result: BulkUploadResult = {
       success: 0,
       failed: 0,
-      errors: [] as { row: number; error: string }[],
-      created: [] as { id: number; title: string }[],
-      skipped: [] as { row: number; reason: string }[],
+      errors: [],
+      created: [],
+      skipped: [],
     };
 
     const productEntities: Partial<Product>[] = [];
@@ -435,12 +572,12 @@ export class VendorService {
         result.errors.push({ row, error: 'Title is required' });
         continue;
       }
-      if (p.price <= 0) {
+      if (p.price === undefined || p.price === null || p.price <= 0) {
         result.failed++;
         result.errors.push({ row, error: 'Price must be greater than 0' });
         continue;
       }
-      if (p.stock < 0) {
+      if (p.stock === undefined || p.stock === null || p.stock < 0) {
         result.failed++;
         result.errors.push({ row, error: 'Stock must be 0 or greater' });
         continue;
@@ -457,25 +594,42 @@ export class VendorService {
       });
     }
 
-    const saved = await this.productRepository.save(productEntities as any);
-    result.success = saved.length;
-    result.created = saved.map((p: Product) => ({ id: p.id, title: p.title }));
+    if (productEntities.length > 0) {
+      const saved = await this.productRepository.save(productEntities as any);
+      result.success = saved.length;
+      result.created = saved.map((p: Product) => ({ id: p.id, title: p.title }));
 
-    this.logger.log(`Bulk upload: ${result.success} created, ${result.failed} failed`);
+      for (const p of saved) {
+        this.metricsService.recordProductCreation(vendorId);
+      }
+      this.logger.log(`Bulk upload: ${result.success} created, ${result.failed} failed`);
+    }
+
+    await this.cacheService.del(`vendor:${vendorId}:products:*`);
+    await this.cacheService.invalidatePattern(`vendor:${vendorId}:stats`);
+
     return result;
   }
 
-  // ============================================================
-  // BULK DELETE
-  // ============================================================
+  @Trace('vendor.bulkDeleteProducts')
+  @QueryTimeout(30000)
+  async bulkDeleteProducts(vendorId: number, productIds: number[]): Promise<BulkDeleteResult> {
+    const MAX_BULK = BULK_LIMITS.PRODUCTS.MAX_BULK_DELETE;
 
-  async bulkDeleteProducts(
-    vendorId: number,
-    productIds: number[],
-  ): Promise<{ success: number[]; failed: { id: number; error: string }[] }> {
-    const result = {
-      success: [] as number[],
-      failed: [] as { id: number; error: string }[],
+    if (productIds.length > MAX_BULK) {
+      throw new BadRequestException(
+        `Maximum ${MAX_BULK} products can be deleted at once. ` +
+        `You provided ${productIds.length}. Please split into smaller batches.`
+      );
+    }
+
+    if (productIds.length === 0) {
+      throw new BadRequestException('No product IDs provided for deletion');
+    }
+
+    const result: BulkDeleteResult = {
+      success: [],
+      failed: [],
     };
 
     const queryRunner = this.dataSource.createQueryRunner();
@@ -494,428 +648,52 @@ export class VendorService {
         product.isActive = false;
         await queryRunner.manager.save(product);
         result.success.push(id);
+        await this.cacheService.del(`product:${id}`);
       }
       await queryRunner.commitTransaction();
       this.logger.log(`Bulk delete: ${result.success.length} deleted, ${result.failed.length} failed`);
-    } catch (e) {
+    } catch (error) {
       await queryRunner.rollbackTransaction();
-      throw e;
+      throw error;
     } finally {
       await queryRunner.release();
     }
+
+    await this.cacheService.del(`vendor:${vendorId}:products:*`);
+    await this.cacheService.invalidatePattern(`vendor:${vendorId}:stats`);
+
     return result;
   }
 
-  // ============================================================
-  // EXPORT ORDERS
-  // ============================================================
-
-  async exportOrders(
-    vendorId: number,
-    format: string,
-    startDate?: string,
-    endDate?: string,
-    status?: string,
-  ): Promise<{ data: any[]; filename: string; contentType: string }> {
-    const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const end = endDate ? new Date(endDate) : new Date();
-
-    let orders = await this.getVendorOrdersWithDateRange(vendorId, start, end);
-
-    if (status) {
-      orders = orders.filter((o) => o.status === status);
-    }
-
-    const exportData = orders.map((order) => ({
-      'Order ID': order.id,
-      Customer: order.user?.name || 'N/A',
-      Email: order.user?.email || 'N/A',
-      Total: Number(order.total).toFixed(2),
-      Status: order.status,
-      Items: order.items?.length || 0,
-      'Order Date': new Date(order.createdAt).toISOString().split('T')[0],
-    }));
-
-    const filename = `orders_export_${new Date().toISOString().split('T')[0]}`;
-
-    return {
-      data: exportData,
-      filename,
-      contentType: format === 'csv' ? 'text/csv' :
-                   format === 'excel' ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' :
-                   'application/json',
-    };
-  }
-
-  private async getVendorOrdersWithDateRange(
-    vendorId: number,
-    startDate: Date,
-    endDate: Date,
-  ): Promise<Order[]> {
-    const query = this.orderRepository
-      .createQueryBuilder('order')
-      .leftJoinAndSelect('order.user', 'user')
-      .leftJoinAndSelect('order.items', 'items')
-      .leftJoinAndSelect('items.product', 'product')
-      .leftJoinAndSelect('product.owner', 'owner')
-      .where('owner.id = :vendorId', { vendorId })
-      .andWhere('order.createdAt BETWEEN :startDate AND :endDate', {
-        startDate,
-        endDate,
-      });
-
-    return query.getMany();
-  }
-
-  // ============================================================
-  // ANALYTICS METHODS
-  // ============================================================
-
-  async getPerformanceMetrics(
-    vendorId: number,
-    period: 'day' | 'week' | 'month' | 'year' = 'month',
-  ): Promise<any> {
-    const now = new Date();
-    let startDate: Date;
-    let previousStartDate: Date;
-
-    switch (period) {
-      case 'day':
-        startDate = new Date(now.setHours(0, 0, 0, 0));
-        previousStartDate = new Date(startDate);
-        previousStartDate.setDate(previousStartDate.getDate() - 1);
-        break;
-      case 'week':
-        startDate = new Date(now.setDate(now.getDate() - 7));
-        previousStartDate = new Date(startDate);
-        previousStartDate.setDate(previousStartDate.getDate() - 7);
-        break;
-      case 'month':
-        startDate = new Date(now.setMonth(now.getMonth() - 1));
-        previousStartDate = new Date(startDate);
-        previousStartDate.setMonth(previousStartDate.getMonth() - 1);
-        break;
-      case 'year':
-        startDate = new Date(now.setFullYear(now.getFullYear() - 1));
-        previousStartDate = new Date(startDate);
-        previousStartDate.setFullYear(previousStartDate.getFullYear() - 1);
-        break;
-      default:
-        startDate = new Date(now.setMonth(now.getMonth() - 1));
-        previousStartDate = new Date(startDate);
-        previousStartDate.setMonth(previousStartDate.getMonth() - 1);
-    }
-
-    const currentOrders = await this.getVendorOrdersWithDateRange(vendorId, startDate, new Date());
-    const previousOrders = await this.getVendorOrdersWithDateRange(vendorId, previousStartDate, startDate);
-
-    const totalRevenue = currentOrders
-      .filter((o) => o.status !== 'cancelled')
-      .reduce((sum, o) => sum + Number(o.total), 0);
-
-    const totalOrders = currentOrders.length;
-    const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
-
-    const previousRevenue = previousOrders
-      .filter((o) => o.status !== 'cancelled')
-      .reduce((sum, o) => sum + Number(o.total), 0);
-
-    const growthRate = previousRevenue > 0 ? ((totalRevenue - previousRevenue) / previousRevenue) * 100 : 0;
-
-    const salesTrend = this.groupByDay(currentOrders);
-    const topProducts = await this.getTopProducts(vendorId, 10);
-
-    return {
-      salesTrend,
-      totalRevenue,
-      totalOrders,
-      averageOrderValue,
-      growthRate,
-      topProducts,
-      period,
-      comparison: {
-        previousRevenue,
-        revenueChange: totalRevenue - previousRevenue,
-        previousOrders: previousOrders.length,
-        ordersChange: totalOrders - previousOrders.length,
-      },
-    };
-  }
-
-  async getRevenueAnalytics(
-    vendorId: number,
-    startDate: Date,
-    endDate: Date,
-  ): Promise<any> {
-    const orders = await this.getVendorOrdersWithDateRange(vendorId, startDate, endDate);
-
-    const totalRevenue = orders
-      .filter((o) => o.status !== 'cancelled')
-      .reduce((sum, o) => sum + Number(o.total), 0);
-
-    const totalOrders = orders.length;
-    const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
-
-    const dailyData = this.groupByDay(orders);
-    const weeklyData = this.groupByWeek(orders);
-    const monthlyData = this.groupByMonth(orders);
-    const statusDistribution = this.getStatusDistributionWithRevenue(orders);
-
-    return {
-      summary: {
-        totalRevenue,
-        totalOrders,
-        averageOrderValue,
-        period: { start: startDate, end: endDate },
-      },
-      dailyData,
-      weeklyData,
-      monthlyData,
-      statusDistribution,
-    };
-  }
-
-  async getOrderAnalytics(vendorId: number): Promise<any> {
-    const orders = await this.getVendorOrdersWithDateRange(
-      vendorId,
-      new Date(Date.now() - 90 * 24 * 60 * 60 * 1000),
-      new Date(),
-    );
-
-    const orderTrends = this.groupByDay(orders);
-    const statusDistribution = this.getStatusDistribution(orders);
-    const peakHours = this.getPeakHours(orders);
-    const averageProcessingTime = this.calculateAverageProcessingTime(orders);
-    const averageDeliveryTime = this.calculateAverageDeliveryTime(orders);
-    const topCustomers = this.getTopCustomers(orders, 10);
-
-    return {
-      orderTrends,
-      statusDistribution,
-      peakHours,
-      averageProcessingTime,
-      averageDeliveryTime,
-      topCustomers,
-    };
-  }
-
-  // ============================================================
-  // HELPER METHODS
-  // ============================================================
-
-  private async getTopProducts(vendorId: number, limit: number = 10): Promise<any[]> {
-    const orderItems = await this.orderItemRepository
-      .createQueryBuilder('orderItem')
-      .leftJoinAndSelect('orderItem.product', 'product')
-      .leftJoinAndSelect('orderItem.order', 'order')
-      .where('product.ownerId = :vendorId', { vendorId })
-      .andWhere('order.status != :status', { status: 'cancelled' })
-      .getMany();
-
-    const productStats: any = {};
-
-    for (const item of orderItems) {
-      const key = item.product.id;
-      if (!productStats[key]) {
-        productStats[key] = {
-          id: item.product.id,
-          title: item.product.title,
-          sold: 0,
-          revenue: 0,
-        };
-      }
-      productStats[key].sold += item.quantity;
-      productStats[key].revenue += Number(item.price) * item.quantity;
-    }
-
-    return Object.values(productStats)
-      .sort((a: any, b: any) => b.revenue - a.revenue)
-      .slice(0, limit);
-  }
-
-  private groupByDay(orders: Order[]): any[] {
-    const grouped: any = {};
-    for (const order of orders) {
-      const date = order.createdAt.toISOString().split('T')[0];
-      if (!grouped[date]) {
-        grouped[date] = { date, revenue: 0, orders: 0 };
-      }
-      grouped[date].revenue += Number(order.total);
-      grouped[date].orders += 1;
-    }
-    return Object.values(grouped);
-  }
-
-  private groupByWeek(orders: Order[]): any[] {
-    const grouped: any = {};
-    for (const order of orders) {
-      const date = new Date(order.createdAt);
-      const week = `${date.getFullYear()}-W${this.getWeekNumber(date)}`;
-      if (!grouped[week]) {
-        grouped[week] = { week, revenue: 0, orders: 0 };
-      }
-      grouped[week].revenue += Number(order.total);
-      grouped[week].orders += 1;
-    }
-    return Object.values(grouped);
-  }
-
-  private groupByMonth(orders: Order[]): any[] {
-    const grouped: any = {};
-    for (const order of orders) {
-      const date = order.createdAt.toISOString().split('T')[0];
-      const month = date.substring(0, 7);
-      if (!grouped[month]) {
-        grouped[month] = { month, revenue: 0, orders: 0 };
-      }
-      grouped[month].revenue += Number(order.total);
-      grouped[month].orders += 1;
-    }
-    return Object.values(grouped);
-  }
-
-  private getWeekNumber(date: Date): number {
-    const d = new Date(date);
-    d.setHours(0, 0, 0, 0);
-    d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7);
-    const week1 = new Date(d.getFullYear(), 0, 4);
-    return 1 + Math.round(((d.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
-  }
-
-  private getStatusDistribution(orders: Order[]): any[] {
-    const distribution: any = {};
-    const total = orders.length;
-    for (const order of orders) {
-      distribution[order.status] = (distribution[order.status] || 0) + 1;
-    }
-    return Object.entries(distribution).map(([status, count]) => ({
-      status,
-      count: count as number,
-      percentage: total > 0 ? ((count as number) / total) * 100 : 0,
-    }));
-  }
-
-  private getStatusDistributionWithRevenue(orders: Order[]): any[] {
-    const distribution: any = {};
-    for (const order of orders) {
-      if (!distribution[order.status]) {
-        distribution[order.status] = { count: 0, revenue: 0 };
-      }
-      distribution[order.status].count += 1;
-      distribution[order.status].revenue += Number(order.total);
-    }
-    return Object.entries(distribution).map(([status, data]: [string, any]) => ({
-      status,
-      count: data.count,
-      revenue: data.revenue,
-    }));
-  }
-
-  private getPeakHours(orders: Order[]): any[] {
-    const hours: any = {};
-    for (const order of orders) {
-      const hour = new Date(order.createdAt).getHours();
-      hours[hour] = (hours[hour] || 0) + 1;
-    }
-    return Object.entries(hours)
-      .map(([hour, count]) => ({ hour: parseInt(hour, 10), orders: count as number }))
-      .sort((a, b) => b.orders - a.orders);
-  }
-
-  private calculateAverageProcessingTime(orders: Order[]): number {
-    const processedOrders = orders.filter(
-      (o) => o.status === 'delivered' || o.status === 'shipped',
-    );
-    if (processedOrders.length === 0) return 0;
-
-    let totalHours = 0;
-    for (const order of processedOrders) {
-      const hours = (new Date().getTime() - new Date(order.createdAt).getTime()) / (1000 * 60 * 60);
-      totalHours += Math.min(hours, 168);
-    }
-    return totalHours / processedOrders.length;
-  }
-
-  private calculateAverageDeliveryTime(orders: Order[]): number {
-    const deliveredOrders = orders.filter((o) => o.status === 'delivered');
-    if (deliveredOrders.length === 0) return 0;
-
-    let totalDays = 0;
-    for (const order of deliveredOrders) {
-      const days = (new Date().getTime() - new Date(order.createdAt).getTime()) / (1000 * 60 * 60 * 24);
-      totalDays += Math.min(days, 30);
-    }
-    return totalDays / deliveredOrders.length;
-  }
-
-  private getTopCustomers(orders: Order[], limit: number): any[] {
-    const customers: any = {};
-    for (const order of orders) {
-      if (!order.user) continue;
-      const key = order.user.id;
-      if (!customers[key]) {
-        customers[key] = {
-          id: order.user.id,
-          name: order.user.name,
-          email: order.user.email,
-          orders: 0,
-          totalSpent: 0,
-        };
-      }
-      customers[key].orders += 1;
-      customers[key].totalSpent += Number(order.total);
-    }
-    return Object.values(customers)
-      .sort((a: any, b: any) => b.totalSpent - a.totalSpent)
-      .slice(0, limit);
-  }
-
-  // ============================================================
-  // ADMIN VENDOR MANAGEMENT
-  // ============================================================
-
-  async suspendVendor(
-    vendorId: number,
-    suspended: boolean,
-    reason?: string,
-  ): Promise<User> {
-    const vendor = await this.userService.findByIdOrFail(vendorId);
-
-    if (vendor.role !== UserRole.VENDOR) {
-      throw new BadRequestException('User is not a vendor');
-    }
-
-    if (suspended) {
-      if (!vendor.isVendorApproved) {
-        throw new BadRequestException('Vendor is already suspended or not approved');
-      }
-      vendor.isVendorApproved = false;
-      vendor.isVendorRejected = false;
-      vendor.vendorRejectionReason = reason || 'Suspended by admin';
-      this.logger.log(`Vendor ${vendorId} suspended by admin`);
-    } else {
-      if (vendor.isVendorApproved) {
-        throw new BadRequestException('Vendor is already active');
-      }
-      vendor.isVendorApproved = true;
-      vendor.isVendorRejected = false;
-      vendor.vendorRejectionReason = null;
-      this.logger.log(`Vendor ${vendorId} activated by admin`);
-    }
-
-    const updated = await this.userRepository.save(vendor);
-    return updated;
-  }
-
+  @Trace('vendor.bulkVendorAction')
+  @QueryTimeout(30000)
   async bulkVendorAction(
     action: string,
     vendorIds: number[],
     reason?: string,
-  ): Promise<{ success: number[]; failed: { id: number; error: string }[] }> {
-    const result = {
-      success: [] as number[],
-      failed: [] as { id: number; error: string }[],
+  ): Promise<BulkActionResult> {
+    const MAX_BULK = BULK_LIMITS.VENDORS.MAX_BULK_ACTION;
+
+    if (vendorIds.length > MAX_BULK) {
+      throw new BadRequestException(
+        `Maximum ${MAX_BULK} vendors can be processed at once. ` +
+        `You provided ${vendorIds.length}. Please split into smaller batches.`
+      );
+    }
+
+    if (vendorIds.length === 0) {
+      throw new BadRequestException('No vendor IDs provided');
+    }
+
+    const result: BulkActionResult = {
+      success: [],
+      failed: [],
     };
+
+    const validActions = ['approve', 'reject', 'suspend', 'activate'];
+    if (!validActions.includes(action)) {
+      throw new BadRequestException(`Invalid action: ${action}. Allowed: ${validActions.join(', ')}`);
+    }
 
     for (const vendorId of vendorIds) {
       try {
@@ -966,27 +744,338 @@ export class VendorService {
             vendor.isVendorRejected = false;
             vendor.vendorRejectionReason = null;
             break;
-
-          default:
-            result.failed.push({ id: vendorId, error: `Unknown action: ${action}` });
-            continue;
         }
 
         await this.userRepository.save(vendor);
         result.success.push(vendorId);
-        this.logger.log(`Vendor ${vendorId} ${action}d by admin`);
+
+        if (action === 'approve') {
+          this.eventsService.emitVendorApproved({
+            vendorId: vendor.id,
+            email: vendor.email,
+            name: vendor.name,
+            businessName: vendor.vendorBusinessName || '',
+            status: 'approved',
+          });
+        } else if (action === 'reject') {
+          this.eventsService.emitVendorRejected({
+            vendorId: vendor.id,
+            email: vendor.email,
+            name: vendor.name,
+            businessName: vendor.vendorBusinessName || '',
+            status: 'rejected',
+          });
+        }
+
+        this.logger.log(`Vendor ${vendorId} ${action}d`);
       } catch (error: any) {
         result.failed.push({ id: vendorId, error: error.message || 'Unknown error' });
       }
     }
 
+    await this.cacheService.del('vendor:admin:stats');
+    await this.cacheService.invalidatePattern('vendors:public:*');
+
     return result;
   }
 
-  // ============================================================
-  // VENDOR REVIEWS
-  // ============================================================
+  @Trace('vendor.suspendVendor')
+  async suspendVendor(
+    vendorId: number,
+    suspended: boolean,
+    reason?: string,
+  ): Promise<User> {
+    const vendor = await this.userService.findByIdOrFail(vendorId);
 
+    if (vendor.role !== UserRole.VENDOR) {
+      throw new BadRequestException('User is not a vendor');
+    }
+
+    if (suspended) {
+      if (!vendor.isVendorApproved) {
+        throw new BadRequestException('Vendor is already suspended or not approved');
+      }
+      vendor.isVendorApproved = false;
+      vendor.isVendorRejected = false;
+      vendor.vendorRejectionReason = reason || 'Suspended by admin';
+      this.logger.log(`Vendor ${vendorId} suspended by admin`);
+      
+      this.eventsService.emitVendorRejected({
+        vendorId: vendor.id,
+        email: vendor.email,
+        name: vendor.name,
+        businessName: vendor.vendorBusinessName || '',
+        status: 'rejected',
+      });
+    } else {
+      if (vendor.isVendorApproved) {
+        throw new BadRequestException('Vendor is already active');
+      }
+      vendor.isVendorApproved = true;
+      vendor.isVendorRejected = false;
+      vendor.vendorRejectionReason = null;
+      this.logger.log(`Vendor ${vendorId} activated by admin`);
+      
+      this.eventsService.emitVendorApproved({
+        vendorId: vendor.id,
+        email: vendor.email,
+        name: vendor.name,
+        businessName: vendor.vendorBusinessName || '',
+        status: 'approved',
+      });
+    }
+
+    const updated = await this.userRepository.save(vendor);
+
+    await this.cacheService.del(`vendor:${vendorId}:stats`);
+    await this.cacheService.del('vendor:admin:stats');
+    await this.cacheService.invalidatePattern('vendors:public:*');
+
+    return updated;
+  }
+
+  @Trace('vendor.toggleProductStatus')
+  async toggleProductStatus(
+    vendorId: number,
+    productId: number,
+    isActive: boolean,
+  ): Promise<Product> {
+    const product = await this.productRepository.findOne({
+      where: { id: productId, owner: { id: vendorId } },
+    });
+
+    if (!product) {
+      throw new NotFoundException('Product not found or does not belong to vendor');
+    }
+
+    product.isActive = isActive;
+    const updated = await this.productRepository.save(product);
+    this.logger.log(`Product ${productId} status updated to ${isActive} by vendor ${vendorId}`);
+
+    await this.cacheService.del(`product:${productId}`);
+    await this.cacheService.del(`vendor:${vendorId}:products:*`);
+    await this.cacheService.del(`vendor:${vendorId}:product:stats`);
+
+    return updated;
+  }
+
+  @Trace('vendor.exportOrders')
+  @QueryTimeout(30000)
+  async exportOrders(
+    vendorId: number,
+    format: string,
+    startDate?: string,
+    endDate?: string,
+    status?: string,
+  ): Promise<{ data: any[]; filename: string; contentType: string }> {
+    const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const end = endDate ? new Date(endDate) : new Date();
+
+    const orders = await this.getOrdersWithDateRange(vendorId, start, end);
+
+    let filteredOrders = orders;
+    if (status) {
+      filteredOrders = filteredOrders.filter((o) => o.status === status);
+    }
+
+    const exportData = filteredOrders.map((order) => ({
+      'Order ID': order.id,
+      Customer: order.user?.name || 'N/A',
+      Email: order.user?.email || 'N/A',
+      Total: Number(order.total).toFixed(2),
+      Status: order.status,
+      Items: order.items?.length || 0,
+      'Order Date': new Date(order.createdAt).toISOString().split('T')[0],
+    }));
+
+    const filename = `orders_export_${new Date().toISOString().split('T')[0]}`;
+
+    const contentTypeMap: Record<string, string> = {
+      csv: 'text/csv',
+      excel: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      json: 'application/json',
+      pdf: 'application/pdf',
+    };
+
+    return {
+      data: exportData,
+      filename,
+      contentType: contentTypeMap[format] || 'application/json',
+    };
+  }
+
+  private async getOrdersWithDateRange(
+    vendorId: number,
+    startDate: Date,
+    endDate: Date,
+  ): Promise<Order[]> {
+    return this.orderRepository
+      .createQueryBuilder('order')
+      .leftJoinAndSelect('order.user', 'user')
+      .leftJoinAndSelect('order.items', 'items')
+      .leftJoinAndSelect('items.product', 'product')
+      .leftJoinAndSelect('product.owner', 'owner')
+      .where('owner.id = :vendorId', { vendorId })
+      .andWhere('order.createdAt BETWEEN :startDate AND :endDate', {
+        startDate,
+        endDate,
+      })
+      .getMany();
+  }
+
+  @Trace('vendor.getPerformanceMetrics')
+  @QueryTimeout(20000)
+  async getPerformanceMetrics(
+    vendorId: number,
+    period: 'day' | 'week' | 'month' | 'year' = 'month',
+  ): Promise<any> {
+    const cacheKey = `vendor:${vendorId}:performance:${period}`;
+    const cached = await this.cacheService.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    const now = new Date();
+    let startDate: Date;
+    let previousStartDate: Date;
+
+    switch (period) {
+      case 'day':
+        startDate = new Date(now.setHours(0, 0, 0, 0));
+        previousStartDate = new Date(startDate);
+        previousStartDate.setDate(previousStartDate.getDate() - 1);
+        break;
+      case 'week':
+        startDate = new Date(now.setDate(now.getDate() - 7));
+        previousStartDate = new Date(startDate);
+        previousStartDate.setDate(previousStartDate.getDate() - 7);
+        break;
+      case 'month':
+        startDate = new Date(now.setMonth(now.getMonth() - 1));
+        previousStartDate = new Date(startDate);
+        previousStartDate.setMonth(previousStartDate.getMonth() - 1);
+        break;
+      case 'year':
+        startDate = new Date(now.setFullYear(now.getFullYear() - 1));
+        previousStartDate = new Date(startDate);
+        previousStartDate.setFullYear(previousStartDate.getFullYear() - 1);
+        break;
+      default:
+        startDate = new Date(now.setMonth(now.getMonth() - 1));
+        previousStartDate = new Date(startDate);
+        previousStartDate.setMonth(previousStartDate.getMonth() - 1);
+    }
+
+    const [currentOrders, previousOrders] = await Promise.all([
+      this.getOrdersWithDateRange(vendorId, startDate, new Date()),
+      this.getOrdersWithDateRange(vendorId, previousStartDate, startDate),
+    ]);
+
+    const totalRevenue = currentOrders
+      .filter((o) => o.status !== 'cancelled')
+      .reduce((sum, o) => sum + Number(o.total), 0);
+
+    const totalOrders = currentOrders.length;
+    const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+
+    const previousRevenue = previousOrders
+      .filter((o) => o.status !== 'cancelled')
+      .reduce((sum, o) => sum + Number(o.total), 0);
+
+    const growthRate = previousRevenue > 0 ? ((totalRevenue - previousRevenue) / previousRevenue) * 100 : 0;
+
+    const salesTrend = AnalyticsUtils.groupByDay(currentOrders);
+    const topProducts = await this.getTopProducts(vendorId, 10);
+
+    const result = {
+      salesTrend,
+      totalRevenue,
+      totalOrders,
+      averageOrderValue,
+      growthRate,
+      topProducts,
+      period,
+      comparison: {
+        previousRevenue,
+        revenueChange: totalRevenue - previousRevenue,
+        previousOrders: previousOrders.length,
+        ordersChange: totalOrders - previousOrders.length,
+      },
+    };
+
+    await this.cacheService.set(cacheKey, result, 300);
+    return result;
+  }
+
+  @Trace('vendor.getRevenueAnalytics')
+  @QueryTimeout(20000)
+  async getRevenueAnalytics(
+    vendorId: number,
+    startDate: Date,
+    endDate: Date,
+  ): Promise<any> {
+    const cacheKey = `vendor:${vendorId}:revenue:${startDate.toISOString()}:${endDate.toISOString()}`;
+    const cached = await this.cacheService.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    const orders = await this.getOrdersWithDateRange(vendorId, startDate, endDate);
+
+    const totalRevenue = orders
+      .filter((o) => o.status !== 'cancelled')
+      .reduce((sum, o) => sum + Number(o.total), 0);
+
+    const totalOrders = orders.length;
+    const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+
+    const result = {
+      summary: {
+        totalRevenue,
+        totalOrders,
+        averageOrderValue,
+        period: { start: startDate, end: endDate },
+      },
+      dailyData: AnalyticsUtils.groupByDay(orders),
+      weeklyData: AnalyticsUtils.groupByWeek(orders),
+      monthlyData: AnalyticsUtils.groupByMonth(orders),
+      statusDistribution: AnalyticsUtils.getStatusRevenueDistribution(orders),
+    };
+
+    await this.cacheService.set(cacheKey, result, 300);
+    return result;
+  }
+
+  @Trace('vendor.getOrderAnalytics')
+  @QueryTimeout(20000)
+  async getOrderAnalytics(vendorId: number): Promise<any> {
+    const cacheKey = `vendor:${vendorId}:order:analytics`;
+    const cached = await this.cacheService.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    const orders = await this.getOrdersWithDateRange(
+      vendorId,
+      new Date(Date.now() - 90 * 24 * 60 * 60 * 1000),
+      new Date(),
+    );
+
+    const result = {
+      orderTrends: AnalyticsUtils.groupByDay(orders),
+      statusDistribution: AnalyticsUtils.getStatusDistribution(orders),
+      peakHours: AnalyticsUtils.getPeakHours(orders),
+      averageProcessingTime: AnalyticsUtils.calculateAverageProcessingTime(orders),
+      averageDeliveryTime: AnalyticsUtils.calculateAverageDeliveryTime(orders),
+      topCustomers: AnalyticsUtils.getTopCustomers(orders, 10),
+    };
+
+    await this.cacheService.set(cacheKey, result, 600);
+    return result;
+  }
+
+  @Trace('vendor.getVendorReviews')
+  @QueryTimeout(15000)
   async getVendorReviews(
     vendorId: number,
     page: number = 1,
@@ -1009,6 +1098,7 @@ export class VendorService {
     };
   }
 
+  @Trace('vendor.getVendorReviewStats')
   async getVendorReviewStats(vendorId: number): Promise<any> {
     return {
       averageRating: 0,
@@ -1017,11 +1107,7 @@ export class VendorService {
     };
   }
 
-  // ============================================================
-  // HELPERS
-  // ============================================================
-
-  private getVendorPublicProfile(vendor: User): any {
+  private getVendorPublicProfile(vendor: User): VendorProfile {
     return {
       id: vendor.id,
       name: vendor.name,
@@ -1034,66 +1120,33 @@ export class VendorService {
     };
   }
 
-  // ============================================================
-  // PLACEHOLDERS
-  // ============================================================
+  private async getTopProducts(vendorId: number, limit: number = 10): Promise<any[]> {
+    const orderItems = await this.orderItemRepository
+      .createQueryBuilder('orderItem')
+      .leftJoinAndSelect('orderItem.product', 'product')
+      .leftJoinAndSelect('orderItem.order', 'order')
+      .where('product.ownerId = :vendorId', { vendorId })
+      .andWhere('order.status != :status', { status: 'cancelled' })
+      .getMany();
 
-  async getVendorNotifications(
-    vendorId: number,
-    page: number = 1,
-    limit: number = 20,
-    read?: boolean,
-  ): Promise<{ data: any[]; meta: any }> {
-    return {
-      data: [],
-      meta: {
-        total: 0,
-        page,
-        limit,
-        totalPages: 0,
-      },
-    };
-  }
+    const productStats: Record<number, { id: number; title: string; sold: number; revenue: number }> = {};
 
-  async markNotificationRead(vendorId: number, notificationId: number): Promise<any> {
-    return { message: 'Notification marked as read' };
-  }
+    for (const item of orderItems) {
+      const key = item.product.id;
+      if (!productStats[key]) {
+        productStats[key] = {
+          id: item.product.id,
+          title: item.product.title,
+          sold: 0,
+          revenue: 0,
+        };
+      }
+      productStats[key].sold += item.quantity;
+      productStats[key].revenue += Number(item.price) * item.quantity;
+    }
 
-  async markAllNotificationsRead(vendorId: number): Promise<any> {
-    return { message: 'All notifications marked as read' };
-  }
-
-  async getVendorSettings(vendorId: number): Promise<any> {
-    return {
-      shippingSettings: {},
-      paymentSettings: {},
-      notificationPreferences: {},
-      businessHours: {},
-      notes: '',
-    };
-  }
-
-  async updateVendorSettings(vendorId: number, dto: any): Promise<any> {
-    return {
-      message: 'Settings updated successfully',
-      settings: dto,
-    };
-  }
-
-  async getVendorSocialLinks(vendorId: number): Promise<any> {
-    return {
-      facebook: '',
-      instagram: '',
-      twitter: '',
-      linkedin: '',
-      youtube: '',
-    };
-  }
-
-  async updateVendorSocialLinks(vendorId: number, dto: any): Promise<any> {
-    return {
-      message: 'Social links updated successfully',
-      links: dto,
-    };
+    return Object.values(productStats)
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, limit);
   }
 }

@@ -1,4 +1,3 @@
-// src/auth/two-factor.entity.ts
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 import { User } from '../user/user.entity';
 
@@ -19,8 +18,8 @@ export class TwoFactor {
   @Column()
   userId!: number;
 
-  @Column({ nullable: true })
-  secret?: string;
+  @Column({ nullable: true, type: 'text' })
+  secret?: string | null;
 
   @Column({ default: false })
   isEnabled!: boolean;
@@ -28,12 +27,12 @@ export class TwoFactor {
   @Column({
     type: 'enum',
     enum: TwoFactorMethod,
-    default: TwoFactorMethod.AUTHENTICATOR,
+    default: TwoFactorMethod.EMAIL,
   })
   method!: TwoFactorMethod;
 
   @Column({ type: 'jsonb', nullable: true, default: [] })
-  backupCodes: string[] = [];
+  backupCodes!: string[];
 
   @Column({ nullable: true })
   phoneNumber?: string;
@@ -41,8 +40,14 @@ export class TwoFactor {
   @Column({ nullable: true })
   email?: string;
 
+  @Column({ nullable: true, type: 'varchar', length: 10 })
+  tempCode?: string | null;
+
   @Column({ type: 'timestamp', nullable: true })
-  verifiedAt?: Date;
+  tempCodeExpiry?: Date | null;
+
+  @Column({ type: 'timestamp', nullable: true })
+  verifiedAt?: Date | null;
 
   @CreateDateColumn()
   createdAt!: Date;

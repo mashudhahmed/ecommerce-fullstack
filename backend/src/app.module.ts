@@ -4,6 +4,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { ScheduleModule } from '@nestjs/schedule';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
@@ -16,7 +17,6 @@ import { SuperadminModule } from './superadmin/superadmin.module';
 import { MailerModule } from './mailer/mailer.module';
 import { HealthModule } from './health/health.module';
 import { CategoriesModule } from './categories/categories.module';
-import { SearchModule } from './search/search.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { VendorModule } from './vendor/vendor.module';
 import { ExportModule } from './analytics/export.module';
@@ -33,6 +33,9 @@ import { User } from './user/user.entity';
 import { Product } from './products/products.entity';
 import { SampleDataSeeder } from './database/sample-data.seeder';
 import { WishlistModule } from './wishlist/wishlist.module';
+import { NotificationsModule } from './notifications/notifications.module';
+import { MonitoringModule } from './monitoring/monitoring.module';
+import { EventsModule } from './events/events.module';
 
 @Module({
   imports: [
@@ -45,6 +48,15 @@ import { WishlistModule } from './wishlist/wishlist.module';
       },
     }),
     ScheduleModule.forRoot(),
+    EventEmitterModule.forRoot({
+      wildcard: false,
+      delimiter: '.',
+      newListener: false,
+      removeListener: false,
+      maxListeners: 10,
+      verboseMemoryLeak: false,
+      ignoreErrors: false,
+    }),
     ThrottlerModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => [
@@ -79,8 +91,14 @@ import { WishlistModule } from './wishlist/wishlist.module';
       }),
       inject: [ConfigService],
     }),
-    // ✅ Register repositories for the seeders
     TypeOrmModule.forFeature([User, Category, Product]),
+    
+    // Global Modules (only need to import once)
+    CacheModule,
+    MonitoringModule,
+    EventsModule,
+    
+    // Feature Modules
     AuthModule,
     UserModule,
     ProductsModule,
@@ -91,21 +109,20 @@ import { WishlistModule } from './wishlist/wishlist.module';
     MailerModule,
     HealthModule,
     CategoriesModule,
-    // SearchModule,
     AnalyticsModule,
     VendorModule,
     ExportModule,
     ReviewsModule,
     FilesModule,
-    CacheModule,
-    WishlistModule
+    WishlistModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [
     AppService,
     DatabaseSeederService,
     CleanupCron,
-    SampleDataSeeder,   // ✅ Added
+    SampleDataSeeder,
   ],
 })
 export class AppModule implements NestModule, OnApplicationBootstrap {

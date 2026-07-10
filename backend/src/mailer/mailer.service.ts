@@ -28,6 +28,86 @@ export class MailerService {
     });
   }
 
+  // ============================================================
+  // ✅ NEW: Send 2FA verification code via email
+  // ============================================================
+  async sendTwoFactorCode(to: string, code: string, userName: string) {
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+        <div style="text-align: center; margin-bottom: 20px;">
+          <h2 style="color: #f97316;">🔐 Two-Factor Authentication</h2>
+        </div>
+        
+        <p>Hello ${userName},</p>
+        
+        <p>Enter the 6-digit verification code below to complete your login:</p>
+        
+        <div style="text-align: center; margin: 30px 0; padding: 20px; background: #f8f9fa; border: 2px dashed #dee2e6; border-radius: 10px;">
+          <div style="font-size: 36px; font-weight: bold; letter-spacing: 10px; color: #f97316;">
+            ${code}
+          </div>
+        </div>
+        
+        <div style="background: #fff3cd; padding: 15px; border-radius: 5px; margin-top: 20px;">
+          <p style="margin: 0; color: #856404; font-size: 14px;">
+            <strong>⚠️ Security Note:</strong> This code will expire in <strong>5 minutes</strong>.
+            If you didn't request this code, please ignore this email and secure your account.
+          </p>
+        </div>
+        
+        <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 20px 0;" />
+        
+        <p style="color: #666; font-size: 12px; text-align: center;">
+          This is an automated message from SnapCart. Please do not reply to this email.
+        </p>
+      </div>
+    `;
+
+    return this.sendMail(to, '🔐 Your 2FA Verification Code', html);
+  }
+
+  // ============================================================
+  // ✅ NEW: Send 2FA backup codes via email
+  // ============================================================
+  async sendTwoFactorBackupCodes(to: string, backupCodes: string[], userName: string) {
+    const codesHtml = backupCodes.map(code => `<div style="display: inline-block; padding: 8px 16px; margin: 4px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; font-family: monospace; font-size: 16px;">${code}</div>`).join('');
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+        <div style="text-align: center; margin-bottom: 20px;">
+          <h2 style="color: #f97316;">🔑 Your 2FA Backup Codes</h2>
+        </div>
+        
+        <p>Hello ${userName},</p>
+        
+        <p>Here are your backup codes for two-factor authentication. Store them in a safe place:</p>
+        
+        <div style="text-align: center; margin: 20px 0; padding: 20px; background: #f8f9fa; border: 2px solid #dee2e6; border-radius: 10px;">
+          ${codesHtml}
+        </div>
+        
+        <div style="background: #fff3cd; padding: 15px; border-radius: 5px; margin-top: 20px;">
+          <p style="margin: 0; color: #856404; font-size: 14px;">
+            <strong>⚠️ Important:</strong> Each backup code can be used only once. 
+            If you lose your authenticator app, you can use these codes to log in.
+          </p>
+        </div>
+        
+        <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 20px 0;" />
+        
+        <p style="color: #666; font-size: 12px; text-align: center;">
+          This is an automated message from SnapCart. Please do not reply to this email.
+        </p>
+      </div>
+    `;
+
+    return this.sendMail(to, '🔑 Your 2FA Backup Codes', html);
+  }
+
+  // ============================================================
+  // EXISTING METHODS (Keep all your existing methods below)
+  // ============================================================
+
   async sendVerificationEmail(to: string, verificationCode: string, userName: string) {
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -164,7 +244,6 @@ export class MailerService {
       </div>
     `;
 
-    // Send to all admins
     const adminEmails = this.configService.get('email.adminEmails')?.split(',') || [];
     if (adminEmails.length === 0) {
       this.logger.warn('No admin emails configured for vendor notifications');

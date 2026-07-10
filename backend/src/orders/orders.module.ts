@@ -12,6 +12,7 @@ import { IdempotencyKey } from './idempotency-key.entity';
 import { IdempotencyService } from './idempotency.service';
 import { EventsModule } from '../events/events.module';
 import { UserRateLimit } from '../common/entities/user-rate-limit.entity';   // ✅ Import the entity
+import { MonitoringModule } from '../monitoring/monitoring.module';
 
 @Module({
   imports: [
@@ -21,7 +22,8 @@ import { UserRateLimit } from '../common/entities/user-rate-limit.entity';   // 
       Product,
       User,
       IdempotencyKey,
-      UserRateLimit,   // ✅ Add this entity
+      UserRateLimit,
+      MonitoringModule
     ]),
     MailerModule,
     EventsModule,

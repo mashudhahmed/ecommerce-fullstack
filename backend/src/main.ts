@@ -10,8 +10,6 @@ import helmet from 'helmet';
 import compression from 'compression';
 import cookieParser from 'cookie-parser';
 import { DataSource } from 'typeorm';
-import { ThrottlerGuard } from '@nestjs/throttler';
-import { APP_GUARD } from '@nestjs/core';  // ✅ Import this
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
@@ -25,21 +23,7 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
   const reflector = app.get(Reflector);
 
-  // ============================================================
-  // ✅ FIX 3: ThrottlerGuard requires arguments
-  // Option 1: Use app.useGlobalGuards with proper instantiation
-  // ============================================================
-  // const throttlerGuard = new ThrottlerGuard({
-  //   // Your config here
-  // });
-  // app.useGlobalGuards(throttlerGuard);
-
-  // Option 2: Use the APP_GUARD provider in module (Recommended)
-  // This is already configured in AppModule with ThrottlerModule
-
-  // ============================================================
-  // SECURITY MIDDLEWARE
-  // ============================================================
+  // Security middleware
   app.use(
     helmet({
       contentSecurityPolicy: {
@@ -68,9 +52,7 @@ async function bootstrap() {
     }),
   );
 
-  // ============================================================
   // CORS
-  // ============================================================
   const corsOrigin = configService.get<string | string[]>('cors.origin') || [
     'http://localhost:3000',
   ];
@@ -82,16 +64,12 @@ async function bootstrap() {
     maxAge: 3600,
   });
 
-  // ============================================================
-  // API PREFIX
-  // ============================================================
+  // API prefix
   const apiPrefix = configService.get<string>('api.prefix') || 'api';
   const apiVersion = configService.get<string>('api.version') || 'v1';
   app.setGlobalPrefix(`${apiPrefix}/${apiVersion}`);
 
-  // ============================================================
-  // VALIDATION
-  // ============================================================
+  // Validation
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -103,22 +81,16 @@ async function bootstrap() {
     }),
   );
 
-  // ============================================================
-  // INTERCEPTORS
-  // ============================================================
+  // Interceptors
   app.useGlobalInterceptors(
     new ClassSerializerInterceptor(reflector),
     new ResponseInterceptor(reflector),
   );
 
-  // ============================================================
-  // GLOBAL EXCEPTION FILTER
-  // ============================================================
+  // Global exception filter
   app.useGlobalFilters(new HttpExceptionFilter());
 
-  // ============================================================
-  // SWAGGER DOCUMENTATION
-  // ============================================================
+  // Swagger documentation
   if (process.env.NODE_ENV !== 'production') {
     const config = new DocumentBuilder()
       .setTitle('E-Commerce API')
@@ -131,26 +103,21 @@ async function bootstrap() {
     SwaggerModule.setup(`${apiPrefix}/${apiVersion}/docs`, app, document);
   }
 
-  // ============================================================
-  // GRACEFUL SHUTDOWN
-  // ============================================================
+  // Graceful shutdown
   app.enableShutdownHooks();
 
-  // ============================================================
-  // START SERVER
-  // ============================================================
+  // Start server
   const port = Number(process.env.PORT) || 3001;
   await app.listen(port);
 
-  logger.log(`🚀 Server running at http://localhost:${port}`);
-  logger.log(`📚 API: http://localhost:${port}/${apiPrefix}/${apiVersion}`);
-  logger.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-  logger.log(`🔒 Security: ${helmet.name} enabled`);
+  logger.log(`Server running at http://localhost:${port}`);
+  logger.log(`API: http://localhost:${port}/${apiPrefix}/${apiVersion}`);
+  logger.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 
   try {
     const dataSource = app.get(DataSource);
     if (dataSource?.isInitialized) {
-      logger.log('✅ Database connection established');
+      logger.log('Database connection established');
     }
   } catch {
     logger.debug('DataSource not available in this context');

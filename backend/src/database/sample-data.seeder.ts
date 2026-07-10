@@ -94,6 +94,25 @@ export class SampleDataSeeder implements OnApplicationBootstrap {
       }
 
       // 3. Create products (20 sample products)
+
+      // ✅ Category-relevant placeholder photos.
+      // LoremFlickr returns real, tagged stock photography (not random noise),
+      // and `lock=<n>` pins a deterministic image per product so re-seeding
+      // (or re-running tests against the same rows) always yields the same
+      // photo instead of a new random one each time.
+      const categoryImageKeywords: Record<string, string> = {
+        'Electronics': 'electronics,gadget',
+        'Clothing': 'fashion,apparel',
+        'Books': 'book,reading',
+        'Home & Garden': 'garden,homedecor',
+        'Toys & Games': 'toys,boardgame',
+      };
+
+      const buildImageUrl = (category: string, seed: number): string => {
+        const keywords = categoryImageKeywords[category] || 'product';
+        return `https://loremflickr.com/400/400/${encodeURIComponent(keywords)}?lock=${seed}`;
+      };
+
       const productsData = [
         { title: 'Smartphone X', price: 699.99, stock: 50, category: 'Electronics' },
         { title: 'Wireless Headphones', price: 99.99, stock: 120, category: 'Electronics' },
@@ -117,7 +136,7 @@ export class SampleDataSeeder implements OnApplicationBootstrap {
         { title: 'Action Figure', price: 24.99, stock: 70, category: 'Toys & Games' },
       ];
 
-      const productsToInsert = productsData.map((p) => {
+      const productsToInsert = productsData.map((p, index) => {
         const category = categoryMap[p.category];
         return this.productRepo.create({
           title: p.title,
@@ -129,7 +148,7 @@ export class SampleDataSeeder implements OnApplicationBootstrap {
           isActive: true,
           averageRating: 0,
           totalReviews: 0,
-          imageUrl: `https://picsum.photos/seed/${p.title.replace(/\s/g, '')}/400/400`,
+          imageUrl: buildImageUrl(p.category, index),
         });
       });
 

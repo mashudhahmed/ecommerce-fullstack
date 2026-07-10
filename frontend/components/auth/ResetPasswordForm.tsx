@@ -21,6 +21,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { InfoIcon } from 'lucide-react';
 
+// Define the types for each step's form data
+interface CodeFormData {
+  email: string;
+  code: string;
+}
+
 export function ResetPasswordForm() {
   const router = useRouter();
   const { verifyResetCode, resetPassword } = useAuth();
@@ -29,8 +35,8 @@ export function ResetPasswordForm() {
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  // Step 1: Verify Code
-  const codeForm = useForm({
+  // Step 1: Verify Code - typed correctly
+  const codeForm = useForm<CodeFormData>({
     defaultValues: {
       email: '',
       code: '',
@@ -47,10 +53,14 @@ export function ResetPasswordForm() {
     },
   });
 
-  const handleVerifyCode = async (data: { email: string; code: string }) => {
+  const handleVerifyCode = async (data: CodeFormData) => {
     try {
       setIsLoading(true);
-      const result = await verifyResetCode(data.email, data.code);
+      // ✅ FIX: Pass as single object, not two positional args
+      const result = await verifyResetCode({ 
+        email: data.email, 
+        code: data.code 
+      });
       setVerificationToken(result.verificationToken);
       setEmail(data.email);
       passwordForm.setValue('verificationToken', result.verificationToken);
@@ -66,7 +76,11 @@ export function ResetPasswordForm() {
   const handleResetPassword = async (data: ResetPasswordInput) => {
     try {
       setIsLoading(true);
-      await resetPassword(data.verificationToken, data.newPassword);
+      // ✅ FIX: Pass as single object with the correct structure
+      await resetPassword({
+        verificationToken: data.verificationToken,
+        newPassword: data.newPassword,
+      });
       toast.success('Password reset successfully!');
       router.push('/login');
     } catch (error: any) {
@@ -91,7 +105,7 @@ export function ResetPasswordForm() {
               <FormField
                 control={codeForm.control}
                 name="email"
-                render={({ field }: { field: any }) => (
+                render={({ field }) => (
                   <FormItem>
                     <FormLabel>Email</FormLabel>
                     <FormControl>
@@ -104,7 +118,7 @@ export function ResetPasswordForm() {
               <FormField
                 control={codeForm.control}
                 name="code"
-                render={({ field }: { field: any }) => (
+                render={({ field }) => (
                   <FormItem>
                     <FormLabel>Verification Code</FormLabel>
                     <FormControl>
@@ -150,7 +164,7 @@ export function ResetPasswordForm() {
             <FormField
               control={passwordForm.control}
               name="newPassword"
-              render={({ field }: { field: any }) => (
+              render={({ field }) => (
                 <FormItem>
                   <FormLabel>New Password</FormLabel>
                   <FormControl>
@@ -163,7 +177,7 @@ export function ResetPasswordForm() {
             <FormField
               control={passwordForm.control}
               name="confirmPassword"
-              render={({ field }: { field: any }) => (
+              render={({ field }) => (
                 <FormItem>
                   <FormLabel>Confirm Password</FormLabel>
                   <FormControl>

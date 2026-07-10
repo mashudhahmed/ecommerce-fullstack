@@ -1,8 +1,10 @@
+// app/login/page.tsx
 import { LoginForm } from '@/components/auth/LoginForm';
+import { Metadata } from 'next';
 
-export const metadata = {
-  title: 'Login | E-Commerce Store',
-  description: 'Sign in to your account',
+export const metadata: Metadata = {
+  title: 'Login | SnapCart',
+  description: 'Sign in to your SnapCart account',
 };
 
 export default function LoginPage() {

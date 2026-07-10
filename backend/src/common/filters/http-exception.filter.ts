@@ -1,3 +1,4 @@
+// src/common/filters/http-exception.filter.ts
 import {
   ExceptionFilter,
   Catch,
@@ -7,6 +8,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
+import { QueryFailedError } from 'typeorm';
 
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
@@ -21,7 +23,13 @@ export class HttpExceptionFilter implements ExceptionFilter {
     let message = 'Internal server error';
     let error = 'Unknown error';
 
-    if (exception instanceof HttpException) {
+    // Handle TypeORM errors
+    if (exception instanceof QueryFailedError) {
+      status = HttpStatus.BAD_REQUEST;
+      message = 'Database error';
+      error = exception.message;
+      this.logger.error(`Database error: ${exception.message}`, exception.stack);
+    } else if (exception instanceof HttpException) {
       status = exception.getStatus();
       const exceptionResponse = exception.getResponse() as any;
       message = exceptionResponse.message || exception.message;
@@ -34,6 +42,8 @@ export class HttpExceptionFilter implements ExceptionFilter {
         exception.stack,
         `${request.method} ${request.url}`,
       );
+    } else {
+      this.logger.error(`Unknown exception: ${JSON.stringify(exception)}`);
     }
 
     response.status(status).json({

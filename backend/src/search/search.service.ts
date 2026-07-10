@@ -1,5 +1,5 @@
 // src/search/search.service.ts
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Client } from '@elastic/elasticsearch';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -7,9 +7,13 @@ import { Repository } from 'typeorm';
 import { Product } from '../products/products.entity';
 
 @Injectable()
-export class SearchService implements OnModuleInit {
+export class SearchService implements OnApplicationBootstrap {
   private readonly logger = new Logger(SearchService.name);
   private client: Client;
+  private indexingInProgress = false;
+
+  /** Exposed for health checks (e.g. HealthController readiness endpoint) */
+  public isHealthy = false;
 
   constructor(
     private configService: ConfigService,
@@ -17,12 +21,45 @@ export class SearchService implements OnModuleInit {
     private readonly productRepository: Repository<Product>,
   ) {
     const node = this.configService.get('elasticsearch.node') || 'http://localhost:9200';
-    this.client = new Client({ node });
+    this.client = new Client({
+      node,
+      requestTimeout: 3000, // fail fast instead of hanging on driver default timeout
+      maxRetries: 1,
+      pingTimeout: 2000,
+    });
   }
 
-  async onModuleInit() {
-    await this.createIndex();
-    await this.indexAllProducts();
+  /**
+   * Runs after the full app graph is ready. Intentionally NOT awaited from
+   * here so app.listen() is not blocked by search indexing.
+   */
+  onApplicationBootstrap() {
+    this.initializeSearchIndex().catch((err) => {
+      this.logger.error('Search initialization failed permanently', err);
+    });
+  }
+
+  /**
+   * Orchestrates index creation + product indexing in the background.
+   * Retries on failure with a fixed backoff instead of blocking startup
+   * or retrying per-item synchronously.
+   */
+  private async initializeSearchIndex(): Promise<void> {
+    if (this.indexingInProgress) return;
+    this.indexingInProgress = true;
+
+    try {
+      await this.createIndex();
+      await this.indexAllProducts();
+      this.isHealthy = true;
+      this.indexingInProgress = false;
+      this.logger.log('✅ Search index ready');
+    } catch (err) {
+      this.isHealthy = false;
+      this.indexingInProgress = false;
+      this.logger.error('❌ Search indexing failed, retrying in 30s', err);
+      setTimeout(() => this.initializeSearchIndex(), 30_000);
+    }
   }
 
   /**
@@ -94,11 +131,13 @@ export class SearchService implements OnModuleInit {
       this.logger.log('Index created successfully');
     } catch (error) {
       this.logger.error('Failed to create index', error);
+      throw error; // propagate so initializeSearchIndex() can retry
     }
   }
 
   /**
-   * Index all active products
+   * Index all active products in batches, running items within each
+   * batch concurrently instead of sequentially awaiting one at a time.
    */
   async indexAllProducts(): Promise<void> {
     const products = await this.productRepository.find({
@@ -108,8 +147,17 @@ export class SearchService implements OnModuleInit {
 
     this.logger.log(`Indexing ${products.length} products`);
 
-    for (const product of products) {
-      await this.indexProduct(product);
+    const CONCURRENCY = 5;
+    let failedCount = 0;
+
+    for (let i = 0; i < products.length; i += CONCURRENCY) {
+      const batch = products.slice(i, i + CONCURRENCY);
+      const results = await Promise.allSettled(batch.map((p) => this.indexProduct(p)));
+      failedCount += results.filter((r) => r.status === 'rejected').length;
+    }
+
+    if (failedCount > 0) {
+      throw new Error(`${failedCount}/${products.length} products failed to index`);
     }
 
     this.logger.log('All products indexed successfully');
@@ -131,14 +179,18 @@ export class SearchService implements OnModuleInit {
           description: product.description,
           price: product.price,
           stock: product.stock,
-          category: product.category ? {
-            id: product.category.id,
-            name: product.category.name,
-          } : null,
-          vendor: product.owner ? {
-            id: product.owner.id,
-            name: product.owner.name,
-          } : null,
+          category: product.category
+            ? {
+                id: product.category.id,
+                name: product.category.name,
+              }
+            : null,
+          vendor: product.owner
+            ? {
+                id: product.owner.id,
+                name: product.owner.name,
+              }
+            : null,
           isActive: product.isActive,
           averageRating: product.averageRating || 0,
           totalReviews: product.totalReviews || 0,
@@ -150,6 +202,7 @@ export class SearchService implements OnModuleInit {
       this.logger.debug(`Product ${product.id} indexed`);
     } catch (error) {
       this.logger.error(`Failed to index product ${product.id}`, error);
+      throw error; // rethrow so batch caller can count failures
     }
   }
 
@@ -219,9 +272,7 @@ export class SearchService implements OnModuleInit {
       query: {
         bool: {
           must: must.length > 0 ? must : [{ match_all: {} }],
-          filter: [
-            { term: { isActive: true } },
-          ],
+          filter: [{ term: { isActive: true } }],
         },
       },
       from: ((filters.page || 1) - 1) * (filters.limit || 20),
@@ -266,21 +317,24 @@ export class SearchService implements OnModuleInit {
           ...hit._source,
           score: hit._score,
         })),
-        total: typeof response.hits.total === 'number' 
-          ? response.hits.total 
-          : response.hits.total?.value || 0,
+        total:
+          typeof response.hits.total === 'number'
+            ? response.hits.total
+            : response.hits.total?.value || 0,
         page: filters.page || 1,
         limit: filters.limit || 20,
         aggs: {
-          categories: (response.aggregations?.categories as any)?.buckets?.map((b: any) => ({
-            id: parseInt(b.key),
-            count: b.doc_count,
-          })) || [],
-          priceRanges: (response.aggregations?.price_ranges as any)?.buckets?.map((b: any) => ({
-            from: b.from,
-            to: b.to,
-            count: b.doc_count,
-          })) || [],
+          categories:
+            (response.aggregations?.categories as any)?.buckets?.map((b: any) => ({
+              id: parseInt(b.key),
+              count: b.doc_count,
+            })) || [],
+          priceRanges:
+            (response.aggregations?.price_ranges as any)?.buckets?.map((b: any) => ({
+              from: b.from,
+              to: b.to,
+              count: b.doc_count,
+            })) || [],
         },
       };
     } catch (error) {
@@ -340,7 +394,7 @@ export class SearchService implements OnModuleInit {
    */
   private buildSort(sortBy?: string, sortOrder?: string): any[] {
     const order: 'asc' | 'desc' = sortOrder === 'asc' ? 'asc' : 'desc';
-    
+
     const sortMapping: Record<string, any> = {
       price: { price: order },
       rating: { averageRating: order },
@@ -353,7 +407,7 @@ export class SearchService implements OnModuleInit {
     if (sortBy && sortMapping[sortBy]) {
       return [sortMapping[sortBy]];
     }
-    
+
     return [{ _score: 'desc' }];
   }
 
@@ -362,7 +416,7 @@ export class SearchService implements OnModuleInit {
    */
   async reindexAll(): Promise<void> {
     this.logger.log('Starting reindex...');
-    
+
     // Delete existing index
     const index = this.configService.get('elasticsearch.index') || 'products';
     try {
@@ -374,10 +428,10 @@ export class SearchService implements OnModuleInit {
 
     // Create new index
     await this.createIndex();
-    
+
     // Index all products
     await this.indexAllProducts();
-    
+
     this.logger.log('Reindex completed successfully');
   }
 }

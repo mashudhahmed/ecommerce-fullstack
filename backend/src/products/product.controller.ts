@@ -1,3 +1,4 @@
+// src/products/product.controller.ts
 import {
   Controller,
   Get,
@@ -11,12 +12,14 @@ import {
   Query,
   Request,
   Patch,
+  ValidationPipe,
 } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
   ApiResponse,
   ApiBearerAuth,
+  ApiQuery,
 } from '@nestjs/swagger';
 import { ProductsService } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
@@ -34,11 +37,43 @@ export class ProductsController {
   // ============================================================
   // PUBLIC ENDPOINTS
   // ============================================================
+
   @ApiOperation({ summary: 'Get all products' })
   @ApiResponse({ status: 200, description: 'Products retrieved successfully' })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'search', required: false, type: String })
+  @ApiQuery({ name: 'categoryId', required: false, type: Number })
+  @ApiQuery({ name: 'minPrice', required: false, type: Number })
+  @ApiQuery({ name: 'maxPrice', required: false, type: Number })
+  @ApiQuery({ name: 'inStock', required: false, type: Boolean })
+  @ApiQuery({ name: 'sortBy', required: false, type: String })
   @Get()
-  findAll() {
-    return this.productsService.findAll();
+  findAll(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('search') search?: string,
+    @Query('categoryId') categoryId?: string,
+    @Query('minPrice') minPrice?: string,
+    @Query('maxPrice') maxPrice?: string,
+    @Query('inStock') inStock?: string,
+    @Query('sortBy') sortBy?: string,
+  ) {
+    const pageNum = page ? parseInt(page, 10) : 1;
+    const limitNum = limit ? Math.min(parseInt(limit, 10), 100) : 20;
+
+    // If search is provided, use search endpoint logic
+    if (search && search.length > 0) {
+      return this.productsService.searchProducts(search, limitNum);
+    }
+
+    // If categoryId is provided, filter by category
+    if (categoryId) {
+      return this.productsService.findByCategory(parseInt(categoryId, 10));
+    }
+
+    // Use paginated version for better performance
+    return this.productsService.findAllPaginated(pageNum, limitNum);
   }
 
   @ApiOperation({ summary: 'Get products in stock' })
@@ -64,17 +99,35 @@ export class ProductsController {
     );
   }
 
+  // ============================================================
+  // GET SINGLE PRODUCT – WITH CACHE BYPASS SUPPORT
+  // ============================================================
+
   @ApiOperation({ summary: 'Get a single product by ID' })
   @ApiResponse({ status: 200, description: 'Product retrieved successfully' })
   @ApiResponse({ status: 404, description: 'Product not found' })
+  @ApiQuery({ 
+    name: 'fresh', 
+    required: false, 
+    type: Boolean,
+    description: 'Bypass cache and fetch fresh data from database'
+  })
   @Get(':id')
-  findOne(@Param('id', ParseIntPipe) id: number) {
+  findOne(
+    @Param('id', ParseIntPipe) id: number,
+    @Query('fresh') fresh?: string,
+  ) {
+    // ✅ If fresh=true, bypass cache and get fresh data
+    if (fresh === 'true') {
+      return this.productsService.findOneFresh(id);
+    }
     return this.productsService.findOne(id);
   }
 
   // ============================================================
   // VENDOR ENDPOINTS
   // ============================================================
+
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get vendor products' })
   @ApiResponse({ status: 200, description: 'Vendor products retrieved successfully' })
@@ -85,7 +138,6 @@ export class ProductsController {
     if (req.user.role === UserRole.VENDOR) {
       return this.productsService.findByVendor(req.user.id);
     }
-    // Admins can see all products
     return this.productsService.findAll();
   }
 
@@ -99,7 +151,6 @@ export class ProductsController {
     if (req.user.role === UserRole.VENDOR) {
       return this.productsService.getVendorStats(req.user.id);
     }
-    // Admins get all products stats
     const allProducts = await this.productsService.findAll();
     return {
       totalProducts: allProducts.length,
@@ -110,8 +161,9 @@ export class ProductsController {
   }
 
   // ============================================================
-  // CREATE PRODUCT (Vendor/Admin/SuperAdmin)
+  // CREATE PRODUCT
   // ============================================================
+
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create a new product (Vendor/Admin only)' })
   @ApiResponse({ status: 201, description: 'Product created successfully' })
@@ -119,15 +171,16 @@ export class ProductsController {
   @Roles(UserRole.VENDOR, UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Post()
   create(
-    @Body() createProductDto: CreateProductDto,
+    @Body(new ValidationPipe()) createProductDto: CreateProductDto,
     @Request() req: { user: { id: number } },
   ) {
     return this.productsService.create(createProductDto, req.user.id);
   }
 
   // ============================================================
-  // UPDATE PRODUCT (Vendor - Own Products | Admin/SuperAdmin - Any)
+  // UPDATE PRODUCT
   // ============================================================
+
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update a product' })
   @ApiResponse({ status: 200, description: 'Product updated successfully' })
@@ -136,15 +189,16 @@ export class ProductsController {
   @Put(':id')
   update(
     @Param('id', ParseIntPipe) id: number,
-    @Body() updateProductDto: UpdateProductDto,
+    @Body(new ValidationPipe()) updateProductDto: UpdateProductDto,
     @Request() req: { user: { id: number; role: UserRole } },
   ) {
     return this.productsService.update(id, updateProductDto, req.user.id, req.user.role);
   }
 
   // ============================================================
-  // BULK STOCK UPDATE (Vendor)
+  // BULK STOCK UPDATE
   // ============================================================
+
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Bulk update product stock (Vendor)' })
   @ApiResponse({ status: 200, description: 'Stock updated successfully' })
@@ -152,15 +206,16 @@ export class ProductsController {
   @Roles(UserRole.VENDOR)
   @Patch('vendor/bulk-stock')
   async bulkUpdateStock(
-    @Body() updates: { productId: number; stock: number }[],
+    @Body(new ValidationPipe()) updates: { productId: number; stock: number }[],
     @Request() req: { user: { id: number } },
   ) {
     return this.productsService.bulkUpdateStock(req.user.id, updates);
   }
 
   // ============================================================
-  // DELETE PRODUCT (Vendor - Own | Admin/SuperAdmin - Any)
+  // DELETE PRODUCT
   // ============================================================
+
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Delete a product (Soft delete)' })
   @ApiResponse({ status: 200, description: 'Product deleted successfully' })
@@ -175,8 +230,9 @@ export class ProductsController {
   }
 
   // ============================================================
-  // PERMANENTLY DELETE PRODUCT (Admin/SuperAdmin)
+  // PERMANENTLY DELETE PRODUCT
   // ============================================================
+
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Permanently delete a product (Admin only)' })
   @ApiResponse({ status: 200, description: 'Product permanently deleted' })

@@ -32,7 +32,6 @@ export class TwoFactor {
   })
   method!: TwoFactorMethod;
 
-  // ✅ Use jsonb for array storage
   @Column({ type: 'jsonb', nullable: true, default: [] })
   backupCodes: string[] = [];
 

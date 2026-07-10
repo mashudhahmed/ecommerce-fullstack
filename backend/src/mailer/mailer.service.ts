@@ -1,19 +1,25 @@
 import { Injectable, Logger } from '@nestjs/common';
-import * as nodemailer from 'nodemailer';
 import { ConfigService } from '@nestjs/config';
+import * as nodemailer from 'nodemailer';
+import { User } from '../user/user.entity';
 
 @Injectable()
 export class MailerService {
   private transporter: nodemailer.Transporter;
   private readonly logger = new Logger(MailerService.name);
+  private readonly fromName: string;
+  private readonly fromEmail: string;
 
   constructor(private configService: ConfigService) {
+    this.fromName = this.configService.get('email.fromName') || 'E-Commerce Store';
+    this.fromEmail = this.configService.get('email.user') || '';
+
     this.transporter = nodemailer.createTransport({
       host: this.configService.get('email.host'),
       port: this.configService.get('email.port'),
-      secure: false,
+      secure: this.configService.get('email.secure') || false,
       auth: {
-        user: this.configService.get('email.user'),
+        user: this.fromEmail,
         pass: this.configService.get('email.pass'),
       },
       tls: {
@@ -22,11 +28,7 @@ export class MailerService {
     });
   }
 
-  async sendVerificationEmail(
-    to: string,
-    verificationCode: string,
-    userName: string,
-  ) {
+  async sendVerificationEmail(to: string, verificationCode: string, userName: string) {
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2 style="color: #333;">Verify Your Email Address</h2>
@@ -65,10 +67,9 @@ export class MailerService {
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2 style="color: #333;">Welcome to Our Store, ${userName}!</h2>
         <p>We're excited to have you as a new member of our community.</p>
-        <p>As a welcome gift, here's a 10% discount code: <strong>WELCOME10</strong></p>
+        <p>Start shopping now and discover our amazing products!</p>
         <div style="margin-top: 20px; padding: 15px; background: #f0f8ff; border-radius: 5px;">
-          <p>Start shopping now and discover our amazing products!</p>
-          <a href="https://yourstore.com/products" style="display: inline-block; padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 5px;">Browse Products</a>
+          <a href="${this.configService.get('app.frontendUrl') || '#'}" style="display: inline-block; padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 5px;">Browse Products</a>
         </div>
       </div>
     `;
@@ -90,10 +91,6 @@ export class MailerService {
             </div>
           </div>
         </div>
-
-        <p style="text-align: center; font-size: 14px; color: #666;">
-          Enter this code on the password reset page to continue.
-        </p>
 
         <div style="background: #fff3cd; padding: 15px; border-radius: 5px; margin-top: 20px;">
           <p style="margin: 0; color: #856404;">
@@ -149,11 +146,72 @@ export class MailerService {
     return this.sendMail(to, 'Account Deletion Confirmation', html);
   }
 
+  async sendVendorRegistrationNotification(vendor: User) {
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #333;">New Vendor Registration</h2>
+        <p>A new vendor has registered and is awaiting approval:</p>
+        <div style="background: #f9f9f9; padding: 15px; border-radius: 5px; margin: 15px 0;">
+          <p><strong>Name:</strong> ${vendor.name}</p>
+          <p><strong>Email:</strong> ${vendor.email}</p>
+          <p><strong>Business Name:</strong> ${vendor.vendorBusinessName || 'N/A'}</p>
+          <p><strong>Business Description:</strong> ${vendor.vendorBusinessDescription || 'N/A'}</p>
+          <p><strong>Phone:</strong> ${vendor.vendorPhoneNumber || 'N/A'}</p>
+          <p><strong>Address:</strong> ${vendor.vendorAddress || 'N/A'}</p>
+          <p><strong>Registration:</strong> ${vendor.vendorBusinessRegistration || 'N/A'}</p>
+        </div>
+        <p>Please review and approve/reject this vendor request.</p>
+      </div>
+    `;
+
+    // Send to all admins
+    const adminEmails = this.configService.get('email.adminEmails')?.split(',') || [];
+    if (adminEmails.length === 0) {
+      this.logger.warn('No admin emails configured for vendor notifications');
+      return;
+    }
+
+    for (const adminEmail of adminEmails) {
+      await this.sendMail(adminEmail.trim(), 'New Vendor Registration - Pending Approval', html);
+    }
+  }
+
+  async sendVendorApprovalEmail(to: string, userName: string) {
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #333;">Vendor Account Approved!</h2>
+        <p>Hello ${userName},</p>
+        <p>We're happy to inform you that your vendor account has been approved.</p>
+        <p>You can now start listing your products on our platform.</p>
+        <div style="margin-top: 20px; padding: 15px; background: #f0f8ff; border-radius: 5px;">
+          <a href="${this.configService.get('app.frontendUrl')}/vendor/dashboard" style="display: inline-block; padding: 10px 20px; background: #28a745; color: white; text-decoration: none; border-radius: 5px;">Go to Vendor Dashboard</a>
+        </div>
+      </div>
+    `;
+
+    return this.sendMail(to, 'Vendor Account Approved!', html);
+  }
+
+  async sendVendorRejectionEmail(to: string, userName: string, reason?: string) {
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #333;">Vendor Account Update</h2>
+        <p>Hello ${userName},</p>
+        <p>We have reviewed your vendor registration request.</p>
+        <p>Unfortunately, we are unable to approve your vendor account at this time.</p>
+        ${reason ? `<p><strong>Reason:</strong> ${reason}</p>` : ''}
+        <p>If you have any questions, please contact our support team.</p>
+      </div>
+    `;
+
+    return this.sendMail(to, 'Vendor Account Update', html);
+  }
+
   async sendOrderConfirmation(to: string, order: any) {
     const itemsHtml = (order.items || [])
       .map(
-        (item) =>
-          `<li>${item.product.title} x ${item.quantity} — $${item.price}</li>`,
+        (item: any) =>
+          `<li>${item.product?.title || 'Product'} x ${item.quantity} — $${item.price}</li>`,
       )
       .join('');
 
@@ -170,27 +228,7 @@ export class MailerService {
     return this.sendMail(to, `Order Confirmation #${order.id}`, html);
   }
 
-  /**
-   * Send order status update email
-   */
   async sendOrderStatusUpdate(to: string, order: any, status: string) {
-    const itemsHtml = (order.items || [])
-      .map(
-        (item) =>
-          `<li>${item.product?.title || 'Product'} x ${item.quantity} — $${item.price}</li>`,
-      )
-      .join('');
-
-    const statusColors = {
-      pending: '#ffc107',
-      processing: '#17a2b8',
-      shipped: '#007bff',
-      delivered: '#28a745',
-      cancelled: '#dc3545',
-    };
-
-    const statusColor = statusColors[status] || '#6c757d';
-
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2 style="color: #333;">Order Status Update</h2>
@@ -198,7 +236,7 @@ export class MailerService {
         <p>Your order <strong>#${order.id}</strong> status has been updated.</p>
         
         <div style="text-align: center; margin: 30px 0;">
-          <div style="display: inline-block; padding: 15px 30px; background: ${statusColor}; color: white; border-radius: 5px; font-size: 20px; font-weight: bold;">
+          <div style="display: inline-block; padding: 15px 30px; background: #007bff; color: white; border-radius: 5px; font-size: 20px; font-weight: bold;">
             ${status.toUpperCase()}
           </div>
         </div>
@@ -208,33 +246,17 @@ export class MailerService {
           <p><strong>Order Date:</strong> ${new Date(order.createdAt).toLocaleDateString()}</p>
         </div>
 
-        <h3>Items:</h3>
-        <ul style="list-style: none; padding: 0;">
-          ${itemsHtml}
-        </ul>
-
         <p style="margin-top: 20px;">Thank you for shopping with us!</p>
-        
-        <div style="background: #f8f9fa; padding: 10px; border-radius: 5px; margin-top: 20px; font-size: 12px; color: #666;">
-          <p>If you have any questions about your order, please contact our support team.</p>
-        </div>
       </div>
     `;
 
     return this.sendMail(to, `Order Status Update - #${order.id}`, html);
   }
 
-  /**
-   * Send a custom email
-   */
-  async sendCustomEmail(to: string, subject: string, html: string, text?: string) {
-    return this.sendMail(to, subject, html);
-  }
-
   async sendMail(to: string, subject: string, html: string) {
     try {
       const info = await this.transporter.sendMail({
-        from: `"HealthScope" <${this.configService.get('email.user')}>`,
+        from: `"${this.fromName}" <${this.fromEmail}>`,
         to,
         subject,
         html,

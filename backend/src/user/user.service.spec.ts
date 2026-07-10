@@ -2,6 +2,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { UserService } from './user.service';
 import { User } from './user.entity';
+import { it } from '@faker-js/faker';
+import { describe, beforeEach } from 'node:test';
 
 describe('UserService', () => {
   let service: UserService;

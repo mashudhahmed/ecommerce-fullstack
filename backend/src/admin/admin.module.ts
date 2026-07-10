@@ -1,11 +1,18 @@
+// src/admin/admin.module.ts
 import { Module } from '@nestjs/common';
 import { AdminController } from './admin.controller';
 import { ProductsModule } from '../products/products.module';
 import { OrdersModule } from '../orders/orders.module';
 import { UserModule } from '../user/user.module';
+import { VendorModule } from '../vendor/vendor.module'; // ✅ Import VendorModule
 
 @Module({
-  imports: [ProductsModule, OrdersModule, UserModule],
+  imports: [
+    ProductsModule,
+    OrdersModule,
+    UserModule,
+    VendorModule, // ✅ VendorModule now exports VendorService
+  ],
   controllers: [AdminController],
 })
 export class AdminModule {}

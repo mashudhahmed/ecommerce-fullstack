@@ -193,7 +193,8 @@ export class UserService {
     const where: FindOptionsWhere<User> = {};
     if (filters?.role) where.role = filters.role;
     if (filters?.isVerified !== undefined) where.isVerified = filters.isVerified;
-    if (filters?.isVendorApproved !== undefined) where.isVendorApproved = filters.isVendorApproved;
+    if (filters?.isVendorApproved !== undefined)
+      where.isVendorApproved = filters.isVendorApproved;
 
     if (filters?.excludeSuperAdmin && !filters?.role) {
       where.role = Not(UserRole.SUPER_ADMIN);
@@ -266,22 +267,29 @@ export class UserService {
     pendingVendors: number;
     approvedVendors: number;
   }> {
-    const [totalUsers, totalVendors, totalAdmins, totalSuperAdmins, verifiedUsers, pendingVendors, approvedVendors] =
-      await Promise.all([
-        this.countUsers(),
-        this.countByRole(UserRole.VENDOR),
-        this.countByRole(UserRole.ADMIN),
-        this.countByRole(UserRole.SUPER_ADMIN),
-        this.countVerifiedUsers(),
-        this.countPendingVendors(),
-        this.userRepository.count({
-          where: {
-            role: UserRole.VENDOR,
-            isVendorApproved: true,
-            isVerified: true,
-          },
-        }),
-      ]);
+    const [
+      totalUsers,
+      totalVendors,
+      totalAdmins,
+      totalSuperAdmins,
+      verifiedUsers,
+      pendingVendors,
+      approvedVendors,
+    ] = await Promise.all([
+      this.countUsers(),
+      this.countByRole(UserRole.VENDOR),
+      this.countByRole(UserRole.ADMIN),
+      this.countByRole(UserRole.SUPER_ADMIN),
+      this.countVerifiedUsers(),
+      this.countPendingVendors(),
+      this.userRepository.count({
+        where: {
+          role: UserRole.VENDOR,
+          isVendorApproved: true,
+          isVerified: true,
+        },
+      }),
+    ]);
 
     return {
       totalUsers,
@@ -295,11 +303,12 @@ export class UserService {
   }
 
   // ============================================================
-  // CREATE METHODS
+  // CREATE METHODS – WITH PASSWORD HASHING (SECURITY FIX)
   // ============================================================
 
   /**
    * Create a new user
+   * Automatically hashes password if not already hashed.
    */
   async create(userData: Partial<User>): Promise<User> {
     if (!userData.email) {
@@ -315,6 +324,11 @@ export class UserService {
     const existingUser = await this.findByEmail(userData.email);
     if (existingUser) {
       throw new ConflictException('Email already registered');
+    }
+
+    // ✅ Hash password if not already hashed (security fix)
+    if (userData.password && !userData.password.startsWith('$2b$')) {
+      userData.password = await bcrypt.hash(userData.password, BCRYPT_ROUNDS);
     }
 
     const user = this.userRepository.create(userData);
@@ -344,7 +358,10 @@ export class UserService {
     const user = await this.findByIdOrFail(id);
 
     if (updateData.password) {
-      updateData.password = await bcrypt.hash(updateData.password, BCRYPT_ROUNDS);
+      // Hash only if not already hashed
+      if (!updateData.password.startsWith('$2b$')) {
+        updateData.password = await bcrypt.hash(updateData.password, BCRYPT_ROUNDS);
+      }
     }
 
     Object.assign(user, updateData);
@@ -397,7 +414,7 @@ export class UserService {
   }
 
   /**
-   * Update user's email verification status
+   * Update user's email verification code
    */
   async updateVerificationCode(email: string, code: string, expiry: Date): Promise<User> {
     const user = await this.findByEmailOrFail(email);
@@ -496,7 +513,7 @@ export class UserService {
 
     vendor.isVendorApproved = true;
     vendor.isVendorRejected = false;
-    vendor.vendorRejectionReason = undefined;
+    vendor.vendorRejectionReason = null; // ✅ use null consistently
     const updatedVendor = await this.userRepository.save(vendor);
     this.logger.log(`Vendor approved: ${vendor.email}`);
     return updatedVendor;
@@ -518,7 +535,7 @@ export class UserService {
 
     vendor.isVendorRejected = true;
     vendor.isVendorApproved = false;
-    vendor.vendorRejectionReason = reason;
+    vendor.vendorRejectionReason = reason || null; // ✅ use null
     const updatedVendor = await this.userRepository.save(vendor);
     this.logger.log(`Vendor rejected: ${vendor.email}`);
     return updatedVendor;
@@ -679,7 +696,7 @@ export class UserService {
   }
 
   /**
-   * Get vendor dashboard statistics
+   * Get vendor dashboard statistics (placeholder)
    */
   async getVendorDashboardStats(vendorId: number): Promise<{
     totalProducts: number;
@@ -687,6 +704,7 @@ export class UserService {
     totalRevenue: number;
     pendingOrders: number;
   }> {
+    // This is a placeholder; actual implementation would use other services.
     return {
       totalProducts: 0,
       totalOrders: 0,

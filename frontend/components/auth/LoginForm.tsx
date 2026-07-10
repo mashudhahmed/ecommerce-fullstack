@@ -1,15 +1,14 @@
 // components/auth/LoginForm.tsx
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
-import { Eye, EyeOff, Loader2, AlertCircle } from 'lucide-react';
+import { Eye, EyeOff, Loader2, AlertCircle, Shield } from 'lucide-react';
 import { loginSchema, type LoginInput } from '@/validations/schemas';
-import { useAuth } from '@/hooks/useAuth';
-import { AuthError } from '@/services/auth.service';
+import { useAuth, AuthError } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import {
   Form,
@@ -20,19 +19,59 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import Link from 'next/link';
+import { useAuthStore } from '@/store/auth-store';
 
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { login, loginLoading } = useAuth();
+  const {
+    login,
+    loginLoading,
+    isAuthenticated,
+    isLoading,
+    twoFactorRequired,
+    setTwoFactorRequired,
+    pendingLoginEmail,
+    setPendingLoginEmail,
+    pendingLoginPassword,
+    setPendingLoginPassword,
+    verifyTwoFactor,
+    verifyTwoFactorLoading,
+  } = useAuth();
+  const storeState = useAuthStore();
 
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [isRateLimited, setIsRateLimited] = useState(false);
-  const rateLimitTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [loginSuccess, setLoginSuccess] = useState(false);
+  const [twoFactorToken, setTwoFactorToken] = useState('');
 
+  const redirectUrl = searchParams.get('redirect') || '/dashboard';
+
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (!isLoading && !loginSuccess && (isAuthenticated || storeState.isAuthenticated)) {
+      console.log('🔄 Already authenticated, redirecting away from /login');
+      router.replace(redirectUrl);
+    }
+  }, [isLoading, isAuthenticated, storeState.isAuthenticated, loginSuccess, redirectUrl, router]);
+
+  useEffect(() => {
+    if (loginSuccess && (isAuthenticated || storeState.isAuthenticated)) {
+      console.log('✅ Redirecting to:', redirectUrl);
+      window.location.href = redirectUrl;
+    }
+  }, [isAuthenticated, loginSuccess, redirectUrl, storeState.isAuthenticated]);
+
+  // Handle query params
   useEffect(() => {
     const sessionExpired = searchParams.get('session');
     const verification = searchParams.get('verification');
@@ -49,91 +88,174 @@ export function LoginForm() {
     }
   }, [searchParams]);
 
-  useEffect(() => {
-    return () => {
-      if (rateLimitTimeoutRef.current) {
-        clearTimeout(rateLimitTimeoutRef.current);
-      }
-    };
-  }, []);
-
   const form = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: '', password: '' },
   });
 
-  const startRateLimitCooldown = () => {
-    setIsRateLimited(true);
-    setErrorMessage('Too many login attempts. Please wait 30 seconds.');
-    if (rateLimitTimeoutRef.current) clearTimeout(rateLimitTimeoutRef.current);
-    rateLimitTimeoutRef.current = setTimeout(() => {
-      setIsRateLimited(false);
-      setErrorMessage(null);
-    }, 30000);
-  };
-
   const onSubmit = async (data: LoginInput) => {
     setErrorMessage(null);
+    setLoginSuccess(false);
     form.clearErrors();
 
-    if (isRateLimited) {
-      toast.error('Too many attempts. Please wait 30 seconds.');
-      return;
-    }
-
     try {
+      console.log('📤 Logging in:', data.email);
       const response = await login(data);
-
-      // ✅ response.user is guaranteed to exist
-      // ✅ Tokens are stored in HTTP-only cookies automatically
+      console.log('✅ Login successful:', response);
+      setLoginSuccess(true);
       const userName = response?.user?.name ?? 'User';
-      
       toast.success(`Welcome back, ${userName}!`);
-      router.push('/dashboard');
+      setTimeout(() => {
+        window.location.href = redirectUrl;
+      }, 500);
     } catch (error: any) {
-      if (error instanceof AuthError) {
-        const message = error.message || 'Login failed. Please try again.';
-        const statusCode = error.statusCode || 500;
+      const isExpected =
+        error instanceof AuthError &&
+        (error.isUnauthorized() || error.isRateLimited() || error.isValidationError());
 
-        if (statusCode === 401) {
-          setErrorMessage(message);
-          toast.error(message);
-          form.setFocus('password');
-          form.setError('password', { type: 'manual', message });
-          return;
-        }
-
-        if (statusCode === 429) {
-          startRateLimitCooldown();
-          toast.error('Rate limit exceeded');
-          return;
-        }
-
-        if (statusCode === 0) {
-          setErrorMessage('Network error. Please check your connection.');
-          toast.error('Network error');
-          return;
-        }
-
-        if (statusCode >= 500) {
-          setErrorMessage('Server error. Please try again later.');
-          toast.error('Server error');
-          return;
-        }
-
-        setErrorMessage(message);
-        toast.error(message);
-        return;
+      if (isExpected) {
+        console.log('ℹ️ Login failed (expected):', error.message);
+      } else {
+        console.error('❌ Login error:', error);
       }
 
-      const message = error?.message || 'An unexpected error occurred. Please try again.';
+      let message = 'An unexpected error occurred. Please try again.';
+
+      if (error instanceof AuthError) {
+        message = error.getDisplayMessage();
+
+        if (error.statusCode === 401) {
+          message = 'Invalid email or password. Please try again.';
+          form.setFocus('password');
+          form.setError('password', {
+            type: 'manual',
+            message: 'Invalid email or password',
+          });
+        } else if (error.statusCode === 429) {
+          message = 'Too many login attempts. Please wait 30 seconds.';
+        } else if (error.statusCode === 0) {
+          message = 'Network error. Please check your connection.';
+        } else if (error.statusCode >= 500) {
+          message = 'Server error. Please try again later.';
+        } else if (message.toLowerCase().includes('verify')) {
+          message = 'Please verify your email before logging in.';
+          setTimeout(() => {
+            router.push(`/verify-email?email=${encodeURIComponent(data.email)}`);
+          }, 2000);
+        }
+      }
+
       setErrorMessage(message);
       toast.error(message);
     }
   };
 
-  const togglePasswordVisibility = () => setShowPassword((v) => !v);
+  // ============================================================
+  // 2FA VERIFICATION HANDLER
+  // ============================================================
 
+  const handleVerifyTwoFactor = async () => {
+    if (!twoFactorToken || twoFactorToken.length !== 6) {
+      toast.error('Please enter a valid 6-digit 2FA code.');
+      return;
+    }
+    try {
+      await verifyTwoFactor(twoFactorToken);
+      // On success, the hook will update the store and redirect.
+    } catch (error: any) {
+      // Error handled in hook
+    }
+  };
+
+  // ============================================================
+  // RENDER
+  // ============================================================
+
+  const isDisabled = loginLoading || loginSuccess;
+
+  // Loading state
+  if (isLoading || (!loginSuccess && (isAuthenticated || storeState.isAuthenticated))) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  // 2FA Step
+  if (twoFactorRequired) {
+    return (
+      <Card className="w-full max-w-md mx-auto shadow-lg">
+        <CardHeader className="space-y-1">
+          <div className="flex items-center gap-2">
+            <Shield className="h-5 w-5 text-primary" />
+            <CardTitle className="text-2xl font-bold">Two-Factor Authentication</CardTitle>
+          </div>
+          <CardDescription>
+            Enter the 6-digit code from your authenticator app
+            {pendingLoginEmail && (
+              <span className="block text-sm mt-1 text-muted-foreground">
+                for <strong>{pendingLoginEmail}</strong>
+              </span>
+            )}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium">Authentication Code</label>
+              <Input
+                type="text"
+                placeholder="123456"
+                maxLength={6}
+                className="text-center text-2xl tracking-widest"
+                value={twoFactorToken}
+                onChange={(e) => setTwoFactorToken(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleVerifyTwoFactor();
+                }}
+                autoFocus
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Enter the 6-digit code from Google Authenticator, Authy, or your backup code.
+              </p>
+            </div>
+            <Button
+              className="w-full"
+              size="lg"
+              onClick={handleVerifyTwoFactor}
+              disabled={verifyTwoFactorLoading || twoFactorToken.length !== 6}
+            >
+              {verifyTwoFactorLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Verifying...
+                </>
+              ) : (
+                'Verify & Login'
+              )}
+            </Button>
+            <div className="text-center">
+              <button
+                type="button"
+                className="text-sm text-muted-foreground hover:text-primary transition-colors"
+                onClick={() => {
+                  setTwoFactorRequired(false);
+                  setTwoFactorToken('');
+                  setPendingLoginEmail(null);
+                  setPendingLoginPassword(null);
+                }}
+              >
+                ← Back to login
+              </button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Standard Login Form
   return (
     <Card className="w-full max-w-md mx-auto shadow-lg">
       <CardHeader className="space-y-1">
@@ -163,7 +285,7 @@ export function LoginForm() {
                     <Input
                       placeholder="john@example.com"
                       type="email"
-                      disabled={loginLoading || isRateLimited}
+                      disabled={isDisabled}
                       autoComplete="email"
                       {...field}
                     />
@@ -184,20 +306,23 @@ export function LoginForm() {
                       <Input
                         type={showPassword ? 'text' : 'password'}
                         placeholder="Enter your password"
-                        disabled={loginLoading || isRateLimited}
+                        disabled={isDisabled}
                         className="pr-10"
                         autoComplete="current-password"
                         {...field}
                       />
                       <button
                         type="button"
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                        onClick={togglePasswordVisibility}
-                        aria-label={showPassword ? 'Hide password' : 'Show password'}
-                        aria-pressed={showPassword}
-                        disabled={loginLoading || isRateLimited}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        onClick={() => setShowPassword(!showPassword)}
+                        disabled={isDisabled}
+                        tabIndex={-1}
                       >
-                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
                       </button>
                     </div>
                   </FormControl>
@@ -212,16 +337,11 @@ export function LoginForm() {
               </Link>
             </div>
 
-            <Button 
-              type="submit" 
-              className="w-full" 
-              disabled={loginLoading || isRateLimited} 
-              size="lg"
-            >
+            <Button type="submit" className="w-full" disabled={isDisabled} size="lg">
               {loginLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Signing in...
+                  {loginSuccess ? 'Redirecting...' : 'Signing in...'}
                 </>
               ) : (
                 'Sign in'

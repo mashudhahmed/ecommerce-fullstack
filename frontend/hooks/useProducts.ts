@@ -1,62 +1,88 @@
+// hooks/useProducts.ts
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { productService } from '@/services/product.service';
 import { Product } from '@/types';
+import { fallbackProducts } from '@/lib/fallback-products';
 
 export function useProducts() {
   const queryClient = useQueryClient();
 
-  const { data: products = [], isLoading, error, refetch } = useQuery({
+  // ============================================================
+  // QUERIES
+  // ============================================================
+
+  // ✅ Primary product list – with fallback data
+  const {
+    data: products = [],
+    isLoading,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: ['products'],
     queryFn: async (): Promise<Product[]> => {
       try {
         const result = await productService.getProducts();
-        return Array.isArray(result) ? result : [];
+        // If result is an array and not empty, use it; otherwise fallback
+        if (Array.isArray(result) && result.length > 0) {
+          return result;
+        }
+        console.log('ℹ️ No products from API, using fallback data');
+        return fallbackProducts;
       } catch (err) {
-        console.error('Error fetching products:', err);
-        return [];
+        console.error('❌ Error fetching products, using fallback:', err);
+        return fallbackProducts;
       }
     },
     throwOnError: false,
     staleTime: 5 * 60 * 1000,
+    initialData: fallbackProducts, // Show immediately while fetching
   });
 
+  // ✅ In-stock products
   const { data: inStockProducts = [] } = useQuery({
     queryKey: ['products', 'in-stock'],
     queryFn: async (): Promise<Product[]> => {
       try {
         const result = await productService.getInStockProducts();
-        return Array.isArray(result) ? result : [];
+        return Array.isArray(result) && result.length > 0 ? result : fallbackProducts;
       } catch (err) {
-        console.error('Error fetching in-stock products:', err);
-        return [];
+        console.error('❌ Error fetching in-stock products:', err);
+        return fallbackProducts;
       }
     },
     throwOnError: false,
+    initialData: fallbackProducts,
   });
 
+  // ✅ Low-stock products
   const { data: lowStockProducts = [] } = useQuery({
     queryKey: ['products', 'low-stock'],
     queryFn: async (): Promise<Product[]> => {
       try {
         const result = await productService.getLowStockProducts();
-        return Array.isArray(result) ? result : [];
+        return Array.isArray(result) && result.length > 0 ? result : [];
       } catch (err) {
-        console.error('Error fetching low-stock products:', err);
+        console.error('❌ Error fetching low-stock products:', err);
         return [];
       }
     },
     throwOnError: false,
+    initialData: [],
   });
 
-  // ✅ Get a single product (with fallback)
+  // ✅ Get a single product
   const getProduct = async (id: number): Promise<Product | null> => {
     try {
       return await productService.getProduct(id);
     } catch (error) {
-      console.error(`Error fetching product ${id}:`, error);
+      console.error(`❌ Error fetching product ${id}:`, error);
       return null;
     }
   };
+
+  // ============================================================
+  // MUTATIONS
+  // ============================================================
 
   const createProductMutation = useMutation({
     mutationFn: productService.createProduct,
@@ -66,7 +92,7 @@ export function useProducts() {
       queryClient.invalidateQueries({ queryKey: ['products', 'low-stock'] });
     },
     onError: (error: any) => {
-      console.error('Error creating product:', error);
+      console.error('❌ Error creating product:', error);
     },
   });
 
@@ -79,7 +105,7 @@ export function useProducts() {
       queryClient.invalidateQueries({ queryKey: ['products', 'low-stock'] });
     },
     onError: (error: any) => {
-      console.error('Error updating product:', error);
+      console.error('❌ Error updating product:', error);
     },
   });
 
@@ -91,22 +117,33 @@ export function useProducts() {
       queryClient.invalidateQueries({ queryKey: ['products', 'low-stock'] });
     },
     onError: (error: any) => {
-      console.error('Error deleting product:', error);
+      console.error('❌ Error deleting product:', error);
     },
   });
 
+  // ============================================================
+  // RETURN
+  // ============================================================
+
   return {
+    // Data
     products,
     isLoading,
     error,
     refetch,
     inStockProducts,
     lowStockProducts,
+
+    // Single product
     getProduct,
+
+    // Mutations
     createProduct: createProductMutation.mutateAsync,
     createProductLoading: createProductMutation.isPending,
+
     updateProduct: updateProductMutation.mutateAsync,
     updateProductLoading: updateProductMutation.isPending,
+
     deleteProduct: deleteProductMutation.mutateAsync,
     deleteProductLoading: deleteProductMutation.isPending,
   };

@@ -14,6 +14,8 @@ import { Product } from '../products/products.entity';
 import { User, UserRole } from '../user/user.entity';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { MailerService } from '../mailer/mailer.service';
+import { EventsGateway } from '../events/events.gateway';
+import { IdempotencyService } from './idempotency.service'; // ✅ Added
 
 @Injectable()
 export class OrdersService {
@@ -28,6 +30,8 @@ export class OrdersService {
     private readonly productRepository: Repository<Product>,
     private readonly dataSource: DataSource,
     private readonly mailerService: MailerService,
+    private readonly eventsGateway: EventsGateway,
+    private readonly idempotencyService: IdempotencyService, // ✅ Added
   ) {}
 
   // ============================================================
@@ -108,6 +112,13 @@ export class OrdersService {
         `order confirmation to ${user.email}`,
       );
 
+      // Emit WebSocket event
+      this.eventsGateway.notifyUser(
+        userId.toString(),
+        'order_created',
+        { orderId: completeOrder.id, total: completeOrder.total },
+      );
+
       this.logger.log(`Order created: ${savedOrder.id} by user ${userId}`);
       return completeOrder;
     } catch (error) {
@@ -116,6 +127,24 @@ export class OrdersService {
     } finally {
       await queryRunner.release();
     }
+  }
+
+  // ============================================================
+  // CREATE ORDER WITH IDEMPOTENCY – NEW METHOD
+  // ============================================================
+
+  async createWithIdempotency(
+    userId: number,
+    createOrderDto: CreateOrderDto,
+    idempotencyKey: string,
+  ): Promise<Order> {
+    return this.idempotencyService.process(
+      idempotencyKey,
+      userId,
+      async () => {
+        return this.create(userId, createOrderDto);
+      },
+    );
   }
 
   // ============================================================
@@ -153,7 +182,7 @@ export class OrdersService {
   }
 
   // ============================================================
-  // FIND BY VENDOR (Orders containing vendor's products)
+  // FIND BY VENDOR
   // ============================================================
   async findByVendor(vendorId: number): Promise<Order[]> {
     const orders = await this.orderRepository
@@ -165,7 +194,6 @@ export class OrdersService {
       .orderBy('order.createdAt', 'DESC')
       .getMany();
 
-    // Filter orders to only show items from this vendor
     return orders.map((order) => ({
       ...order,
       items: order.items.filter((item) => item.product.owner?.id === vendorId),
@@ -173,7 +201,7 @@ export class OrdersService {
   }
 
   // ============================================================
-  // UPDATE STATUS (Admin/SuperAdmin)
+  // UPDATE STATUS
   // ============================================================
   async updateStatus(id: number, status: OrderStatus, userId: number): Promise<Order> {
     const order = await this.findOne(id);
@@ -193,6 +221,13 @@ export class OrdersService {
       `status update to ${order.user.email}`,
     );
 
+    // Emit WebSocket event
+    this.eventsGateway.notifyUser(
+      order.user.id.toString(),
+      'order_status_updated',
+      { orderId: order.id, status },
+    );
+
     return updatedOrder;
   }
 
@@ -202,7 +237,6 @@ export class OrdersService {
   async cancelOrder(id: number, userId: number, userRole: UserRole): Promise<Order> {
     const order = await this.findOne(id);
 
-    // Check if user owns the order or is admin/superadmin
     const isAdmin = [UserRole.ADMIN, UserRole.SUPER_ADMIN].includes(userRole);
     if (!isAdmin && order.user.id !== userId) {
       throw new ForbiddenException('You can only cancel your own orders');
@@ -223,7 +257,6 @@ export class OrdersService {
     await queryRunner.startTransaction();
 
     try {
-      // Restore stock
       for (const item of order.items) {
         const product = await queryRunner.manager.findOne(Product, {
           where: { id: item.product.id },
@@ -241,6 +274,13 @@ export class OrdersService {
       await queryRunner.commitTransaction();
 
       this.logger.log(`Order ${id} cancelled successfully by user ${userId}`);
+
+      this.eventsGateway.notifyUser(
+        order.user.id.toString(),
+        'order_cancelled',
+        { orderId: order.id },
+      );
+
       return cancelledOrder;
     } catch (error) {
       await queryRunner.rollbackTransaction();
@@ -351,7 +391,7 @@ export class OrdersService {
   }
 
   // ============================================================
-  // HELPER: Fire and Forget
+  // HELPER: Fire and Forget (for email sending)
   // ============================================================
   private fireAndForget(promise: Promise<unknown>, label: string) {
     promise.catch((err) => {

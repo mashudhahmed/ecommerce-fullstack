@@ -1,6 +1,18 @@
 {
-  "devDependencies": {
-    "@types/jest": "^30.0.0",
-    "jest": "^30.4.2"
+  "name": "ecommerce-fullstack",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=frontend",
+    "dev:backend": "npm run dev --workspace=backend",
+    "build": "npm run build --workspace=frontend",
+    "start": "npm run start --workspace=frontend"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }

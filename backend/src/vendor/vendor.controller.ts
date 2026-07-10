@@ -63,6 +63,8 @@ export class VendorController {
     const pageNum = page ? parseInt(page, 10) : 1;
     const limitNum = limit ? Math.min(parseInt(limit, 10), 100) : 20;
 
+    // Service already handles pagination-in-memory for this endpoint.
+    // For production-scale, consider moving pagination to service.
     const vendors = await this.vendorService.getPublicVendors({
       search,
       sortBy,
@@ -193,7 +195,7 @@ export class VendorController {
     const pageNum = page ? parseInt(page, 10) : 1;
     const limitNum = limit ? Math.min(parseInt(limit, 10), 100) : 20;
     const inStockBool = inStock !== undefined ? inStock === 'true' : undefined;
-    
+
     return this.vendorService.getVendorProducts(
       req.user.id,
       pageNum,
@@ -267,6 +269,10 @@ export class VendorController {
     return this.vendorService.getVendorOrderSummary(req.user.id);
   }
 
+  // ============================================================
+  // EXPORT ORDERS – FIXED: @Res({ passthrough: true })
+  // ============================================================
+
   @Get('orders/export')
   @UseGuards(RolesGuard)
   @Roles(UserRole.VENDOR)
@@ -277,7 +283,7 @@ export class VendorController {
   @ApiQuery({ name: 'endDate', required: false, type: String })
   @ApiQuery({ name: 'status', required: false, type: String })
   async exportOrders(
-    @Res() res: Response, // ✅ @Res() moved to front
+    @Res({ passthrough: true }) res: Response,   // ✅ passthrough enabled
     @Request() req: { user: { id: number } },
     @Query('format') format: 'csv' | 'excel' = 'csv',
     @Query('startDate') startDate?: string,
@@ -292,13 +298,16 @@ export class VendorController {
       status,
     );
 
+    // Set download headers
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Content-Disposition', `attachment; filename="${result.filename}.json"`);
-    res.json(result);
+
+    // ✅ Return data – interceptor will handle formatting
+    return result;
   }
 
   // ============================================================
-  // VENDOR REVIEWS
+  // VENDOR REVIEWS (will be connected to ReviewsModule)
   // ============================================================
 
   @Get('reviews')
@@ -318,7 +327,7 @@ export class VendorController {
     const pageNum = page ? parseInt(page, 10) : 1;
     const limitNum = limit ? Math.min(parseInt(limit, 10), 100) : 20;
     const ratingNum = rating ? parseInt(rating, 10) : undefined;
-    
+
     return this.vendorService.getVendorReviews(req.user.id, pageNum, limitNum, ratingNum);
   }
 }

@@ -1,102 +1,191 @@
-import { apiClient } from '@/lib/api-client';
-import { Order, ApiResponse } from '@/types';
+// services/order.service.ts
+import { apiClient, unwrapData } from '@/lib/api-client';
+import { Order } from '@/types';
 
+// ✅ EXPORTED
 export interface CreateOrderData {
   items: {
     productId: number;
     quantity: number;
   }[];
+  shippingAddress?: string;
+  idempotencyKey?: string;
 }
 
+export interface OrderSummary {
+  totalOrders: number;
+  totalSpent: number;
+  pendingOrders: number;
+  recentOrders: Order[];
+}
+
+export interface AdminOrderStats {
+  totalOrders: number;
+  totalRevenue: number;
+  pendingOrders: number;
+  processingOrders: number;
+  shippedOrders: number;
+  deliveredOrders: number;
+  cancelledOrders: number;
+}
+
+// ✅ EXPORTED
 export const orderService = {
+  // ============================================================
+  // GET USER ORDERS
+  // ============================================================
   async getOrders(): Promise<Order[]> {
     try {
-      console.log('📡 Fetching orders...');
-      const { data } = await apiClient.get<ApiResponse<Order[]>>('/orders/my');
-      return data.data || [];
-    } catch (error) {
-      console.error('❌ Failed to fetch orders:', error);
+      const response = await apiClient.get('/orders/my');
+      const data = unwrapData<Order[]>(response.data);
+      return Array.isArray(data) ? data : [];
+    } catch (error: any) {
+      const status = error?.response?.status || error?.statusCode || 'unknown';
+      const message = error?.response?.data?.message || error?.message || 'Unknown error';
+      console.error(`❌ Failed to fetch orders (${status}):`, message);
+      if (status === 401 || status === 403) return [];
       return [];
     }
   },
 
+  // ============================================================
+  // GET SINGLE ORDER
+  // ============================================================
   async getOrder(id: number): Promise<Order> {
+    const response = await apiClient.get(`/orders/${id}`);
+    return unwrapData<Order>(response.data);
+  },
+
+  // ============================================================
+  // CREATE ORDER
+  // ============================================================
+  async createOrder(data: CreateOrderData): Promise<Order> {
+    const { idempotencyKey, ...orderData } = data;
+    const headers: Record<string, string> = {};
+    if (idempotencyKey) {
+      headers['idempotency-key'] = idempotencyKey;
+    }
+    const response = await apiClient.post('/orders', orderData, { headers });
+    return unwrapData<Order>(response.data);
+  },
+
+  // ============================================================
+  // CANCEL ORDER
+  // ============================================================
+  async cancelOrder(id: number): Promise<Order> {
+    const response = await apiClient.patch(`/orders/${id}/cancel`);
+    return unwrapData<Order>(response.data);
+  },
+
+  // ============================================================
+  // GET ORDER SUMMARY
+  // ============================================================
+  async getOrderSummary(): Promise<OrderSummary> {
     try {
-      const { data } = await apiClient.get<ApiResponse<Order>>(`/orders/${id}`);
-      return data.data;
-    } catch (error) {
-      console.error(`❌ Failed to fetch order ${id}:`, error);
-      throw error;
+      const response = await apiClient.get('/orders/my/summary');
+      const data = unwrapData<OrderSummary>(response.data);
+      return {
+        totalOrders: data?.totalOrders || 0,
+        totalSpent: data?.totalSpent || 0,
+        pendingOrders: data?.pendingOrders || 0,
+        recentOrders: data?.recentOrders || [],
+      };
+    } catch (error: any) {
+      const status = error?.response?.status || error?.statusCode || 'unknown';
+      console.error(`❌ Failed to fetch order summary (${status}):`, error?.message || 'Unknown error');
+      return { totalOrders: 0, totalSpent: 0, pendingOrders: 0, recentOrders: [] };
     }
   },
 
+  // ============================================================
+  // GET VENDOR ORDERS
+  // ============================================================
+  async getVendorOrders(): Promise<Order[]> {
+    try {
+      const response = await apiClient.get('/orders/vendor');
+      const data = unwrapData<Order[]>(response.data);
+      return Array.isArray(data) ? data : [];
+    } catch (error: any) {
+      const status = error?.response?.status || error?.statusCode || 'unknown';
+      console.error(`❌ Failed to fetch vendor orders (${status}):`, error?.message || 'Unknown error');
+      if (status === 401 || status === 403) return [];
+      return [];
+    }
+  },
+
+  // ============================================================
+  // GET VENDOR ORDER SUMMARY
+  // ============================================================
+  async getVendorOrderSummary(): Promise<any> {
+    try {
+      const response = await apiClient.get('/orders/vendor/summary');
+      return unwrapData(response.data) || {};
+    } catch (error: any) {
+      const status = error?.response?.status || error?.statusCode || 'unknown';
+      console.error(`❌ Failed to fetch vendor order summary (${status}):`, error?.message || 'Unknown error');
+      return {};
+    }
+  },
+
+  // ============================================================
+  // UPDATE VENDOR ORDER STATUS
+  // ============================================================
+  async updateVendorOrderStatus(id: number, status: string): Promise<Order> {
+    const response = await apiClient.patch(`/orders/${id}/vendor-status`, { status });
+    return unwrapData<Order>(response.data);
+  },
+
+  // ============================================================
+  // ADMIN: GET ALL ORDERS
+  // ============================================================
   async getAllOrders(): Promise<Order[]> {
     try {
-      const { data } = await apiClient.get<ApiResponse<Order[]>>('/orders');
-      return data.data || [];
-    } catch (error) {
-      console.error('❌ Failed to fetch all orders:', error);
+      const response = await apiClient.get('/orders');
+      const data = unwrapData<Order[]>(response.data);
+      return Array.isArray(data) ? data : [];
+    } catch (error: any) {
+      const status = error?.response?.status || error?.statusCode || 'unknown';
+      console.error(`❌ Failed to fetch all orders (${status}):`, error?.message || 'Unknown error');
       return [];
     }
   },
 
-  async createOrder(orderData: CreateOrderData): Promise<Order> {
+  // ============================================================
+  // ADMIN: GET ORDER STATS
+  // ============================================================
+  async getAdminOrderStats(): Promise<AdminOrderStats> {
     try {
-      const { data } = await apiClient.post<ApiResponse<Order>>('/orders', orderData);
-      return data.data;
-    } catch (error) {
-      console.error('❌ Failed to create order:', error);
-      throw error;
-    }
-  },
-
-  async updateOrderStatus(id: number, status: string): Promise<Order> {
-    try {
-      const { data } = await apiClient.patch<ApiResponse<Order>>(
-        `/orders/${id}/status`,
-        { status }
-      );
-      return data.data;
-    } catch (error) {
-      console.error(`❌ Failed to update order ${id}:`, error);
-      throw error;
-    }
-  },
-
-  async cancelOrder(id: number): Promise<Order> {
-    try {
-      const { data } = await apiClient.patch<ApiResponse<Order>>(`/orders/${id}/cancel`);
-      return data.data;
-    } catch (error) {
-      console.error(`❌ Failed to cancel order ${id}:`, error);
-      throw error;
-    }
-  },
-
-  // ✅ FIXED: Always return an object, never undefined
-  async getOrderSummary(): Promise<any> {
-    try {
-      console.log('📡 Fetching order summary...');
-      const { data } = await apiClient.get<ApiResponse<any>>('/orders/my/summary');
-      console.log('✅ Order summary fetched:', data.data);
-      
-      // ✅ Ensure we always return an object with default values
+      const response = await apiClient.get('/orders/admin/stats');
+      const data = unwrapData<AdminOrderStats>(response.data);
       return {
-        totalOrders: data.data?.totalOrders || 0,
-        totalSpent: data.data?.totalSpent || 0,
-        pendingOrders: data.data?.pendingOrders || 0,
-        recentOrders: data.data?.recentOrders || [],
-        ...(data.data || {}),
+        totalOrders: data?.totalOrders || 0,
+        totalRevenue: data?.totalRevenue || 0,
+        pendingOrders: data?.pendingOrders || 0,
+        processingOrders: data?.processingOrders || 0,
+        shippedOrders: data?.shippedOrders || 0,
+        deliveredOrders: data?.deliveredOrders || 0,
+        cancelledOrders: data?.cancelledOrders || 0,
       };
-    } catch (error) {
-      console.error('❌ Failed to fetch order summary:', error);
-      // ✅ Always return a valid object, never undefined
+    } catch (error: any) {
+      const status = error?.response?.status || error?.statusCode || 'unknown';
+      console.error(`❌ Failed to fetch admin order stats (${status}):`, error?.message || 'Unknown error');
       return {
         totalOrders: 0,
-        totalSpent: 0,
+        totalRevenue: 0,
         pendingOrders: 0,
-        recentOrders: [],
+        processingOrders: 0,
+        shippedOrders: 0,
+        deliveredOrders: 0,
+        cancelledOrders: 0,
       };
     }
+  },
+
+  // ============================================================
+  // ADMIN: UPDATE ORDER STATUS
+  // ============================================================
+  async updateOrderStatus(id: number, status: string): Promise<Order> {
+    const response = await apiClient.patch(`/orders/${id}/status`, { status });
+    return unwrapData<Order>(response.data);
   },
 };

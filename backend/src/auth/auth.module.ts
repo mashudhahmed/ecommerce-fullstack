@@ -14,13 +14,22 @@ import { TokenBlacklist } from './token-blacklist.entity';
 import { TokenBlacklistService } from './token-blacklist.service';
 import { LoginAttempt } from './login-attempt.entity';
 import { LoginAttemptService } from './login-attempt.service';
-import { TwoFactor } from './two-factor.entity'; // ✅ Add this
+import { TwoFactor } from './two-factor.entity';
+import { TwoFactorService } from './two-factor.service';
+import { EventsModule } from '../events/events.module';   // ✅ Import EventsModule
 
 @Module({
   imports: [
     UserModule,
     MailerModule,
-    TypeOrmModule.forFeature([User, RefreshToken, TokenBlacklist, LoginAttempt, TwoFactor]), // ✅ Add TwoFactor
+    EventsModule,   // ✅ This provides EventsGateway
+    TypeOrmModule.forFeature([
+      User,
+      RefreshToken,
+      TokenBlacklist,
+      LoginAttempt,
+      TwoFactor,
+    ]),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => {
@@ -44,7 +53,13 @@ import { TwoFactor } from './two-factor.entity'; // ✅ Add this
     JwtStrategy,
     TokenBlacklistService,
     LoginAttemptService,
+    TwoFactorService,   // ✅ Added TwoFactorService
   ],
-  exports: [AuthService, TokenBlacklistService, LoginAttemptService],
+  exports: [
+    AuthService,
+    TokenBlacklistService,
+    LoginAttemptService,
+    TwoFactorService,
+  ],
 })
 export class AuthModule {}

@@ -1,3 +1,4 @@
+// src/orders/orders.controller.ts
 import {
   Controller,
   Get,
@@ -11,12 +12,14 @@ import {
   HttpCode,
   HttpStatus,
   ForbiddenException,
+  Headers,                              // ✅ Added
 } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
   ApiResponse,
   ApiBearerAuth,
+  ApiHeader,                            // ✅ Added
 } from '@nestjs/swagger';
 import { OrdersService } from './orders.service';
 import { CreateOrderDto } from './dto/create-order.dto';
@@ -25,6 +28,7 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { OrderStatus } from './order.entity';
 import { UserRole } from '../user/user.entity';
+import { UserRateLimitGuard } from '../common/guards/user-rate-limit.guard';   // ✅ Added
 
 @ApiTags('Orders')
 @Controller('orders')
@@ -32,17 +36,31 @@ export class OrdersController {
   constructor(private readonly ordersService: OrdersService) {}
 
   // ============================================================
-  // CREATE ORDER (Authenticated User)
+  // CREATE ORDER – WITH IDEMPOTENCY KEY & PER-USER RATE LIMITING
   // ============================================================
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create a new order' })
   @ApiResponse({ status: 201, description: 'Order created successfully' })
-  @UseGuards(JwtAuthGuard)
+  @ApiHeader({
+    name: 'idempotency-key',
+    description: 'Unique key to prevent duplicate order creation. Use UUID v4.',
+    required: false,
+    example: '550e8400-e29b-41d4-a716-446655440000',
+  })
+  @UseGuards(JwtAuthGuard, UserRateLimitGuard)   // ✅ Rate limiting added
   @Post()
   async create(
     @Request() req: { user: { id: number } },
     @Body() createOrderDto: CreateOrderDto,
+    @Headers('idempotency-key') idempotencyKey?: string,   // ✅ Added
   ) {
+    if (idempotencyKey) {
+      return this.ordersService.createWithIdempotency(
+        req.user.id,
+        createOrderDto,
+        idempotencyKey,
+      );
+    }
     return this.ordersService.create(req.user.id, createOrderDto);
   }
 

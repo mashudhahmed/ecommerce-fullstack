@@ -18,10 +18,13 @@ import { UserService } from '../user/user.service';
 import { MailerService } from '../mailer/mailer.service';
 import { RefreshToken } from './refresh-token.entity';
 import { LoginAttemptService } from './login-attempt.service';
+import { TwoFactorService } from './two-factor.service';          // ✅ Added
+import { TwoFactor } from './two-factor.entity';                 // ✅ Added
 import { RegisterUserDto } from './dto/register-user.dto';
 import { RegisterVendorDto } from './dto/register-vendor.dto';
 import { LoginDto } from './dto/login.dto';
 import { User, UserRole } from '../user/user.entity';
+import { EventsGateway } from '../events/events.gateway';
 
 export const BCRYPT_ROUNDS = 12;
 export const ACCESS_TOKEN_TTL_SECONDS = 15 * 60; // 15 minutes
@@ -46,6 +49,10 @@ export class AuthService {
     private readonly loginAttemptService: LoginAttemptService,
     @InjectRepository(RefreshToken)
     private readonly refreshTokenRepo: Repository<RefreshToken>,
+    private readonly eventsGateway: EventsGateway,
+    private readonly twoFactorService: TwoFactorService,          // ✅ Injected
+    @InjectRepository(TwoFactor)
+    private readonly twoFactorRepo: Repository<TwoFactor>,        // ✅ Injected
   ) {}
 
   // ============================================================
@@ -54,16 +61,13 @@ export class AuthService {
   async registerUser(dto: RegisterUserDto) {
     this.logger.log(`📝 User registration attempt: ${dto.email}`);
 
-    // Check if user exists
     const existingUser = await this.userService.findByEmail(dto.email);
     if (existingUser) {
       throw new ConflictException('Email already registered');
     }
 
-    // Hash password
     const hashedPassword = await bcrypt.hash(dto.password, BCRYPT_ROUNDS);
 
-    // Create user
     const user = await this.userService.create({
       name: dto.name,
       email: dto.email,
@@ -72,15 +76,19 @@ export class AuthService {
       isVerified: false,
     });
 
-    // Generate verification code
     const verificationCode = this.userService.generateSixDigitCode();
     const expiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
     await this.userService.updateVerificationCode(user.email, verificationCode, expiry);
 
-    // Send verification email (fire and forget)
     this.fireAndForget(
       this.mailerService.sendVerificationEmail(user.email, verificationCode, user.name),
       `verification email to ${user.email}`,
+    );
+
+    this.eventsGateway.notifyUser(
+      user.id.toString(),
+      'user_registered',
+      { userId: user.id, email: user.email, role: user.role },
     );
 
     return {
@@ -98,16 +106,13 @@ export class AuthService {
   async registerVendor(dto: RegisterVendorDto) {
     this.logger.log(`📝 Vendor registration attempt: ${dto.email}`);
 
-    // Check if user exists
     const existingUser = await this.userService.findByEmail(dto.email);
     if (existingUser) {
       throw new ConflictException('Email already registered');
     }
 
-    // Hash password
     const hashedPassword = await bcrypt.hash(dto.password, BCRYPT_ROUNDS);
 
-    // Create vendor user
     const user = await this.userService.create({
       name: dto.name,
       email: dto.email,
@@ -123,26 +128,30 @@ export class AuthService {
       vendorBusinessRegistration: dto.businessRegistration,
     });
 
-    // Generate verification code
     const verificationCode = this.userService.generateSixDigitCode();
     const expiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
     await this.userService.updateVerificationCode(user.email, verificationCode, expiry);
 
-    // Send verification email
     this.fireAndForget(
       this.mailerService.sendVerificationEmail(user.email, verificationCode, user.name),
       `verification email to ${user.email}`,
     );
 
-    // Notify admins about new vendor registration
     this.fireAndForget(
       this.mailerService.sendVendorRegistrationNotification(user),
       `vendor registration notification`,
     );
 
+    this.eventsGateway.notifyUser(
+      user.id.toString(),
+      'vendor_registered',
+      { userId: user.id, email: user.email, businessName: user.vendorBusinessName },
+    );
+
     return {
       success: true,
-      message: 'Vendor registration successful. Please check your email for verification code. Your account will be reviewed by admins.',
+      message:
+        'Vendor registration successful. Please check your email for verification code. Your account will be reviewed by admins.',
       userId: user.id,
       email: user.email,
       requiresVerification: true,
@@ -151,17 +160,19 @@ export class AuthService {
   }
 
   // ============================================================
-  // LOGIN WITH ATTEMPT TRACKING
+  // LOGIN WITH ATTEMPT TRACKING AND 2FA
   // ============================================================
-  
-  async login(dto: LoginDto, meta: { userAgent?: string; ipAddress?: string }): Promise<{
+  async login(
+    dto: LoginDto,
+    meta: { userAgent?: string; ipAddress?: string },
+  ): Promise<{
     message: string;
     tokens: TokenPair;
     user: any;
   }> {
     this.logger.log(`🔐 Login attempt: ${dto.email}`);
 
-    // ✅ Check if account is locked
+    // Account lockout check
     const isLocked = await this.loginAttemptService.isAccountLocked(
       dto.email,
       meta.ipAddress || 'unknown',
@@ -202,26 +213,44 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    // ✅ Clear attempts on successful login
-    await this.loginAttemptService.clearAttempts(
-      dto.email,
-      meta.ipAddress || 'unknown',
-    );
+    // Clear failed attempts on success
+    await this.loginAttemptService.clearAttempts(dto.email, meta.ipAddress || 'unknown');
 
     // Check if email is verified
     if (!user.isVerified) {
       throw new UnauthorizedException('Please verify your email before logging in.');
     }
 
-    // Check vendor approval status
+    // Vendor approval checks
     if (user.role === UserRole.VENDOR) {
       if (user.isVendorRejected) {
-        throw new ForbiddenException('Your vendor account has been rejected. Please contact support.');
+        throw new ForbiddenException(
+          'Your vendor account has been rejected. Please contact support.',
+        );
       }
       if (!user.isVendorApproved) {
         throw new ForbiddenException('Your vendor account is pending admin approval.');
       }
     }
+
+    // ============================================================
+    // ✅ TWO-FACTOR AUTHENTICATION CHECK (NEW)
+    // ============================================================
+    const twoFactor = await this.twoFactorRepo.findOne({
+      where: { userId: user.id, isEnabled: true },
+    });
+
+    if (twoFactor && !dto.twoFactorToken) {
+      throw new UnauthorizedException('2FA token required');
+    }
+
+    if (twoFactor && dto.twoFactorToken) {
+      const valid = await this.twoFactorService.verifyToken(user.id, dto.twoFactorToken);
+      if (!valid) {
+        throw new UnauthorizedException('Invalid 2FA token');
+      }
+    }
+    // ============================================================
 
     // Issue tokens
     const tokens = await this.issueTokenPair(user, meta);
@@ -230,6 +259,18 @@ export class AuthService {
     this.fireAndForget(
       this.mailerService.sendLoginNotification(user.email, user.name),
       `login notification to ${user.email}`,
+    );
+
+    this.eventsGateway.notifyUser(
+      user.id.toString(),
+      'user_logged_in',
+      {
+        userId: user.id,
+        email: user.email,
+        role: user.role,
+        timestamp: new Date().toISOString(),
+        ip: meta.ipAddress,
+      },
     );
 
     return {
@@ -242,7 +283,10 @@ export class AuthService {
   // ============================================================
   // REFRESH TOKEN
   // ============================================================
-  async refresh(rawRefreshToken: string, meta: { userAgent?: string; ipAddress?: string }): Promise<{
+  async refresh(
+    rawRefreshToken: string,
+    meta: { userAgent?: string; ipAddress?: string },
+  ): Promise<{
     tokens: TokenPair;
     user: any;
   }> {
@@ -255,19 +299,14 @@ export class AuthService {
       where: { tokenHash },
     });
 
-    // Validate refresh token
     if (!stored || stored.revoked || stored.expiresAt < new Date()) {
       throw new UnauthorizedException('Invalid or expired session. Please login again.');
     }
 
-    // Revoke old refresh token
     stored.revoked = true;
     await this.refreshTokenRepo.save(stored);
 
-    // Get user
     const user = await this.userService.findByIdOrFail(stored.userId);
-
-    // Issue new tokens
     const tokens = await this.issueTokenPair(user, meta);
 
     return { tokens, user: this.toPublicUser(user) };
@@ -283,17 +322,20 @@ export class AuthService {
   }> {
     this.logger.log(`📧 Verifying email for: ${email}`);
 
-    // Verify user
     const user = await this.userService.verifyUser(email, code);
 
-    // Send welcome email
     this.fireAndForget(
       this.mailerService.sendWelcomeEmail(user.email, user.name),
       `welcome email to ${user.email}`,
     );
 
-    // Issue tokens
     const tokens = await this.issueTokenPair(user, {});
+
+    this.eventsGateway.notifyUser(
+      user.id.toString(),
+      'email_verified',
+      { userId: user.id, email: user.email },
+    );
 
     return {
       message: 'Email verified successfully!',
@@ -310,19 +352,17 @@ export class AuthService {
 
     const user = await this.userService.findByEmail(email);
 
-    // Generic response for security (don't reveal if user exists)
     if (!user || user.isVerified) {
-      return { 
-        message: 'If the account exists and is not verified, a new code has been sent' 
+      return {
+        message:
+          'If the account exists and is not verified, a new code has been sent',
       };
     }
 
-    // Generate new code
     const code = this.userService.generateSixDigitCode();
     const expiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
     await this.userService.updateVerificationCode(email, code, expiry);
 
-    // Send email
     this.fireAndForget(
       this.mailerService.sendVerificationEmail(user.email, code, user.name),
       `verification resend to ${user.email}`,
@@ -338,11 +378,10 @@ export class AuthService {
     user: User,
     meta: { userAgent?: string; ipAddress?: string },
   ): Promise<TokenPair> {
-    // Generate access token
     const accessToken = this.jwtService.sign(
-      { 
-        sub: user.id, 
-        email: user.email, 
+      {
+        sub: user.id,
+        email: user.email,
         role: user.role,
         isVerified: user.isVerified,
         isVendorApproved: user.isVendorApproved,
@@ -351,12 +390,10 @@ export class AuthService {
       { expiresIn: ACCESS_TOKEN_TTL_SECONDS },
     );
 
-    // Generate refresh token
     const rawRefreshToken = crypto.randomBytes(40).toString('hex');
     const tokenHash = this.hashToken(rawRefreshToken);
     const expiresAt = new Date(Date.now() + REFRESH_TOKEN_TTL_SECONDS * 1000);
 
-    // Store refresh token
     await this.refreshTokenRepo.save(
       this.refreshTokenRepo.create({
         tokenHash,
@@ -381,29 +418,30 @@ export class AuthService {
   async changePassword(userId: number, currentPassword: string, newPassword: string) {
     this.logger.log(`🔐 Password change attempt for user: ${userId}`);
 
-    // Get user with password
     const user = await this.userService.findByIdWithPassword(userId);
     if (!user) {
       throw new NotFoundException('User not found');
     }
 
-    // Verify current password
     const isPasswordValid = await bcrypt.compare(currentPassword, user.password);
     if (!isPasswordValid) {
       throw new UnauthorizedException('Current password is incorrect');
     }
 
-    // Hash new password
     const hashedNewPassword = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
     await this.userService.updatePassword(user.id, hashedNewPassword);
 
-    // Revoke all sessions
     await this.logoutAll(userId);
 
-    // Send confirmation email
     this.fireAndForget(
       this.mailerService.sendPasswordChangedConfirmation(user.email, user.name),
       `password changed email to ${user.email}`,
+    );
+
+    this.eventsGateway.notifyUser(
+      user.id.toString(),
+      'password_changed',
+      { userId: user.id },
     );
 
     return { message: 'Password changed successfully' };
@@ -422,12 +460,10 @@ export class AuthService {
     const user = await this.userService.findByEmail(email);
     if (!user) return genericResponse;
 
-    // Generate reset code
     const resetCode = this.userService.generateSixDigitCode();
     const expiry = new Date(Date.now() + 15 * 60 * 1000);
     await this.userService.updateResetCode(email, resetCode, expiry);
 
-    // Send reset code email
     this.fireAndForget(
       this.mailerService.sendPasswordResetCode(user.email, resetCode, user.name),
       `reset code to ${user.email}`,
@@ -439,10 +475,8 @@ export class AuthService {
   async verifyResetCode(email: string, code: string) {
     this.logger.log(`🔑 Verifying reset code for: ${email}`);
 
-    // Verify code
     await this.userService.verifyResetCode(email, code);
 
-    // Generate verification token
     const rawToken = crypto.randomBytes(32).toString('hex');
     const tokenHash = this.hashToken(rawToken);
     const expiry = new Date(Date.now() + 10 * 60 * 1000);
@@ -468,14 +502,11 @@ export class AuthService {
       throw new BadRequestException('Verification token expired');
     }
 
-    // Hash new password
     const hashedPassword = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
     await this.userService.resetPassword(user.email, hashedPassword);
 
-    // Revoke all sessions
     await this.logoutAll(user.id);
 
-    // Send confirmation
     this.fireAndForget(
       this.mailerService.sendPasswordChangedConfirmation(user.email, user.name),
       `password changed email to ${user.email}`,
@@ -516,47 +547,33 @@ export class AuthService {
   }
 
   // ============================================================
-  // VENDOR MANAGEMENT - GET PENDING VENDORS
+  // VENDOR MANAGEMENT
   // ============================================================
   async getPendingVendors() {
     this.logger.log('📋 Fetching pending vendors');
     return this.userService.findPendingVendors();
   }
 
-  // ============================================================
-  // VENDOR MANAGEMENT - GET APPROVED VENDORS
-  // ============================================================
   async getApprovedVendors() {
     this.logger.log('📋 Fetching approved vendors');
     return this.userService.findApprovedVendors();
   }
 
-  // ============================================================
-  // VENDOR MANAGEMENT - GET VENDOR BY ID
-  // ============================================================
   async getVendorById(vendorId: number) {
     this.logger.log(`📋 Fetching vendor: ${vendorId}`);
     const vendor = await this.userService.findByIdOrFail(vendorId);
-    
     if (vendor.role !== UserRole.VENDOR) {
       throw new BadRequestException('User is not a vendor');
     }
-
     return this.toPublicUser(vendor);
   }
 
-  // ============================================================
-  // VENDOR MANAGEMENT - GET ALL VENDORS
-  // ============================================================
   async getAllVendors() {
     this.logger.log('📋 Fetching all vendors');
     const vendors = await this.userService.findByRole(UserRole.VENDOR);
     return vendors.map((v) => this.toPublicUser(v));
   }
 
-  // ============================================================
-  // VENDOR MANAGEMENT - APPROVE VENDOR
-  // ============================================================
   async approveVendor(vendorId: number, adminId: number) {
     this.logger.log(`✅ Approving vendor: ${vendorId} by admin: ${adminId}`);
 
@@ -565,30 +582,31 @@ export class AuthService {
     if (vendor.role !== UserRole.VENDOR) {
       throw new BadRequestException('User is not a vendor');
     }
-
     if (vendor.isVendorApproved) {
       throw new BadRequestException('Vendor is already approved');
     }
-
     if (vendor.isVendorRejected) {
       throw new BadRequestException('Vendor has been rejected. Cannot approve.');
     }
 
-    // Approve vendor
     await this.userService.update(vendor.id, {
       isVendorApproved: true,
       isVendorRejected: false,
       vendorRejectionReason: null,
     });
 
-    // Send approval email
     this.fireAndForget(
       this.mailerService.sendVendorApprovalEmail(vendor.email, vendor.name),
       `vendor approval email to ${vendor.email}`,
     );
 
-    // Refresh user data
     const updatedVendor = await this.userService.findByIdOrFail(vendorId);
+
+    this.eventsGateway.notifyUser(
+      vendorId.toString(),
+      'vendor_approved',
+      { vendorId, approvedAt: new Date().toISOString() },
+    );
 
     return {
       message: 'Vendor approved successfully',
@@ -596,9 +614,6 @@ export class AuthService {
     };
   }
 
-  // ============================================================
-  // VENDOR MANAGEMENT - REJECT VENDOR
-  // ============================================================
   async rejectVendor(vendorId: number, adminId: number, reason?: string) {
     this.logger.log(`❌ Rejecting vendor: ${vendorId} by admin: ${adminId}`);
 
@@ -607,26 +622,28 @@ export class AuthService {
     if (vendor.role !== UserRole.VENDOR) {
       throw new BadRequestException('User is not a vendor');
     }
-
     if (vendor.isVendorApproved) {
       throw new BadRequestException('Vendor is already approved');
     }
-
     if (vendor.isVendorRejected) {
       throw new BadRequestException('Vendor is already rejected');
     }
 
-    // Reject vendor
     await this.userService.update(vendor.id, {
       isVendorApproved: false,
       isVendorRejected: true,
       vendorRejectionReason: reason || 'No reason provided',
     });
 
-    // Send rejection email
     this.fireAndForget(
       this.mailerService.sendVendorRejectionEmail(vendor.email, vendor.name, reason),
       `vendor rejection email to ${vendor.email}`,
+    );
+
+    this.eventsGateway.notifyUser(
+      vendorId.toString(),
+      'vendor_rejected',
+      { vendorId, reason, rejectedAt: new Date().toISOString() },
     );
 
     return {
@@ -634,9 +651,6 @@ export class AuthService {
     };
   }
 
-  // ============================================================
-  // VENDOR MANAGEMENT - RESUBMIT VENDOR APPLICATION
-  // ============================================================
   async resubmitVendorApplication(vendorId: number) {
     this.logger.log(`🔄 Resubmitting vendor application: ${vendorId}`);
 
@@ -645,23 +659,19 @@ export class AuthService {
     if (vendor.role !== UserRole.VENDOR) {
       throw new BadRequestException('User is not a vendor');
     }
-
     if (vendor.isVendorApproved) {
       throw new BadRequestException('Vendor is already approved');
     }
-
     if (!vendor.isVendorRejected) {
       throw new BadRequestException('Vendor application is not rejected');
     }
 
-    // Reset rejection status
     await this.userService.update(vendor.id, {
       isVendorRejected: false,
       vendorRejectionReason: null,
       isVendorApproved: false,
     });
 
-    // Notify admins about resubmission
     const updatedVendor = await this.userService.findByIdOrFail(vendorId);
     this.fireAndForget(
       this.mailerService.sendVendorRegistrationNotification(updatedVendor),
@@ -674,27 +684,20 @@ export class AuthService {
     };
   }
 
-  // ============================================================
-  // VENDOR MANAGEMENT - GET VENDOR STATISTICS
-  // ============================================================
   async getVendorStatistics() {
     this.logger.log('📊 Fetching vendor statistics');
 
-    const [
-      totalVendors,
-      pendingVendors,
-      approvedVendors,
-      rejectedVendors,
-    ] = await Promise.all([
-      this.userService.countByRole(UserRole.VENDOR),
-      this.userService.countPendingVendors(),
-      this.userService.countByRole(UserRole.VENDOR).then(count => 
-        this.userService.findApprovedVendors().then(vendors => vendors.length)
-      ),
-      this.userService.findByRole(UserRole.VENDOR).then(vendors => 
-        vendors.filter(v => v.isVendorRejected).length
-      ),
-    ]);
+    const [totalVendors, pendingVendors, approvedVendors, rejectedVendors] =
+      await Promise.all([
+        this.userService.countByRole(UserRole.VENDOR),
+        this.userService.countPendingVendors(),
+        this.userService
+          .countByRole(UserRole.VENDOR)
+          .then(() => this.userService.findApprovedVendors().then((v) => v.length)),
+        this.userService
+          .findByRole(UserRole.VENDOR)
+          .then((v) => v.filter((u) => u.isVendorRejected).length),
+      ]);
 
     return {
       totalVendors,
@@ -706,9 +709,6 @@ export class AuthService {
     };
   }
 
-  // ============================================================
-  // VENDOR MANAGEMENT - BULK APPROVE VENDORS
-  // ============================================================
   async bulkApproveVendors(vendorIds: number[], adminId: number) {
     this.logger.log(`✅ Bulk approving ${vendorIds.length} vendors by admin: ${adminId}`);
 
@@ -719,7 +719,7 @@ export class AuthService {
 
     for (const vendorId of vendorIds) {
       try {
-        const result = await this.approveVendor(vendorId, adminId);
+        await this.approveVendor(vendorId, adminId);
         results.success.push(vendorId);
       } catch (error: any) {
         results.failed.push({
@@ -735,14 +735,7 @@ export class AuthService {
     };
   }
 
-  // ============================================================
-  // VENDOR MANAGEMENT - BULK REJECT VENDORS
-  // ============================================================
-  async bulkRejectVendors(
-    vendorIds: number[],
-    adminId: number,
-    reason?: string,
-  ) {
+  async bulkRejectVendors(vendorIds: number[], adminId: number, reason?: string) {
     this.logger.log(`❌ Bulk rejecting ${vendorIds.length} vendors by admin: ${adminId}`);
 
     const results = {
@@ -752,7 +745,7 @@ export class AuthService {
 
     for (const vendorId of vendorIds) {
       try {
-        const result = await this.rejectVendor(vendorId, adminId, reason);
+        await this.rejectVendor(vendorId, adminId, reason);
         results.success.push(vendorId);
       } catch (error: any) {
         results.failed.push({
@@ -768,9 +761,6 @@ export class AuthService {
     };
   }
 
-  // ============================================================
-  // VENDOR MANAGEMENT - SEARCH VENDORS
-  // ============================================================
   async searchVendors(query: string) {
     this.logger.log(`🔍 Searching vendors with query: ${query}`);
 
@@ -784,9 +774,6 @@ export class AuthService {
       .map((v) => this.toPublicUser(v));
   }
 
-  // ============================================================
-  // VENDOR MANAGEMENT - GET VENDOR BY BUSINESS NAME
-  // ============================================================
   async getVendorByBusinessName(businessName: string) {
     this.logger.log(`🔍 Finding vendor by business name: ${businessName}`);
 
@@ -807,16 +794,13 @@ export class AuthService {
   // ADMIN MANAGEMENT (Super Admin Only)
   // ============================================================
   async createAdmin(dto: RegisterUserDto) {
-    // Check if user exists
     const existingUser = await this.userService.findByEmail(dto.email);
     if (existingUser) {
       throw new ConflictException('Email already registered');
     }
 
-    // Hash password
     const hashedPassword = await bcrypt.hash(dto.password, BCRYPT_ROUNDS);
 
-    // Create admin
     const user = await this.userService.create({
       name: dto.name,
       email: dto.email,
@@ -827,7 +811,6 @@ export class AuthService {
       isVendorRejected: false,
     });
 
-    // Send welcome email
     this.fireAndForget(
       this.mailerService.sendWelcomeEmail(user.email, user.name),
       `admin welcome email to ${user.email}`,
@@ -846,21 +829,16 @@ export class AuthService {
   async deleteUser(id: number) {
     const user = await this.userService.findByIdOrFail(id);
 
-    // Prevent deleting super admin
     if (user.role === UserRole.SUPER_ADMIN) {
       throw new ForbiddenException('Cannot delete superadmin account');
     }
 
-    // Delete user
     await this.userService.delete(id);
-
-    // Revoke all refresh tokens
     await this.refreshTokenRepo.update(
       { userId: id, revoked: false },
       { revoked: true },
     );
 
-    // Send deletion email
     this.fireAndForget(
       this.mailerService.sendAccountDeletionEmail(user.email, user.name),
       `deletion email to ${user.email}`,

@@ -1,3 +1,4 @@
+// hooks/useCart.ts
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCartStore } from '@/store/cart-store';
 import { cartService } from '@/services/cart.service';
@@ -25,10 +26,12 @@ export function useCart() {
     enabled: isAuthenticated && !authLoading,
     staleTime: 60 * 1000,
     retry: false,
-    // ✅ Provide initial data to prevent undefined
     initialData: [],
   });
 
+  // ============================================================
+  // ADD TO CART
+  // ============================================================
   const addToCartMutation = useMutation({
     mutationFn: ({ productId, quantity }: { productId: number; quantity: number }) =>
       cartService.addToCart(productId, quantity),
@@ -37,8 +40,8 @@ export function useCart() {
       toast.success('Item added to cart');
     },
     onError: (error: any) => {
-      // ✅ Handle auth errors gracefully
-      if (error?.statusCode === 401 || error?.statusCode === 403) {
+      // ✅ Check for auth errors (401, 403, or requiresAuth flag)
+      if (error?.requiresAuth || error?.statusCode === 401 || error?.statusCode === 403) {
         toast.error('Please login to add items to cart');
         return;
       }
@@ -46,6 +49,9 @@ export function useCart() {
     },
   });
 
+  // ============================================================
+  // UPDATE QUANTITY
+  // ============================================================
   const updateQuantityMutation = useMutation({
     mutationFn: ({ productId, quantity }: { productId: number; quantity: number }) =>
       cartService.updateQuantity(productId, quantity),
@@ -53,7 +59,7 @@ export function useCart() {
       queryClient.invalidateQueries({ queryKey: ['cart'] });
     },
     onError: (error: any) => {
-      if (error?.statusCode === 401 || error?.statusCode === 403) {
+      if (error?.requiresAuth || error?.statusCode === 401 || error?.statusCode === 403) {
         toast.error('Please login to update cart');
         return;
       }
@@ -61,6 +67,9 @@ export function useCart() {
     },
   });
 
+  // ============================================================
+  // REMOVE ITEM
+  // ============================================================
   const removeItemMutation = useMutation({
     mutationFn: cartService.removeItem,
     onSuccess: () => {
@@ -68,7 +77,7 @@ export function useCart() {
       toast.success('Item removed from cart');
     },
     onError: (error: any) => {
-      if (error?.statusCode === 401 || error?.statusCode === 403) {
+      if (error?.requiresAuth || error?.statusCode === 401 || error?.statusCode === 403) {
         toast.error('Please login to remove items');
         return;
       }
@@ -76,6 +85,9 @@ export function useCart() {
     },
   });
 
+  // ============================================================
+  // CLEAR CART
+  // ============================================================
   const clearCartMutation = useMutation({
     mutationFn: cartService.clearCart,
     onSuccess: () => {
@@ -83,13 +95,17 @@ export function useCart() {
       toast.success('Cart cleared');
     },
     onError: (error: any) => {
-      if (error?.statusCode === 401 || error?.statusCode === 403) {
+      if (error?.requiresAuth || error?.statusCode === 401 || error?.statusCode === 403) {
+        // Silently ignore auth errors for clear cart
         return;
       }
       toast.error(error?.message || 'Failed to clear cart');
     },
   });
 
+  // ============================================================
+  // RETURN
+  // ============================================================
   return {
     items,
     serverCart,

@@ -11,20 +11,22 @@ import { Repository, IsNull, Not } from 'typeorm';
 import { Category } from './category.entity';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
+import { CacheService } from '../common/cache/cache.service'; // ✅ Added
 
 @Injectable()
 export class CategoriesService {
   private readonly logger = new Logger(CategoriesService.name);
+  private readonly CACHE_TTL = 1800; // 30 minutes
 
   constructor(
     @InjectRepository(Category)
     private readonly categoryRepository: Repository<Category>,
+    private readonly cacheService: CacheService, // ✅ Injected
   ) {}
 
   // ============================================================
-  // CREATE
+  // CREATE – invalidates cache
   // ============================================================
-  
   async create(dto: CreateCategoryDto): Promise<Category> {
     // Check if category with this name exists
     const existing = await this.categoryRepository.findOne({
@@ -72,41 +74,84 @@ export class CategoriesService {
 
     const saved = await this.categoryRepository.save(category);
     this.logger.log(`Category created: ${saved.name} (${saved.slug})`);
+
+    // ✅ Invalidate all category caches
+    await this.invalidateCategoryCaches();
+
     return saved;
   }
 
   // ============================================================
-  // FIND ALL
+  // FIND ALL – WITH CACHING
   // ============================================================
-  
   async findAll(): Promise<Category[]> {
-    return this.categoryRepository.find({
+    const cacheKey = 'categories:all';
+
+    // ✅ Check cache first
+    const cached = await this.cacheService.get<Category[]>(cacheKey);
+    if (cached) {
+      this.logger.debug('Cache hit for categories:all');
+      return cached;
+    }
+
+    // Cache miss – fetch from database
+    const categories = await this.categoryRepository.find({
       where: { isActive: true },
       relations: ['children'],
       order: { sortOrder: 'ASC', name: 'ASC' },
     });
+
+    // ✅ Store in cache
+    await this.cacheService.set(cacheKey, categories, this.CACHE_TTL);
+    this.logger.debug('Cached categories:all');
+
+    return categories;
   }
 
   // ============================================================
-  // FIND TREE (Hierarchical)
+  // FIND TREE (Hierarchical) – WITH CACHING
   // ============================================================
-  
   async findTree(): Promise<Category[]> {
+    const cacheKey = 'categories:tree';
+
+    // ✅ Check cache first
+    const cached = await this.cacheService.get<Category[]>(cacheKey);
+    if (cached) {
+      this.logger.debug('Cache hit for categories:tree');
+      return cached;
+    }
+
+    // Cache miss – fetch from database
     const categories = await this.categoryRepository.find({
       where: { isActive: true },
       relations: ['children', 'children.children'],
       order: { sortOrder: 'ASC' },
     });
-    
+
     // Return only root categories (parent is null)
-    return categories.filter((cat) => !cat.parent);
+    const tree = categories.filter((cat) => !cat.parent);
+
+    // ✅ Store in cache
+    await this.cacheService.set(cacheKey, tree, this.CACHE_TTL);
+    this.logger.debug('Cached categories:tree');
+
+    return tree;
   }
 
   // ============================================================
-  // FIND ONE BY ID
+  // FIND ONE BY ID – WITH CACHING
   // ============================================================
-  
   async findOne(id: number): Promise<Category> {
+    const cacheKey = `category:${id}`;
+
+    // ✅ Check cache first
+    const cached = await this.cacheService.get<Category>(cacheKey);
+    if (cached) {
+      this.logger.debug(`Cache hit for category:${id}`);
+      return cached;
+    }
+
+    // Cache miss – fetch from database
     const category = await this.categoryRepository.findOne({
       where: { id },
       relations: ['parent', 'children', 'products'],
@@ -116,14 +161,27 @@ export class CategoriesService {
       throw new NotFoundException(`Category with ID ${id} not found`);
     }
 
+    // ✅ Store in cache
+    await this.cacheService.set(cacheKey, category, this.CACHE_TTL);
+    this.logger.debug(`Cached category:${id}`);
+
     return category;
   }
 
   // ============================================================
-  // FIND BY SLUG
+  // FIND BY SLUG – WITH CACHING
   // ============================================================
-  
   async findBySlug(slug: string): Promise<Category> {
+    const cacheKey = `category:slug:${slug}`;
+
+    // ✅ Check cache first
+    const cached = await this.cacheService.get<Category>(cacheKey);
+    if (cached) {
+      this.logger.debug(`Cache hit for category:slug:${slug}`);
+      return cached;
+    }
+
+    // Cache miss – fetch from database
     const category = await this.categoryRepository.findOne({
       where: { slug },
       relations: ['children', 'products'],
@@ -133,13 +191,16 @@ export class CategoriesService {
       throw new NotFoundException(`Category with slug "${slug}" not found`);
     }
 
+    // ✅ Store in cache
+    await this.cacheService.set(cacheKey, category, this.CACHE_TTL);
+    this.logger.debug(`Cached category:slug:${slug}`);
+
     return category;
   }
 
   // ============================================================
-  // UPDATE
+  // UPDATE – invalidates cache
   // ============================================================
-  
   async update(id: number, dto: UpdateCategoryDto): Promise<Category> {
     const category = await this.findOne(id);
 
@@ -194,13 +255,16 @@ export class CategoriesService {
 
     const updated = await this.categoryRepository.save(category);
     this.logger.log(`Category updated: ${updated.name}`);
+
+    // ✅ Invalidate all category caches
+    await this.invalidateCategoryCaches();
+
     return updated;
   }
 
   // ============================================================
-  // DELETE (Soft Delete)
+  // DELETE (Soft Delete) – invalidates cache
   // ============================================================
-  
   async delete(id: number): Promise<void> {
     const category = await this.findOne(id);
 
@@ -210,7 +274,7 @@ export class CategoriesService {
     });
 
     if (children.length > 0) {
-      // Option 1: Move children to parent
+      // Move children to parent
       for (const child of children) {
         child.parent = category.parent || undefined;
         await this.categoryRepository.save(child);
@@ -220,8 +284,6 @@ export class CategoriesService {
 
     // Check if category has products
     if (category.products && category.products.length > 0) {
-      // Option: Unassign products from this category
-      // Or prevent deletion
       this.logger.warn(
         `Category ${category.name} has ${category.products.length} products`,
       );
@@ -231,12 +293,14 @@ export class CategoriesService {
     category.isActive = false;
     await this.categoryRepository.save(category);
     this.logger.log(`Category deleted: ${category.name}`);
+
+    // ✅ Invalidate all category caches
+    await this.invalidateCategoryCaches();
   }
 
   // ============================================================
   // GET CATEGORY STATS
   // ============================================================
-  
   async getCategoryStats(): Promise<{
     total: number;
     active: number;
@@ -272,7 +336,7 @@ export class CategoriesService {
   // ============================================================
   // HELPER METHODS
   // ============================================================
-  
+
   private generateSlug(name: string): string {
     return name
       .toLowerCase()
@@ -309,5 +373,25 @@ export class CategoriesService {
     }
 
     return maxDepth;
+  }
+
+  // ============================================================
+  // CACHE INVALIDATION
+  // ============================================================
+
+  private async invalidateCategoryCaches(): Promise<void> {
+    await this.cacheService.invalidatePattern('categories:*');
+    this.logger.debug('Invalidated all category caches');
+  }
+
+  // ============================================================
+  // BULK CACHE WARM-UP (optional – call on startup)
+  // ============================================================
+
+  async warmCache(): Promise<void> {
+    this.logger.log('Warming category cache...');
+    await this.findAll();
+    await this.findTree();
+    this.logger.log('Category cache warmed up');
   }
 }

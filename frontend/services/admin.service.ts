@@ -7,12 +7,21 @@ export interface DashboardStats {
   totalUsers: number;
   revenue: number;
   pendingOrders: number;
+  totalVendors: number;
+  pendingVendors: number;
+  userStats: {
+    totalUsers: number;
+    totalVendors: number;
+    totalAdmins: number;
+    totalSuperAdmins: number;
+    verifiedUsers: number;
+    pendingVendors: number;
+    approvedVendors: number;
+  };
 }
 
-// ✅ Set to true to use real API
-const USE_API = true;
-
 export const adminService = {
+  // ✅ Get dashboard stats
   async getStats(): Promise<DashboardStats> {
     try {
       const { data } = await apiClient.get<ApiResponse<DashboardStats>>('/admin/stats');
@@ -23,9 +32,10 @@ export const adminService = {
     }
   },
 
+  // ✅ Get all users
   async getAllUsers(): Promise<User[]> {
     try {
-      const { data } = await apiClient.get<ApiResponse<User[]>>('/auth/users');
+      const { data } = await apiClient.get<ApiResponse<User[]>>('/admin/users');
       return data.data || [];
     } catch (error) {
       console.error('❌ Failed to fetch users:', error);
@@ -33,38 +43,18 @@ export const adminService = {
     }
   },
 
+  // ✅ Get user by ID
+  async getUser(id: number): Promise<User> {
+    const { data } = await apiClient.get<ApiResponse<User>>(`/admin/users/${id}`);
+    return data.data;
+  },
+
+  // ✅ Delete user
   async deleteUser(id: number): Promise<void> {
-    try {
-      await apiClient.delete(`/auth/users/${id}`);
-    } catch (error) {
-      console.error(`❌ Failed to delete user ${id}:`, error);
-      throw error;
-    }
+    await apiClient.delete(`/admin/users/${id}`);
   },
 
-  async updateOrderStatus(id: number, status: string): Promise<Order> {
-    try {
-      const { data } = await apiClient.patch<ApiResponse<Order>>(
-        `/admin/order/${id}/status`,
-        { status }
-      );
-      return data.data;
-    } catch (error) {
-      console.error(`❌ Failed to update order ${id}:`, error);
-      throw error;
-    }
-  },
-
-  async getAllOrders(): Promise<Order[]> {
-    try {
-      const { data } = await apiClient.get<ApiResponse<Order[]>>('/admin/orders');
-      return data.data || [];
-    } catch (error) {
-      console.error('❌ Failed to fetch orders:', error);
-      throw error;
-    }
-  },
-
+  // ✅ Get all products (admin)
   async getAllProducts(): Promise<Product[]> {
     try {
       const { data } = await apiClient.get<ApiResponse<Product[]>>('/admin/products');
@@ -75,13 +65,67 @@ export const adminService = {
     }
   },
 
-  async createAdmin(userData: { name: string; email: string; password: string }): Promise<User> {
+  // ✅ Get all orders (admin)
+  async getAllOrders(): Promise<Order[]> {
     try {
-      const { data } = await apiClient.post<ApiResponse<User>>('/superadmin/create-admin', userData);
-      return data.data;
+      const { data } = await apiClient.get<ApiResponse<Order[]>>('/admin/orders');
+      return data.data || [];
     } catch (error) {
-      console.error('❌ Failed to create admin:', error);
+      console.error('❌ Failed to fetch orders:', error);
       throw error;
+    }
+  },
+
+  // ✅ Update order status (admin)
+  async updateOrderStatus(id: number, status: string): Promise<Order> {
+    const { data } = await apiClient.patch<ApiResponse<Order>>(
+      `/admin/order/${id}/status`,
+      { status }
+    );
+    return data.data;
+  },
+
+  // ✅ Get all vendors
+  async getAllVendors(): Promise<User[]> {
+    try {
+      const { data } = await apiClient.get<ApiResponse<User[]>>('/admin/vendors');
+      return data.data || [];
+    } catch (error) {
+      console.error('❌ Failed to fetch vendors:', error);
+      throw error;
+    }
+  },
+
+  // ✅ Get pending vendors
+  async getPendingVendors(): Promise<User[]> {
+    try {
+      const { data } = await apiClient.get<ApiResponse<User[]>>('/admin/vendors/pending');
+      return data.data || [];
+    } catch (error) {
+      console.error('❌ Failed to fetch pending vendors:', error);
+      throw error;
+    }
+  },
+
+  // ✅ Create admin (superadmin only)
+  async createAdmin(userData: { name: string; email: string; password: string }): Promise<User> {
+    const { data } = await apiClient.post<ApiResponse<User>>('/superadmin/admins', userData);
+    return data.data;
+  },
+
+  // ✅ Delete admin (superadmin only)
+  async deleteAdmin(id: number): Promise<void> {
+    await apiClient.delete(`/superadmin/admins/${id}`);
+  },
+
+  // ✅ Get all admins (superadmin only)
+  async getAdmins(): Promise<User[]> {
+    try {
+      const { data } = await apiClient.get<ApiResponse<User[]>>('/superadmin/admins');
+      return data.data || [];
+    } catch (error) {
+      console.error('❌ Failed to fetch admins:', error);
+      return [];
     }
   },
 };

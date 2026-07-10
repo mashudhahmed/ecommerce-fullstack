@@ -19,46 +19,48 @@ export class CleanupCron {
     this.logger.log('🧹 Cleaning up expired tokens...');
     
     try {
+      // ✅ FIX: Use camelCase column names (matches TypeORM entity)
+      
       // Clean expired refresh tokens
       const refreshResult = await this.dataSource.query(`
         DELETE FROM refresh_tokens 
-        WHERE expires_at < NOW() OR revoked = true
+        WHERE "expiresAt" < NOW() OR revoked = true
       `);
       
       // Clean expired blacklisted tokens
       const blacklistResult = await this.dataSource.query(`
         DELETE FROM token_blacklist 
-        WHERE expires_at < NOW()
+        WHERE "expiresAt" < NOW()
       `);
 
       // Clean expired verification codes
       const verificationResult = await this.dataSource.query(`
         UPDATE users 
-        SET verification_code = NULL, 
-            verification_code_expiry = NULL 
-        WHERE verification_code_expiry < NOW()
+        SET "verificationCode" = NULL, 
+            "verificationCodeExpiry" = NULL 
+        WHERE "verificationCodeExpiry" < NOW()
       `);
 
       // Clean expired reset codes
       const resetResult = await this.dataSource.query(`
         UPDATE users 
-        SET reset_code = NULL, 
-            reset_code_expiry = NULL 
-        WHERE reset_code_expiry < NOW()
+        SET "resetCode" = NULL, 
+            "resetCodeExpiry" = NULL 
+        WHERE "resetCodeExpiry" < NOW()
       `);
 
       // Clean expired reset tokens
       const resetTokenResult = await this.dataSource.query(`
         UPDATE users 
-        SET reset_token_hash = NULL, 
-            reset_token_expiry = NULL 
-        WHERE reset_token_expiry < NOW()
+        SET "resetTokenHash" = NULL, 
+            "resetTokenExpiry" = NULL 
+        WHERE "resetTokenExpiry" < NOW()
       `);
 
       // Clean old login attempts (older than 30 days)
       const loginAttemptResult = await this.dataSource.query(`
         DELETE FROM login_attempts 
-        WHERE created_at < NOW() - INTERVAL '30 days'
+        WHERE "createdAt" < NOW() - INTERVAL '30 days'
       `);
 
       // Clean expired cart items (older than 7 days)
@@ -92,8 +94,8 @@ export class CleanupCron {
     try {
       const result = await this.dataSource.query(`
         DELETE FROM users 
-        WHERE deleted_at IS NOT NULL 
-        AND deleted_at < NOW() - INTERVAL '30 days'
+        WHERE "deletedAt" IS NOT NULL 
+        AND "deletedAt" < NOW() - INTERVAL '30 days'
       `);
 
       this.logger.log(`✅ Permanently deleted ${result[0]?.count || 0} old soft-deleted users`);
@@ -109,12 +111,26 @@ export class CleanupCron {
     this.logger.log('🧹 Cleaning up expired sessions...');
     
     try {
-      const result = await this.dataSource.query(`
-        DELETE FROM session 
-        WHERE expired_at < NOW()
+      // ✅ Check if session table exists before querying
+      const tableCheck = await this.dataSource.query(`
+        SELECT EXISTS (
+          SELECT 1 
+          FROM information_schema.tables 
+          WHERE table_name = 'session'
+        )
       `);
 
-      this.logger.log(`✅ ${result[0]?.count || 0} expired sessions cleaned`);
+      const tableExists = tableCheck[0]?.exists || false;
+
+      if (tableExists) {
+        const result = await this.dataSource.query(`
+          DELETE FROM session 
+          WHERE "expiredAt" < NOW()
+        `);
+        this.logger.log(`✅ ${result[0]?.count || 0} expired sessions cleaned`);
+      } else {
+        this.logger.log('ℹ️ Session table does not exist, skipping cleanup');
+      }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       this.logger.error('❌ Failed to clean up expired sessions:', errorMessage);
@@ -170,13 +186,13 @@ export class CleanupCron {
       // Clean login attempts older than 90 days
       const loginAttemptResult = await this.dataSource.query(`
         DELETE FROM login_attempts 
-        WHERE created_at < NOW() - INTERVAL '90 days'
+        WHERE "createdAt" < NOW() - INTERVAL '90 days'
       `);
 
       // Clean refresh tokens older than 90 days (even if not expired)
       const refreshResult = await this.dataSource.query(`
         DELETE FROM refresh_tokens 
-        WHERE created_at < NOW() - INTERVAL '90 days'
+        WHERE "createdAt" < NOW() - INTERVAL '90 days'
       `);
 
       this.logger.log(

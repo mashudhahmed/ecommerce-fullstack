@@ -20,6 +20,7 @@ import type { Request, Response } from 'express';
 import { Throttle, SkipThrottle } from '@nestjs/throttler';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
+import { TwoFactorService } from './two-factor.service'; // ✅ Added
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -31,24 +32,23 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
 import { VerifyResetCodeDto } from './dto/verify-reset-code.dto';
 import { UserRole } from '../user/user.entity';
+// 2FA DTOs
+import { EnableTwoFactorDto, VerifyTwoFactorDto, DisableTwoFactorDto } from './dto/enable-2fa.dto';
 
 const isProd = process.env.NODE_ENV === 'production';
 const ACCESS_COOKIE = 'access_token';
 const REFRESH_COOKIE = 'refresh_token';
 
-// ✅ FIX: must match the ACTUAL mounted route. The app has a global
-// prefix of `api/v1` (see main.ts: app.setGlobalPrefix(`${apiPrefix}/${apiVersion}`)),
-// so AuthController's refresh endpoint really lives at
-// `/api/v1/auth/refresh` — NOT `/api/auth/refresh`. A cookie's `path`
-// only gets sent on requests whose URL starts with that path, so the
-// old value meant the browser silently never attached the refresh
-// cookie to the real refresh request, and it always 401'd.
+// ✅ Must match the actual mounted route (global prefix: api/v1)
 const REFRESH_COOKIE_PATH = '/api/v1/auth/refresh';
 
 @ApiTags('Authentication')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly twoFactorService: TwoFactorService, // ✅ Injected
+  ) {}
 
   // ============================================================
   // COOKIE HELPERS
@@ -68,14 +68,14 @@ export class AuthController {
 
     res.cookie(REFRESH_COOKIE, tokens.refreshToken, {
       ...baseOpts,
-      path: REFRESH_COOKIE_PATH, // ✅ FIX (was '/api/auth/refresh')
+      path: REFRESH_COOKIE_PATH,
       maxAge: tokens.refreshTokenExpiresIn * 1000,
     });
   }
 
   private clearAuthCookies(res: Response) {
     res.clearCookie(ACCESS_COOKIE, { path: '/' });
-    res.clearCookie(REFRESH_COOKIE, { path: REFRESH_COOKIE_PATH }); // ✅ FIX (was '/api/auth/refresh')
+    res.clearCookie(REFRESH_COOKIE, { path: REFRESH_COOKIE_PATH });
   }
 
   private requestMeta(req: Request) {
@@ -268,9 +268,66 @@ export class AuthController {
   }
 
   // ============================================================
-  // ADMIN ROUTES - ✅ REMOVED DUPLICATES
-  // These are now in SuperadminController
+  // TWO-FACTOR AUTHENTICATION (2FA) ENDPOINTS – ✅ Added
   // ============================================================
-  // NOTE: POST /admin, GET /users, DELETE /users/:id
-  // have been moved to superadmin.controller.ts
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Post('2fa/generate')
+  @ApiOperation({ summary: 'Generate 2FA secret and QR code' })
+  @ApiResponse({ status: 200, description: 'Secret and QR code generated' })
+  async generateTwoFactor(@Req() req: Request & { user: { sub: number } }) {
+    return this.twoFactorService.generateSecret(req.user.sub);
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Post('2fa/enable')
+  @ApiOperation({ summary: 'Enable 2FA with TOTP verification' })
+  @ApiResponse({ status: 200, description: '2FA enabled successfully' })
+  async enableTwoFactor(
+    @Req() req: Request & { user: { sub: number } },
+    @Body(new ValidationPipe()) dto: VerifyTwoFactorDto,
+  ) {
+    const result = await this.twoFactorService.verifyAndEnable(req.user.sub, dto.token);
+    return {
+      message: '2FA enabled successfully',
+      backupCodes: result.backupCodes,
+    };
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Post('2fa/verify')
+  @ApiOperation({ summary: 'Verify TOTP token (for login flow)' })
+  @ApiResponse({ status: 200, description: 'Token validation result' })
+  async verifyTwoFactor(
+    @Req() req: Request & { user: { sub: number } },
+    @Body(new ValidationPipe()) dto: VerifyTwoFactorDto,
+  ) {
+    const valid = await this.twoFactorService.verifyToken(req.user.sub, dto.token);
+    return { valid };
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Post('2fa/disable')
+  @ApiOperation({ summary: 'Disable 2FA' })
+  @ApiResponse({ status: 200, description: '2FA disabled successfully' })
+  async disableTwoFactor(
+    @Req() req: Request & { user: { sub: number } },
+    @Body(new ValidationPipe()) dto: DisableTwoFactorDto,
+  ) {
+    await this.twoFactorService.disable(req.user.sub, dto.token);
+    return { message: '2FA disabled successfully' };
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Post('2fa/backup-codes')
+  @ApiOperation({ summary: 'Regenerate backup codes' })
+  @ApiResponse({ status: 200, description: 'New backup codes generated' })
+  async regenerateBackupCodes(@Req() req: Request & { user: { sub: number } }) {
+    const codes = await this.twoFactorService.generateBackupCodes(req.user.sub);
+    return { backupCodes: codes };
+  }
 }

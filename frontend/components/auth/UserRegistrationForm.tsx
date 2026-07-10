@@ -1,4 +1,4 @@
-// components/auth/VendorRegistrationForm.tsx
+// components/auth/UserRegistrationForm.tsx
 'use client';
 
 import { useState } from 'react';
@@ -6,11 +6,8 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
-import { 
-  Eye, EyeOff, Loader2, AlertCircle, Mail, Lock, User, 
-  Building2, Phone, MapPin, FileText, ArrowRight, Store 
-} from 'lucide-react';
-import { registerVendorSchema, type RegisterVendorInput } from '@/validations/schemas';
+import { Eye, EyeOff, Loader2, AlertCircle, Mail, Lock, User, ArrowRight } from 'lucide-react';
+import { registerSchema, type RegisterInput } from '@/validations/schemas';
 import { useAuth, AuthError } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import {
@@ -22,7 +19,6 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
@@ -72,12 +68,12 @@ const PasswordStrength = ({ password }: { password: string }) => {
 };
 
 // ============================================================
-// VENDOR REGISTRATION FORM
+// USER REGISTRATION FORM
 // ============================================================
 
-export function VendorRegistrationForm() {
+export function UserRegistrationForm() {
   const router = useRouter();
-  const { registerVendor, registerVendorLoading } = useAuth();
+  const { register, registerLoading } = useAuth();
 
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -85,22 +81,17 @@ export function VendorRegistrationForm() {
   const [password, setPassword] = useState('');
   const [acceptedTerms, setAcceptedTerms] = useState(false);
 
-  const form = useForm<RegisterVendorInput>({
-    resolver: zodResolver(registerVendorSchema),
+  const form = useForm<RegisterInput>({
+    resolver: zodResolver(registerSchema),
     defaultValues: {
       name: '',
       email: '',
       password: '',
       confirmPassword: '',
-      businessName: '',
-      businessDescription: '',
-      phoneNumber: '',
-      address: '',
-      businessRegistration: '',
     },
   });
 
-  const onSubmit = async (data: RegisterVendorInput) => {
+  const onSubmit = async (data: RegisterInput) => {
     setErrorMessage(null);
     form.clearErrors();
 
@@ -114,15 +105,10 @@ export function VendorRegistrationForm() {
         name: data.name,
         email: data.email,
         password: data.password,
-        businessName: data.businessName,
-        businessDescription: data.businessDescription,
-        phoneNumber: data.phoneNumber,
-        address: data.address,
-        businessRegistration: data.businessRegistration,
       };
 
-      const result = await registerVendor(payload);
-      toast.success(result.message || 'Vendor registration successful!');
+      const result = await register(payload);
+      toast.success(result.message || 'Registration successful!');
       router.push(`/verify-email?email=${encodeURIComponent(data.email)}`);
     } catch (error: any) {
       let message = 'Registration failed. Please try again.';
@@ -172,7 +158,7 @@ export function VendorRegistrationForm() {
                   <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     placeholder="John Doe"
-                    disabled={registerVendorLoading}
+                    disabled={registerLoading}
                     autoComplete="name"
                     className="pl-10"
                     {...field}
@@ -194,9 +180,9 @@ export function VendorRegistrationForm() {
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
-                    placeholder="vendor@example.com"
+                    placeholder="john@example.com"
                     type="email"
-                    disabled={registerVendorLoading}
+                    disabled={registerLoading}
                     autoComplete="email"
                     className="pl-10"
                     {...field}
@@ -220,7 +206,7 @@ export function VendorRegistrationForm() {
                   <Input
                     type={showPassword ? 'text' : 'password'}
                     placeholder="Enter password"
-                    disabled={registerVendorLoading}
+                    disabled={registerLoading}
                     className="pl-10 pr-12"
                     autoComplete="new-password"
                     {...field}
@@ -233,7 +219,7 @@ export function VendorRegistrationForm() {
                     type="button"
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                     onClick={() => setShowPassword(!showPassword)}
-                    disabled={registerVendorLoading}
+                    disabled={registerLoading}
                     tabIndex={-1}
                     aria-label={showPassword ? 'Hide password' : 'Show password'}
                   >
@@ -259,7 +245,7 @@ export function VendorRegistrationForm() {
                   <Input
                     type={showConfirmPassword ? 'text' : 'password'}
                     placeholder="Confirm password"
-                    disabled={registerVendorLoading}
+                    disabled={registerLoading}
                     className="pl-10 pr-12"
                     autoComplete="new-password"
                     {...field}
@@ -268,7 +254,7 @@ export function VendorRegistrationForm() {
                     type="button"
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    disabled={registerVendorLoading}
+                    disabled={registerLoading}
                     tabIndex={-1}
                     aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
                   >
@@ -281,130 +267,15 @@ export function VendorRegistrationForm() {
           )}
         />
 
-        <div className="space-y-4 border-t pt-4 mt-2">
-          <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-            <Store className="h-4 w-4" />
-            Business Information
-          </div>
-
-          <FormField
-            control={form.control}
-            name="businessName"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel className="font-medium">Business Name</FormLabel>
-                <FormControl>
-                  <div className="relative">
-                    <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="My Store"
-                      disabled={registerVendorLoading}
-                      className="pl-10"
-                      {...field}
-                    />
-                  </div>
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="businessDescription"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel className="font-medium">Business Description</FormLabel>
-                <FormControl>
-                  <Textarea
-                    placeholder="Describe your business..."
-                    disabled={registerVendorLoading}
-                    rows={3}
-                    {...field}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="phoneNumber"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel className="font-medium">Phone Number</FormLabel>
-                <FormControl>
-                  <div className="relative">
-                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="+1234567890"
-                      disabled={registerVendorLoading}
-                      className="pl-10"
-                      {...field}
-                    />
-                  </div>
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="address"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel className="font-medium">Business Address</FormLabel>
-                <FormControl>
-                  <div className="relative">
-                    <MapPin className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Textarea
-                      placeholder="123 Main St, City, Country"
-                      disabled={registerVendorLoading}
-                      rows={2}
-                      className="pl-10"
-                      {...field}
-                    />
-                  </div>
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="businessRegistration"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel className="font-medium">Business Registration (Optional)</FormLabel>
-                <FormControl>
-                  <div className="relative">
-                    <FileText className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="REG-12345"
-                      disabled={registerVendorLoading}
-                      className="pl-10"
-                      {...field}
-                    />
-                  </div>
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </div>
-
         <div className="flex items-start gap-2 pt-1">
           <input
             type="checkbox"
-            id="terms-vendor"
+            id="terms-user"
             checked={acceptedTerms}
             onChange={(e) => setAcceptedTerms(e.target.checked)}
             className="h-4 w-4 mt-1 rounded border-gray-300 text-primary focus:ring-primary/20 transition-colors"
           />
-          <label htmlFor="terms-vendor" className="text-sm text-muted-foreground">
+          <label htmlFor="terms-user" className="text-sm text-muted-foreground">
             I agree to the{' '}
             <Link href="/terms" className="text-primary hover:underline font-medium transition-colors">
               Terms of Service
@@ -418,18 +289,18 @@ export function VendorRegistrationForm() {
 
         <Button
           type="submit"
-          className="w-full gap-2 group bg-orange-500 hover:bg-orange-600"
-          disabled={registerVendorLoading}
+          className="w-full gap-2 group"
+          disabled={registerLoading}
           size="lg"
         >
-          {registerVendorLoading ? (
+          {registerLoading ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin" />
-              Creating vendor account...
+              Creating account...
             </>
           ) : (
             <>
-              Register as Vendor
+              Create Account
               <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
             </>
           )}
@@ -439,4 +310,5 @@ export function VendorRegistrationForm() {
   );
 }
 
-export default VendorRegistrationForm;
+// ✅ Export as default for compatibility
+export default UserRegistrationForm;

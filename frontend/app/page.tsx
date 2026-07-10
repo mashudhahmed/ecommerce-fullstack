@@ -1,485 +1,507 @@
 // app/page.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useProducts } from '@/hooks/useProducts';
 import { useCategories } from '@/hooks/useCategories';
-import { ProductCard } from '@/components/products/ProductCard';
+import { ProductList } from '@/components/products/ProductList';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   ArrowRight,
-  ShoppingBag,
+  Star,
   Truck,
   Shield,
   Clock,
-  Star,
-  TrendingUp,
-  Sparkles,
-  Zap,
   Package,
-  ChevronRight,
-  MoveRight,
-  Users,
+  Sparkles,
+  ShoppingBag,
+  Zap,
+  Gem,
+  Crown,
   Award,
-  Headphones,
-  Rocket,
-  Laptop,
-  Shirt,
-  BookOpen,
-  Home,
-  Gamepad2,
-  Bike,
-  Smartphone,
-  Watch,
-  Sofa,
-  Camera,
-  Dumbbell,
+  ChevronRight,
+  Send,
+  CheckCircle,
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { motion } from 'framer-motion';
 import { toast } from 'sonner';
+import { useAuth } from '@/hooks/useAuth';
 
 // ============================================================
-// ANIMATION VARIANTS
+// MARKET PULSE — signature ticker
 // ============================================================
 
-const fadeInUp = {
-  initial: { opacity: 0, y: 20 },
-  animate: { opacity: 1, y: 0 },
-  transition: { duration: 0.5 },
+const TICKER_ITEMS = [
+  'Wireless Earbuds Pro',
+  'Minimalist Desk Setup',
+  'Ceramic Pour-Over Kit',
+  'Trail Running Shoes',
+  'Linen Weekend Bag',
+  'Smart Home Hub',
+  'Vintage Vinyl Records',
+  'Organic Skincare Set',
+];
+
+const MarketPulse = () => (
+  <div className="relative overflow-hidden rounded-full border border-white/10 bg-zinc-950 py-2.5">
+    <div className="flex items-center gap-3 px-4 md:px-5">
+      <span className="relative flex h-2 w-2 shrink-0">
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-orange-500 opacity-75" />
+        <span className="relative inline-flex h-2 w-2 rounded-full bg-orange-500" />
+      </span>
+      <span className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/50">
+        Trending now
+      </span>
+      <div className="flex-1 overflow-hidden">
+        <div className="animate-marquee flex gap-8 whitespace-nowrap">
+          {[...TICKER_ITEMS, ...TICKER_ITEMS].map((item, i) => (
+            <span key={i} className="text-sm text-white/80">
+              {item}
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+    <style jsx>{`
+      @keyframes marquee {
+        from {
+          transform: translateX(0);
+        }
+        to {
+          transform: translateX(-50%);
+        }
+      }
+      .animate-marquee {
+        animation: marquee 26s linear infinite;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .animate-marquee {
+          animation: none;
+        }
+      }
+    `}</style>
+  </div>
+);
+
+// ============================================================
+// HERO SECTION
+// ============================================================
+
+const HeroSection = () => {
+  const { isAuthenticated } = useAuth();
+
+  return (
+    <section className="grid grid-cols-1 items-center gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:gap-6">
+      <div className="space-y-6">
+        <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-orange-600">
+          <span className="h-px w-6 bg-orange-600" />
+          Marketplace · Est. 2024
+        </div>
+
+        <h1 className="text-[2.75rem] font-black leading-[1.02] tracking-tight text-foreground sm:text-6xl lg:text-[4.5rem]">
+          Shop the internet&apos;s
+          <br />
+          best <span className="font-serif font-medium italic text-orange-600">independent</span>
+          <br />
+          storefronts.
+        </h1>
+
+        <p className="max-w-md text-lg leading-relaxed text-muted-foreground">
+          15,000+ products from 500 vetted vendors. No middleman markups, no guesswork —
+          just things worth buying, delivered fast.
+        </p>
+
+        <div className="flex flex-wrap items-center gap-4 pt-2">
+          <Link href="/products">
+            <Button
+              size="lg"
+              className="h-12 gap-2 rounded-full bg-zinc-950 px-7 text-[15px] text-white hover:bg-zinc-800"
+            >
+              Browse products
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+          </Link>
+          {!isAuthenticated && (
+            <Link
+              href="/register"
+              className="text-[15px] font-medium text-foreground underline decoration-muted-foreground/40 underline-offset-4 transition-colors hover:decoration-foreground"
+            >
+              Become a vendor →
+            </Link>
+          )}
+        </div>
+
+        <div className="flex items-center gap-5 pt-4">
+          <div className="flex -space-x-3">
+            {['A', 'M', 'J', 'R'].map((letter, i) => (
+              <div
+                key={i}
+                className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-background bg-orange-50 text-xs font-semibold text-orange-700"
+              >
+                {letter}
+              </div>
+            ))}
+          </div>
+          <p className="text-sm text-muted-foreground">
+            <span className="font-semibold text-foreground">10,000+</span> customers shop
+            with us weekly
+          </p>
+        </div>
+      </div>
+
+      {/* Image mosaic */}
+      <div className="relative hidden h-105 md:block lg:h-130">
+        <div className="absolute right-0 top-0 h-[62%] w-[65%] overflow-hidden rounded-3xl shadow-xl">
+          <Image
+            src="https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800&q=80"
+            alt="Curated product from a marketplace vendor"
+            fill
+            sizes="(min-width: 1024px) 35vw, 40vw"
+            className="object-cover"
+            priority
+          />
+        </div>
+        <div className="absolute bottom-0 left-0 h-[48%] w-[55%] overflow-hidden rounded-3xl shadow-xl">
+          <Image
+            src="https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=800&q=80"
+            alt="Curated product from a marketplace vendor"
+            fill
+            sizes="(min-width: 1024px) 30vw, 35vw"
+            className="object-cover"
+          />
+        </div>
+        <div className="absolute bottom-6 right-6 flex aspect-square w-[38%] flex-col justify-between rounded-2xl bg-zinc-950 p-4 text-white shadow-xl">
+          <Shield className="h-5 w-5 text-orange-500" />
+          <div>
+            <p className="text-2xl font-bold">
+              4.9<span className="text-sm font-normal text-white/60">/5</span>
+            </p>
+            <p className="text-[11px] uppercase tracking-wide text-white/60">
+              Vendor rating
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
 };
 
-const staggerContainer = {
-  animate: {
-    transition: {
-      staggerChildren: 0.1,
-    },
-  },
+// ============================================================
+// FEATURES SECTION
+// ============================================================
+
+const FeaturesSection = () => {
+  const features = [
+    { icon: Truck, label: 'Free shipping', description: 'On orders $50+' },
+    { icon: Shield, label: 'Buyer protection', description: 'Full refund guarantee' },
+    { icon: Clock, label: '2-day delivery', description: 'On most items' },
+    { icon: Star, label: 'Vetted vendors', description: 'Reviewed & verified' },
+  ];
+
+  return (
+    <section className="grid grid-cols-2 divide-x divide-y divide-border overflow-hidden rounded-2xl border border-border md:grid-cols-4 md:divide-y-0">
+      {features.map((feature) => (
+        <div key={feature.label} className="flex items-center gap-3 p-5 md:p-6">
+          <feature.icon className="h-5 w-5 shrink-0 text-orange-600" />
+          <div>
+            <p className="text-sm font-semibold leading-tight">{feature.label}</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">{feature.description}</p>
+          </div>
+        </div>
+      ))}
+    </section>
+  );
 };
 
 // ============================================================
-// CATEGORY ICONS MAPPING
+// STATS SECTION
 // ============================================================
 
-const categoryIcons: Record<string, React.ReactNode> = {
-  electronics: <Laptop className="h-6 w-6" />,
-  clothing: <Shirt className="h-6 w-6" />,
-  books: <BookOpen className="h-6 w-6" />,
-  'home-garden': <Home className="h-6 w-6" />,
-  'toys-games': <Gamepad2 className="h-6 w-6" />,
-  'sports-outdoors': <Bike className="h-6 w-6" />,
-  smartphones: <Smartphone className="h-6 w-6" />,
-  accessories: <Watch className="h-6 w-6" />,
-  furniture: <Sofa className="h-6 w-6" />,
-  photography: <Camera className="h-6 w-6" />,
-  audio: <Headphones className="h-6 w-6" />,
-  fitness: <Dumbbell className="h-6 w-6" />,
-};
+const StatsSection = () => {
+  const [counts, setCounts] = useState({ products: 0, users: 0, orders: 0, vendors: 0 });
 
-// ============================================================
-// HOMEPAGE COMPONENT
-// ============================================================
+  useEffect(() => {
+    const target = { products: 15000, users: 10000, orders: 25000, vendors: 500 };
+    const duration = 1800;
+    const steps = 60;
+    const interval = duration / steps;
 
-export default function HomePage() {
-  const { products, isLoading } = useProducts();
-  const { categories, isLoading: categoriesLoading } = useCategories();
-  const [email, setEmail] = useState('');
-  const [isSubscribing, setIsSubscribing] = useState(false);
+    let step = 0;
+    const timer = setInterval(() => {
+      step++;
+      const progress = Math.min(step / steps, 1);
+      setCounts({
+        products: Math.floor(target.products * progress),
+        users: Math.floor(target.users * progress),
+        orders: Math.floor(target.orders * progress),
+        vendors: Math.floor(target.vendors * progress),
+      });
+      if (step >= steps) clearInterval(timer);
+    }, interval);
 
-  // ✅ Featured products (first 6)
-  const featuredProducts = products?.slice(0, 6) || [];
-
-  // ✅ Trending products (next 4)
-  const trendingProducts = products?.slice(6, 10) || [];
-
-  // ✅ Top selling products (simulated - based on rating or stock)
-  const topSellingProducts = products?.filter(p => p.stock < 20).slice(0, 4) || [];
-
-  // ============================================================
-  // STATS
-  // ============================================================
+    return () => clearInterval(timer);
+  }, []);
 
   const stats = [
-    { label: 'Happy Customers', value: '10K+', icon: Users },
-    { label: 'Products Sold', value: '50K+', icon: Package },
-    { label: 'Awards Won', value: '12', icon: Award },
-    { label: 'Support Hours', value: '24/7', icon: Headphones },
+    { label: 'Products listed', value: counts.products },
+    { label: 'Happy customers', value: counts.users },
+    { label: 'Orders delivered', value: counts.orders },
+    { label: 'Trusted vendors', value: counts.vendors },
   ];
 
-  // ============================================================
-  // FEATURES
-  // ============================================================
+  return (
+    <section className="rounded-2xl bg-zinc-950 px-6 py-10 text-white md:px-12 md:py-12">
+      <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
+        {stats.map((stat) => (
+          <div key={stat.label}>
+            <p className="text-3xl font-black tracking-tight tabular-nums md:text-5xl">
+              {stat.value.toLocaleString()}
+              <span className="text-orange-500">+</span>
+            </p>
+            <p className="mt-1.5 text-xs text-white/50 md:text-sm">{stat.label}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+};
 
-  const features = [
-    {
-      icon: ShoppingBag,
-      title: 'Premium Products',
-      description: 'Curated selection of high-quality items',
-      color: 'bg-blue-50 text-blue-600',
-    },
-    {
-      icon: Truck,
-      title: 'Fast Delivery',
-      description: 'Get your orders delivered within 3-5 days',
-      color: 'bg-green-50 text-green-600',
-    },
-    {
-      icon: Shield,
-      title: 'Secure Payment',
-      description: 'Your transactions are safe and secure',
-      color: 'bg-purple-50 text-purple-600',
-    },
-    {
-      icon: Clock,
-      title: '24/7 Support',
-      description: "We're here to help anytime",
-      color: 'bg-orange-50 text-orange-600',
-    },
-  ];
+// ============================================================
+// CATEGORY SECTION
+// ============================================================
 
-  // ============================================================
-  // NEWSLETTER SUBSCRIPTION
-  // ============================================================
+const CategorySection = () => {
+  const { categories, isLoading } = useCategories();
 
-  const handleSubscribe = async (e: React.FormEvent) => {
+  const displayCategories = useMemo(() => {
+    if (!categories) return [];
+    return categories.slice(0, 6);
+  }, [categories]);
+
+  const categoryIcons: Record<string, React.ReactNode> = {
+    electronics: <Zap className="h-5 w-5" />,
+    clothing: <ShoppingBag className="h-5 w-5" />,
+    books: <Sparkles className="h-5 w-5" />,
+    'home-garden': <Gem className="h-5 w-5" />,
+    'toys-games': <Crown className="h-5 w-5" />,
+    'sports-outdoors': <Award className="h-5 w-5" />,
+  };
+
+  return (
+    <section className="space-y-6">
+      <div className="flex items-end justify-between">
+        <div>
+          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-orange-600">
+            Browse
+          </p>
+          <h2 className="text-2xl font-black tracking-tight md:text-3xl">Shop by category</h2>
+        </div>
+        <Link
+          href="/categories"
+          className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+        >
+          View all
+          <ChevronRight className="h-4 w-4" />
+        </Link>
+      </div>
+
+      {isLoading ? (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-6">
+          {[...Array(6)].map((_, i) => (
+            <Skeleton key={i} className="h-28 w-full rounded-2xl" />
+          ))}
+        </div>
+      ) : displayCategories.length > 0 ? (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-6">
+          {displayCategories.map((category) => (
+            <Link
+              key={category.id}
+              href={`/products?category=${category.slug}`}
+              className="group relative flex h-28 flex-col justify-between overflow-hidden rounded-2xl border border-border bg-card p-4 transition-colors hover:border-orange-300"
+            >
+              <div className="absolute -right-3 -top-3 h-16 w-16 rounded-full bg-orange-500/0 transition-colors group-hover:bg-orange-500/10" />
+              <div className="relative text-muted-foreground transition-colors group-hover:text-orange-600">
+                {categoryIcons[category.slug] || <Package className="h-5 w-5" />}
+              </div>
+              <p className="relative line-clamp-1 text-sm font-semibold">{category.name}</p>
+            </Link>
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-dashed border-border py-10 text-center text-muted-foreground">
+          <Package className="mx-auto mb-2 h-10 w-10 text-muted-foreground/40" />
+          <p className="text-sm">No categories yet</p>
+        </div>
+      )}
+    </section>
+  );
+};
+
+// ============================================================
+// NEW ARRIVALS SECTION
+// ============================================================
+
+const NewArrivalsSection = () => {
+  const { products, isLoading } = useProducts();
+
+  const newArrivals = useMemo(() => {
+    if (!products) return [];
+    return [...products]
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 8);
+  }, [products]);
+
+  return (
+    <section className="space-y-6">
+      <div className="flex items-end justify-between">
+        <div>
+          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-orange-600">
+            Just landed
+          </p>
+          <h2 className="text-2xl font-black tracking-tight md:text-3xl">New arrivals</h2>
+        </div>
+        <Link
+          href="/products?sortBy=newest"
+          className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+        >
+          View all
+          <ChevronRight className="h-4 w-4" />
+        </Link>
+      </div>
+      <ProductList products={newArrivals} isLoading={isLoading} columns={4} />
+    </section>
+  );
+};
+
+// ============================================================
+// NEWSLETTER SECTION
+// ============================================================
+
+const NewsletterSection = () => {
+  const [email, setEmail] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !email.includes('@')) {
       toast.error('Please enter a valid email address');
       return;
     }
-    setIsSubscribing(true);
+
+    setIsSubmitting(true);
     try {
       await new Promise((resolve) => setTimeout(resolve, 1000));
-      toast.success('Subscribed successfully!');
+      setIsSuccess(true);
       setEmail('');
-    } catch (error) {
+      toast.success('Subscribed successfully!');
+    } catch {
       toast.error('Failed to subscribe. Please try again.');
     } finally {
-      setIsSubscribing(false);
+      setIsSubmitting(false);
     }
   };
 
-  // ============================================================
-  // RENDER
-  // ============================================================
+  return (
+    <section className="overflow-hidden rounded-2xl bg-zinc-950 text-white">
+      <div className="grid grid-cols-1 items-center gap-8 p-8 md:grid-cols-2 md:p-12">
+        <div>
+          <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-orange-500">
+            Newsletter
+          </p>
+          <h2 className="mb-3 text-3xl font-black leading-tight tracking-tight md:text-4xl">
+            First look at new drops.
+          </h2>
+          <p className="max-w-sm text-white/60">
+            One email a week. New vendors, restocks, and prices that won&apos;t last.
+          </p>
+        </div>
+
+        <div>
+          {isSuccess ? (
+            <div className="flex items-center gap-2 text-emerald-400">
+              <CheckCircle className="h-5 w-5" />
+              <span className="font-medium">You&apos;re on the list.</span>
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit} className="flex flex-col gap-3 sm:flex-row">
+              <Input
+                type="email"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="h-12 rounded-full border-white/15 bg-white/5 px-5 text-white placeholder:text-white/40 focus-visible:border-white/40"
+                required
+              />
+              <Button
+                type="submit"
+                disabled={isSubmitting}
+                className="h-12 whitespace-nowrap rounded-full bg-orange-600 px-6 text-white hover:bg-orange-700"
+              >
+                {isSubmitting ? (
+                  'Subscribing…'
+                ) : (
+                  <>
+                    Subscribe
+                    <Send className="ml-2 h-4 w-4" />
+                  </>
+                )}
+              </Button>
+            </form>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+};
+
+// ============================================================
+// MAIN HOME PAGE
+// ============================================================
+
+export default function HomePage() {
+  const { products, isLoading } = useProducts();
+
+  const featuredProducts = useMemo(() => {
+    if (!products) return [];
+    return products.slice(0, 4);
+  }, [products]);
 
   return (
-    <div className="space-y-16 pb-16">
-      {/* ============================================================
-          1. HERO SECTION – Dynamic & Animated
-      ============================================================ */}
-      <section className="relative overflow-hidden rounded-2xl bg-linear-to-br from-orange-50 via-white to-blue-50 dark:from-gray-900 dark:via-gray-900 dark:to-gray-800 py-16 md:py-24 px-6 md:px-12">
-        {/* Animated Background Elements */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute -top-20 -right-20 w-64 h-64 bg-orange-200/30 dark:bg-orange-500/10 rounded-full blur-3xl animate-pulse" />
-          <div className="absolute -bottom-20 -left-20 w-64 h-64 bg-blue-200/30 dark:bg-blue-500/10 rounded-full blur-3xl animate-pulse delay-1000" />
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-purple-200/20 dark:bg-purple-500/5 rounded-full blur-3xl animate-pulse delay-2000" />
-        </div>
+    <div className="space-y-14 pb-12 md:space-y-20">
+      <MarketPulse />
+      <HeroSection />
+      <FeaturesSection />
+      <StatsSection />
+      <CategorySection />
 
-        <div className="relative z-10 max-w-6xl mx-auto">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-            {/* Left Content */}
-            <motion.div
-              initial={{ opacity: 0, x: -30 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.6 }}
-              className="space-y-6"
-            >
-              {/* Badge */}
-              <Badge className="bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 border-0 px-4 py-1.5 text-sm w-fit">
-                <Sparkles className="h-3.5 w-3.5 mr-1.5" />
-                New Collection 2024
-              </Badge>
-
-              <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold leading-tight">
-                Welcome to{' '}
-                <span className="bg-linear-to-r from-orange-500 to-orange-600 bg-clip-text text-transparent">
-                  SnapCart
-                </span>
-              </h1>
-
-              <p className="text-lg md:text-xl text-muted-foreground max-w-lg">
-                Discover amazing products at great prices. Shop the latest trends today!
-              </p>
-
-              <div className="flex flex-col sm:flex-row gap-4">
-                <Link href="/products">
-                  <Button size="lg" className="gap-2 group">
-                    Start Shopping
-                    <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
-                  </Button>
-                </Link>
-                <Link href="/categories">
-                  <Button size="lg" variant="outline" className="gap-2">
-                    Browse Categories
-                    <MoveRight className="h-4 w-4" />
-                  </Button>
-                </Link>
-              </div>
-
-              {/* Stats */}
-              <div className="flex flex-wrap gap-6 pt-4">
-                {stats.map((stat, index) => (
-                  <div key={index} className="flex items-center gap-2">
-                    <stat.icon className="h-4 w-4 text-orange-500" />
-                    <div>
-                      <span className="font-bold">{stat.value}</span>
-                      <span className="text-sm text-muted-foreground ml-1">
-                        {stat.label}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </motion.div>
-
-            {/* Right Content – Hero Image */}
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.6, delay: 0.2 }}
-              className="relative flex justify-center"
-            >
-              <div className="relative w-full max-w-md aspect-square">
-                <div className="absolute inset-0 bg-linear-to-br from-orange-200 to-orange-300 dark:from-orange-800 dark:to-orange-900 rounded-3xl rotate-6 scale-95" />
-                <div className="absolute inset-0 bg-white dark:bg-gray-800 rounded-3xl shadow-2xl p-6 flex flex-col items-center justify-center">
-                  <div className="text-7xl mb-4">🛍️</div>
-                  <h3 className="text-2xl font-bold text-center">Shop Smarter</h3>
-                  <p className="text-muted-foreground text-center text-sm max-w-xs">
-                    Discover thousands of products at the best prices
-                  </p>
-                  <div className="flex gap-2 mt-4">
-                    <Badge className="bg-orange-100 text-orange-700">10K+ Products</Badge>
-                    <Badge className="bg-blue-100 text-blue-700">Free Shipping</Badge>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        </div>
-      </section>
-
-      {/* ============================================================
-          2. FEATURES SECTION
-      ============================================================ */}
-      <section>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {features.map((feature, index) => (
-            <motion.div
-              key={feature.title}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.1 }}
-              className="text-center p-6 border rounded-xl hover:shadow-lg transition-all duration-300 group hover:-translate-y-1 bg-background"
-            >
-              <div className={cn("w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4", feature.color)}>
-                <feature.icon className="h-6 w-6" />
-              </div>
-              <h3 className="font-semibold text-lg group-hover:text-orange-600 transition-colors">
-                {feature.title}
-              </h3>
-              <p className="text-sm text-muted-foreground mt-1">
-                {feature.description}
-              </p>
-            </motion.div>
-          ))}
-        </div>
-      </section>
-
-      {/* ============================================================
-          3. CATEGORIES SECTION – ✅ UPDATED WITH LUCIDE ICONS
-      ============================================================ */}
-      {!categoriesLoading && categories?.length > 0 && (
-        <section>
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold">Shop by Category</h2>
-            <Link
-              href="/categories"
-              className="text-sm text-orange-500 hover:text-orange-600 flex items-center gap-1"
-            >
-              View All <ChevronRight className="h-4 w-4" />
-            </Link>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-            {categories.slice(0, 6).map((category) => (
-              <Link
-                key={category.id}
-                href={`/products?category=${category.slug}`}
-                className="group relative overflow-hidden rounded-xl border p-4 text-center hover:shadow-lg transition-all hover:-translate-y-1 bg-background"
-              >
-                <div className="flex items-center justify-center h-12 w-12 mx-auto mb-2 rounded-full bg-muted/50 group-hover:bg-orange-50 group-hover:text-orange-600 transition-colors">
-                  {categoryIcons[category.slug] || <Package className="h-6 w-6 text-muted-foreground group-hover:text-orange-600 transition-colors" />}
-                </div>
-                <h4 className="font-medium text-sm group-hover:text-orange-600 transition-colors">
-                  {category.name}
-                </h4>
-              </Link>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* ============================================================
-          4. FEATURED PRODUCTS
-      ============================================================ */}
-      <section>
-        <div className="flex items-center justify-between mb-6">
+      {/* Featured Products */}
+      <section className="space-y-6">
+        <div className="flex items-end justify-between">
           <div>
-            <h2 className="text-2xl font-bold">Featured Products</h2>
-            <p className="text-sm text-muted-foreground">Handpicked just for you</p>
+            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-orange-600">
+              Curated
+            </p>
+            <h2 className="text-2xl font-black tracking-tight md:text-3xl">
+              Featured products
+            </h2>
           </div>
-          <Link href="/products">
-            <Button variant="ghost" className="gap-2 group">
-              View All <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
-            </Button>
+          <Link
+            href="/products"
+            className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+          >
+            View all
+            <ChevronRight className="h-4 w-4" />
           </Link>
         </div>
-
-        {isLoading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {[...Array(4)].map((_, i) => (
-              <Skeleton key={i} className="h-80 w-full rounded-xl" />
-            ))}
-          </div>
-        ) : featuredProducts.length === 0 ? (
-          <div className="text-center py-12 text-muted-foreground">
-            <Package className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
-            <p>No featured products available yet.</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {featuredProducts.map((product) => (
-              <motion.div
-                key={product.id}
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.3 }}
-              >
-                <ProductCard product={product} />
-              </motion.div>
-            ))}
-          </div>
-        )}
+        <ProductList products={featuredProducts} isLoading={isLoading} columns={4} />
       </section>
 
-      {/* ============================================================
-          5. TRENDING PRODUCTS
-      ============================================================ */}
-      {trendingProducts.length > 0 && (
-        <section>
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h2 className="text-2xl font-bold flex items-center gap-2">
-                <TrendingUp className="h-5 w-5 text-orange-500" />
-                Trending Now
-              </h2>
-              <p className="text-sm text-muted-foreground">Most popular products this week</p>
-            </div>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {trendingProducts.map((product) => (
-              <ProductCard key={product.id} product={product} />
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* ============================================================
-          6. TOP SELLING PRODUCTS
-      ============================================================ */}
-      {topSellingProducts.length > 0 && (
-        <section>
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h2 className="text-2xl font-bold flex items-center gap-2">
-                <Zap className="h-5 w-5 text-orange-500" />
-                Top Selling
-              </h2>
-              <p className="text-sm text-muted-foreground">Bestsellers you'll love</p>
-            </div>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {topSellingProducts.map((product) => (
-              <ProductCard key={product.id} product={product} />
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* ============================================================
-    7. BRAND TRUST SECTION – SLIM & ELEGANT (FIXED)
-=========================================================== */}
-<section className="relative overflow-hidden rounded-2xl py-10 px-6 md:py-12 md:px-10">
-  {/* Background */}
-  <div className="absolute inset-0 bg-linear-to-r from-orange-500 to-orange-600" />
-  
-  {/* Subtle Accent Glow */}
-  <div className="absolute -top-20 -right-20 w-48 h-48 bg-white/10 rounded-full blur-2xl" />
-  <div className="absolute -bottom-20 -left-20 w-48 h-48 bg-white/10 rounded-full blur-2xl" />
-
-  <div className="relative z-10 max-w-4xl mx-auto">
-    <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-      {/* Left Content */}
-      <div className="text-center md:text-left">
-        <h2 className="text-2xl md:text-3xl font-bold text-white">
-          Ready to Start Shopping?
-        </h2>
-        <p className="text-orange-50/80 text-sm md:text-base mt-1">
-          Join thousands of happy customers
-        </p>
-      </div>
-
-      {/* Buttons */}
-      <div className="flex flex-col sm:flex-row items-center gap-3">
-        {/* Primary Button */}
-        <Link href="/products">
-          <Button 
-            className="bg-white text-orange-600 hover:bg-orange-50 hover:text-orange-700 shadow-md hover:shadow-lg transition-all duration-300 px-6 py-2.5 text-sm font-semibold rounded-lg"
-          >
-            <span className="flex items-center gap-1.5">
-              Shop Now
-              <ArrowRight className="h-3.5 w-3.5" />
-            </span>
-          </Button>
-        </Link>
-
-        {/* Secondary Button – Dark Text (Alternative) */}
-<Link href="/register">
-  <Button 
-    variant="outline" 
-    className="border-white/30 bg-white text-orange-600 hover:bg-orange-50 hover:text-orange-700 transition-all duration-300 px-6 py-2.5 text-sm font-semibold rounded-lg shadow-sm"
-  >
-    <span className="flex items-center gap-1.5">
-      Create Account
-      <Rocket className="h-3.5 w-3.5" />
-    </span>
-  </Button>
-</Link>
-      </div>
-    </div>
-
-    {/* Trust Indicators – Slim */}
-    <div className="flex flex-wrap justify-center md:justify-start items-center gap-4 md:gap-6 mt-4 pt-4 border-t border-white/15">
-      <span className="flex items-center gap-1.5 text-white/80 text-xs">
-        <Shield className="h-3.5 w-3.5" />
-        Secure Checkout
-      </span>
-      <span className="flex items-center gap-1.5 text-white/80 text-xs">
-        <Truck className="h-3.5 w-3.5" />
-        Free Returns
-      </span>
-      <span className="flex items-center gap-1.5 text-white/80 text-xs">
-        <Star className="h-3.5 w-3.5 fill-white/30" />
-        4.8/5 Rating
-      </span>
-    </div>
-  </div>
-</section>
+      <NewArrivalsSection />
+      <NewsletterSection />
     </div>
   );
 }

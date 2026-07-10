@@ -1,4 +1,6 @@
 // hooks/useAuth.ts
+'use client';
+
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/auth-store';
@@ -22,11 +24,15 @@ function isExpectedAuthFailure(error: unknown): boolean {
 
 function logAuthFailure(label: string, error: unknown) {
   if (isExpectedAuthFailure(error)) {
-    console.log(`ℹ️ ${label} (expected):`, (error as AuthError).message);
+    console.log(`Login failed (expected):`, (error as AuthError).message);
   } else {
-    console.error(`❌ ${label}:`, error);
+    console.error('Login error:', error);
   }
 }
+
+// ============================================================
+// USE AUTH HOOK
+// ============================================================
 
 export function useAuth() {
   const {
@@ -42,10 +48,7 @@ export function useAuth() {
 
   const queryClient = useQueryClient();
 
-  // ============================================================
   // 2FA STATE
-  // ============================================================
-
   const [twoFactorRequired, setTwoFactorRequired] = useState(false);
   const [pendingLoginEmail, setPendingLoginEmail] = useState<string | null>(null);
   const [pendingLoginPassword, setPendingLoginPassword] = useState<string | null>(null);
@@ -61,22 +64,28 @@ export function useAuth() {
   } = useQuery({
     queryKey: ['user'],
     queryFn: async () => {
-      console.log('📡 Fetching current user...');
+      console.log('Fetching current user...');
       try {
         const data = await authService.getCurrentUser();
-        console.log('✅ User fetched:', data);
+        console.log('User fetched:', data);
         return data;
       } catch (error) {
-        if (error instanceof AuthError && error.isUnauthorized()) {
-          console.log('ℹ️ No active session (user not logged in)');
-          return null;
+        if (error instanceof AuthError) {
+          if (error.isUnauthorized()) {
+            console.log('No active session (user not logged in)');
+            return null;
+          }
+          if (error.isNetworkError()) {
+            console.warn('Backend not available:', error.message);
+            return null;
+          }
         }
-        console.error('❌ Failed to fetch user:', error);
-        throw error;
+        console.error('Failed to fetch user:', error);
+        return null;
       }
     },
     enabled: isHydrated && !storeIsAuthenticated,
-    retry: false,
+    retry: 1,
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
     throwOnError: false,
@@ -88,7 +97,7 @@ export function useAuth() {
 
   useEffect(() => {
     if (userData !== undefined && userData !== null) {
-      console.log('🔄 Updating store with user data:', userData);
+      console.log('Updating store with user data:', userData);
       setUser(userData);
       setAuthenticated(true);
       setLoading(false);
@@ -97,7 +106,7 @@ export function useAuth() {
 
   useEffect(() => {
     if (!isUserLoading && userData === undefined && isHydrated && !storeIsAuthenticated) {
-      console.log('🔄 No user found, clearing store');
+      console.log('No user found, clearing store');
       setUser(null);
       setAuthenticated(false);
       setLoading(false);
@@ -105,36 +114,31 @@ export function useAuth() {
   }, [isUserLoading, userData, isHydrated, storeIsAuthenticated, setUser, setAuthenticated, setLoading]);
 
   // ============================================================
-  // LOGIN MUTATION – with 2FA handling
+  // LOGIN MUTATION
   // ============================================================
 
   const loginMutation = useMutation({
     mutationFn: async (credentials: LoginCredentials): Promise<AuthResponse> => {
-      console.log('📤 Logging in:', credentials.email);
+      console.log('Logging in:', credentials.email);
       const response = await authService.login(credentials);
-      console.log('✅ Login response:', response);
+      console.log('Login response:', response);
       return response;
     },
     onSuccess: (data) => {
-      console.log('✅ Login mutation success, updating store...');
-
+      console.log('Login mutation success, updating store...');
       setUser(data.user);
       setAuthenticated(true);
       setLoading(false);
       setTwoFactorRequired(false);
       setPendingLoginEmail(null);
       setPendingLoginPassword(null);
-
       queryClient.setQueryData(['user'], data.user);
-      console.log('✅ Store updated - User:', data.user);
-      console.log('✅ Store updated - isAuthenticated:', true);
+      console.log('Store updated - User:', data.user);
+      console.log('Store updated - isAuthenticated:', true);
     },
     onError: (error: any) => {
-      // Check if the error indicates 2FA is required
       if (error?.message?.toLowerCase().includes('2fa') || error?.statusCode === 401) {
-        // The backend may respond with a specific message for 2FA
-        // We'll capture the email/password for the 2FA step
-        console.log('🔐 2FA required for this account');
+        console.log('2FA required for this account');
         setTwoFactorRequired(true);
         setLoading(false);
         return;
@@ -145,28 +149,21 @@ export function useAuth() {
   });
 
   // ============================================================
-  // 2FA VERIFICATION MUTATION – completes login after 2FA
+  // 2FA VERIFICATION MUTATION
   // ============================================================
 
   const verifyTwoFactorMutation = useMutation({
     mutationFn: async (token: string) => {
-      console.log('📤 Verifying 2FA token...');
-      // First verify the 2FA token
+      console.log('Verifying 2FA token...');
       const verifyResult = await authService.verifyTwoFactor(token);
       if (!verifyResult.valid) {
         throw new AuthError('Invalid 2FA token', 401);
       }
-      // If valid, we need to complete the login with the stored credentials
-      // The backend should have a dedicated endpoint to finalize login with 2FA
-      // For now, we'll rely on the fact that after verification, the session is complete.
-      // In practice, the backend may require a second login call with a 2FA flag.
-      // We'll assume the backend sets a session cookie after successful 2FA verification.
-      // Then we fetch the user.
       const user = await authService.getCurrentUser();
       return user;
     },
     onSuccess: (user) => {
-      console.log('✅ 2FA verification success, updating store...');
+      console.log('2FA verification success, updating store...');
       setUser(user);
       setAuthenticated(true);
       setLoading(false);
@@ -189,13 +186,13 @@ export function useAuth() {
 
   const registerMutation = useMutation({
     mutationFn: async (data: RegisterData): Promise<AuthResponse> => {
-      console.log('📤 Registering user:', data.email);
+      console.log('Registering user:', data.email);
       const response = await authService.register(data);
-      console.log('✅ Registration response:', response);
+      console.log('Registration response:', response);
       return response;
     },
     onSuccess: (data) => {
-      console.log('✅ Registration success:', data);
+      console.log('Registration success:', data);
       toast.success(data.message || 'Registration successful! Please check your email.');
     },
     onError: (error: any) => {
@@ -209,13 +206,13 @@ export function useAuth() {
 
   const registerVendorMutation = useMutation({
     mutationFn: async (data: RegisterVendorData): Promise<AuthResponse> => {
-      console.log('📤 Registering vendor:', data.email);
+      console.log('Registering vendor:', data.email);
       const response = await authService.registerVendor(data);
-      console.log('✅ Vendor registration response:', response);
+      console.log('Vendor registration response:', response);
       return response;
     },
     onSuccess: (data) => {
-      console.log('✅ Vendor registration success:', data);
+      console.log('Vendor registration success:', data);
       toast.success(data.message || 'Vendor registration successful! Please check your email.');
     },
     onError: (error: any) => {
@@ -229,13 +226,13 @@ export function useAuth() {
 
   const verifyEmailMutation = useMutation({
     mutationFn: async ({ email, code }: { email: string; code: string }): Promise<AuthResponse> => {
-      console.log('📤 Verifying email:', email);
+      console.log('Verifying email:', email);
       const response = await authService.verifyEmail(email, code);
-      console.log('✅ Email verification response:', response);
+      console.log('Email verification response:', response);
       return response;
     },
     onSuccess: (data) => {
-      console.log('✅ Email verification success, updating store...');
+      console.log('Email verification success, updating store...');
       setUser(data.user);
       setAuthenticated(true);
       setLoading(false);
@@ -248,14 +245,14 @@ export function useAuth() {
   });
 
   // ============================================================
-  // OTHER MUTATIONS (forgot password, reset, change password, logout)
+  // OTHER MUTATIONS
   // ============================================================
 
   const resendVerificationMutation = useMutation({
     mutationFn: async (email: string): Promise<{ message: string }> => {
-      console.log('📤 Resending verification for:', email);
+      console.log('Resending verification for:', email);
       const response = await authService.resendVerification(email);
-      console.log('✅ Resend verification response:', response);
+      console.log('Resend verification response:', response);
       return response;
     },
     onSuccess: () => {
@@ -268,9 +265,9 @@ export function useAuth() {
 
   const forgotPasswordMutation = useMutation({
     mutationFn: async (email: string): Promise<{ message: string }> => {
-      console.log('📤 Forgot password for:', email);
+      console.log('Forgot password for:', email);
       const response = await authService.forgotPassword(email);
-      console.log('✅ Forgot password response:', response);
+      console.log('Forgot password response:', response);
       return response;
     },
     onSuccess: () => {
@@ -283,9 +280,9 @@ export function useAuth() {
 
   const verifyResetCodeMutation = useMutation({
     mutationFn: async ({ email, code }: { email: string; code: string }): Promise<{ verificationToken: string }> => {
-      console.log('📤 Verifying reset code for:', email);
+      console.log('Verifying reset code for:', email);
       const response = await authService.verifyResetCode(email, code);
-      console.log('✅ Verify reset code response:', response);
+      console.log('Verify reset code response:', response);
       return response;
     },
     onSuccess: () => {
@@ -304,9 +301,9 @@ export function useAuth() {
       verificationToken: string;
       newPassword: string;
     }): Promise<{ message: string }> => {
-      console.log('📤 Resetting password...');
+      console.log('Resetting password...');
       const response = await authService.resetPassword(verificationToken, newPassword);
-      console.log('✅ Reset password response:', response);
+      console.log('Reset password response:', response);
       return response;
     },
     onSuccess: () => {
@@ -325,9 +322,9 @@ export function useAuth() {
       currentPassword: string;
       newPassword: string;
     }): Promise<{ message: string }> => {
-      console.log('📤 Changing password...');
+      console.log('Changing password...');
       const response = await authService.changePassword(currentPassword, newPassword);
-      console.log('✅ Change password response:', response);
+      console.log('Change password response:', response);
       return response;
     },
     onSuccess: () => {
@@ -340,18 +337,18 @@ export function useAuth() {
 
   const logoutMutation = useMutation({
     mutationFn: async (): Promise<{ message: string }> => {
-      console.log('📤 Logging out...');
+      console.log('Logging out...');
       try {
         const response = await authService.logout();
-        console.log('✅ Logout response:', response);
+        console.log('Logout response:', response);
         return response;
       } catch (error) {
-        console.log('ℹ️ Logout request failed, proceeding with local logout anyway:', error);
+        console.log('Logout request failed, proceeding with local logout anyway:', error);
         return { message: 'Logged out successfully' };
       }
     },
     onSuccess: () => {
-      console.log('✅ Logout success, clearing store...');
+      console.log('Logout success, clearing store...');
       storeLogout();
       queryClient.clear();
       queryClient.setQueryData(['user'], null);
@@ -361,7 +358,7 @@ export function useAuth() {
       toast.success('Logged out successfully');
     },
     onError: () => {
-      console.log('⚠️ Logout error, but clearing store anyway...');
+      console.log('Logout error, but clearing store anyway...');
       storeLogout();
       queryClient.clear();
       queryClient.setQueryData(['user'], null);
@@ -370,13 +367,13 @@ export function useAuth() {
 
   const logoutAllMutation = useMutation({
     mutationFn: async (): Promise<{ message: string; sessionsEnded: number }> => {
-      console.log('📤 Logging out from all devices...');
+      console.log('Logging out from all devices...');
       const response = await authService.logoutAll();
-      console.log('✅ Logout all response:', response);
+      console.log('Logout all response:', response);
       return response;
     },
     onSuccess: (data) => {
-      console.log('✅ Logout all success, clearing store...');
+      console.log('Logout all success, clearing store...');
       storeLogout();
       queryClient.clear();
       queryClient.setQueryData(['user'], null);
@@ -412,7 +409,6 @@ export function useAuth() {
     isLoading,
     isHydrated,
 
-    // 2FA State
     twoFactorRequired,
     setTwoFactorRequired,
     pendingLoginEmail,
@@ -420,12 +416,10 @@ export function useAuth() {
     pendingLoginPassword,
     setPendingLoginPassword,
 
-    // Auth mutations
     login: loginMutation.mutateAsync,
     loginLoading: loginMutation.isPending,
     loginError: loginMutation.error,
 
-    // 2FA verification
     verifyTwoFactor: verifyTwoFactorMutation.mutateAsync,
     verifyTwoFactorLoading: verifyTwoFactorMutation.isPending,
     verifyTwoFactorError: verifyTwoFactorMutation.error,

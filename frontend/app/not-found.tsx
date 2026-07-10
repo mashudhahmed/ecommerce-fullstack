@@ -1,20 +1,14 @@
+// app/not-found.tsx
 'use client';
 
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Home, Search, ShoppingBag } from 'lucide-react';
-import { motion } from 'framer-motion';
 
 export default function NotFound() {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
-      className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4"
-    >
+    <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
       <div className="space-y-6 max-w-md">
-        {/* 404 Animation */}
         <div className="relative">
           <h1 className="text-8xl font-bold text-muted-foreground/20">404</h1>
           <div className="absolute inset-0 flex items-center justify-center">
@@ -24,7 +18,7 @@ export default function NotFound() {
 
         <h2 className="text-2xl font-semibold">Page Not Found</h2>
         <p className="text-muted-foreground">
-          Oops! The page you are looking for doesn&apos;t exist or has been moved.
+          Oops! The page you are looking for does not exist or has been moved.
         </p>
 
         <div className="flex flex-col sm:flex-row gap-3 justify-center pt-4">
@@ -46,7 +40,6 @@ export default function NotFound() {
           </Button>
         </div>
 
-        {/* Quick links */}
         <div className="pt-6 border-t">
           <p className="text-sm text-muted-foreground mb-3">Popular categories:</p>
           <div className="flex flex-wrap gap-2 justify-center">
@@ -62,6 +55,6 @@ export default function NotFound() {
           </div>
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 }

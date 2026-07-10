@@ -28,6 +28,7 @@ export interface User {
 export interface LoginCredentials {
   email: string;
   password: string;
+  twoFactorToken?: string;  // ✅ Add optional 2FA token
 }
 
 export interface RegisterData {
@@ -51,6 +52,7 @@ export interface AuthResponse {
   message: string;
   access_token?: string;
   user: User;
+  requiresTwoFactor?: boolean;  // ✅ Add this flag
 }
 
 export interface AuthResponseWithToken extends AuthResponse {
@@ -69,12 +71,12 @@ export interface Product {
   description: string;
   stock: number;
   imageUrl?: string;
-  compareAtPrice?: number;   // ✅ Optional – for discounts
+  compareAtPrice?: number;
   isActive?: boolean;
   averageRating?: number;
   totalReviews?: number;
-  isNew?: boolean;          // ✅ Optional – shows "New" badge
-  isTrending?: boolean;     // ✅ Optional – shows "Trending" badge
+  isNew?: boolean;
+  isTrending?: boolean;
   owner?: User;
   category?: Category;
   createdAt: string;
@@ -257,7 +259,6 @@ export interface PendingVendor {
   createdAt: string;
 }
 
-// Vendor Dashboard Stats (full dashboard data)
 export interface VendorDashboardStats {
   totalProducts: number;
   totalOrders: number;
@@ -271,7 +272,6 @@ export interface VendorDashboardStats {
   recentOrders: Order[];
 }
 
-// Vendor Performance Metrics
 export interface PerformanceMetrics {
   salesTrend: { date: string; revenue: number; orders: number }[];
   totalRevenue: number;
@@ -324,7 +324,6 @@ export interface ReviewStats {
   };
 }
 
-// 🆕 Review response with pagination and stats
 export interface ReviewResponse {
   data: Review[];
   meta: {
@@ -354,7 +353,6 @@ export interface WishlistItem {
   createdAt: string;
 }
 
-// 🆕 Wishlist response with pagination
 export interface WishlistResponse {
   data: Product[];
   meta: {
@@ -744,7 +742,7 @@ export interface FilterParams {
 }
 
 // ============================================================
-// ENUMS (for better type safety)
+// ENUMS
 // ============================================================
 
 export enum UserRole {
@@ -885,20 +883,17 @@ export interface UseAuthReturn {
 }
 
 // ============================================================
-// 🆕 ADDITIONAL TYPES FOR NEW FEATURES
+// ADDITIONAL TYPES FOR NEW FEATURES
 // ============================================================
 
-// Export Format
 export type ExportFormat = 'excel' | 'pdf' | 'csv' | 'json';
 
-// WebSocket Message
 export interface WebSocketMessage {
   event: string;
   data: any;
   timestamp: string;
 }
 
-// System Status (SuperAdmin)
 export interface SystemStatus {
   system: {
     status: string;
@@ -914,7 +909,6 @@ export interface SystemStatus {
   };
 }
 
-// Admin Extended Stats (SuperAdmin)
 export interface AdminStatsExtended {
   total: {
     users: number;

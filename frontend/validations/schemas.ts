@@ -122,6 +122,37 @@ export const verifyEmailSchema = z.object({
 });
 
 // ============================================================
+// PRODUCT
+// ============================================================
+
+export const productSchema = z.object({
+  title: z.string()
+    .min(2, 'Title must be at least 2 characters')
+    .max(150, 'Title cannot exceed 150 characters'),
+
+  price: z.number({
+    error: 'Price must be a number',
+  })
+    .positive('Price must be greater than 0')
+    .max(1000000, 'Price is too high'),
+
+  description: z.string()
+    .min(10, 'Description must be at least 10 characters')
+    .max(2000, 'Description cannot exceed 2000 characters'),
+
+  stock: z.number({
+    error: 'Stock must be a number',
+  })
+    .int('Stock must be a whole number')
+    .min(0, 'Stock cannot be negative'),
+
+  imageUrl: z.string()
+    .url('Must be a valid URL')
+    .optional()
+    .or(z.literal('')),
+});
+
+// ============================================================
 // TYPE EXPORTS
 // ============================================================
 
@@ -131,3 +162,4 @@ export type RegisterVendorInput = z.infer<typeof registerVendorSchema>;
 export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
 export type VerifyEmailInput = z.infer<typeof verifyEmailSchema>;
+export type ProductInput = z.infer<typeof productSchema>;

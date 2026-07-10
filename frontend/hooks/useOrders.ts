@@ -1,41 +1,61 @@
 // hooks/useOrders.ts
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { orderService, CreateOrderData } from '@/services/order.service';
+import { useAuth } from './useAuth';
 import { toast } from 'sonner';
-import { fallbackOrders } from '@/lib/fallback-orders';
 
-// ✅ EXPORTED
 export function useOrders() {
   const queryClient = useQueryClient();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
 
   // ============================================================
-  // GET ORDERS
+  // GET ORDERS - Only fetch if authenticated
   // ============================================================
-  const { data: orders = [], isLoading } = useQuery({
+  const { 
+    data: orders = [], 
+    isLoading, 
+    refetch,
+    isRefetching,
+  } = useQuery({
     queryKey: ['orders'],
     queryFn: async () => {
+      // If not authenticated, return empty array
+      if (!isAuthenticated) {
+        return [];
+      }
+      
       try {
         const result = await orderService.getOrders();
         if (Array.isArray(result) && result.length > 0) {
           return result;
         }
-        console.log('ℹ️ No orders from API, using fallback data');
-        return fallbackOrders;
+        return [];
       } catch (error) {
-        console.error('❌ Error fetching orders, using fallback:', error);
-        return fallbackOrders;
+        console.error('Error fetching orders:', error);
+        return [];
       }
     },
+    enabled: isAuthenticated && !authLoading,
     throwOnError: false,
-    initialData: fallbackOrders,
+    initialData: [],
+    staleTime: 30 * 1000,
   });
 
   // ============================================================
-  // GET ORDER SUMMARY
+  // GET ORDER SUMMARY - Only if authenticated
   // ============================================================
   const { data: orderSummary } = useQuery({
     queryKey: ['orders', 'summary'],
     queryFn: async () => {
+      if (!isAuthenticated) {
+        return {
+          totalOrders: 0,
+          totalSpent: 0,
+          pendingOrders: 0,
+          recentOrders: [],
+        };
+      }
+      
       try {
         const result = await orderService.getOrderSummary();
         return {
@@ -45,7 +65,7 @@ export function useOrders() {
           recentOrders: result?.recentOrders || [],
         };
       } catch (error) {
-        console.error('❌ Error fetching order summary:', error);
+        console.error('Error fetching order summary:', error);
         return {
           totalOrders: 0,
           totalSpent: 0,
@@ -54,6 +74,7 @@ export function useOrders() {
         };
       }
     },
+    enabled: isAuthenticated && !authLoading,
     throwOnError: false,
     initialData: {
       totalOrders: 0,
@@ -68,7 +89,10 @@ export function useOrders() {
   // ============================================================
   const createOrderMutation = useMutation({
     mutationFn: async (data: CreateOrderData) => {
-      // Generate idempotency key if not provided
+      if (!isAuthenticated) {
+        throw new Error('Please login to create an order');
+      }
+      
       const idempotencyKey = data.idempotencyKey || 
         (typeof crypto !== 'undefined' && crypto.randomUUID?.()) || 
         `order-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
@@ -106,16 +130,28 @@ export function useOrders() {
   });
 
   // ============================================================
+  // GET ORDER BY ID (lazy)
+  // ============================================================
+  const getOrder = async (id: number) => {
+    if (!isAuthenticated) {
+      throw new Error('Please login to view order details');
+    }
+    return orderService.getOrder(id);
+  };
+
+  // ============================================================
   // RETURN
   // ============================================================
   return {
     orders,
-    isLoading,
+    isLoading: isLoading || authLoading,
+    isRefetching,
+    refetch,
     orderSummary,
     createOrder: createOrderMutation.mutateAsync,
     isCreatingOrder: createOrderMutation.isPending,
     cancelOrder: cancelOrderMutation.mutateAsync,
     isCancellingOrder: cancelOrderMutation.isPending,
-    getOrder: orderService.getOrder,
+    getOrder,
   };
 }

@@ -1,37 +1,34 @@
 // app/products/[id]/page.tsx
 'use client';
 
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { productService } from '@/services/product.service';
 import { useCart } from '@/hooks/useCart';
 import { useWishlist } from '@/hooks/useWishlist';
 import { useReviews } from '@/hooks/useReviews';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ReviewList } from '@/components/reviews/ReviewList';
 import { ReviewForm } from '@/components/reviews/ReviewForm';
 import { RelatedProducts } from '@/components/products/RelatedProducts';
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
-import { 
-  ArrowLeft, 
-  ShoppingCart, 
-  Heart, 
-  Share2, 
-  Star, 
+import {
+  ArrowLeft,
+  ShoppingCart,
+  Heart,
+  Share2,
+  Star,
   StarHalf,
-  Truck, 
-  Shield, 
-  RefreshCw, 
+  Truck,
+  Shield,
+  RefreshCw,
   Package,
-  CheckCircle,
   AlertCircle,
   Minus,
   Plus,
@@ -39,7 +36,6 @@ import {
 } from 'lucide-react';
 import { formatPrice, cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { motion } from 'framer-motion';
 
 // ============================================================
 // HELPERS
@@ -65,12 +61,12 @@ const Rating = ({ rating, count }: { rating: number; count: number }) => {
       <div className="flex">
         {[...Array(5)].map((_, i) => {
           if (i < fullStars) {
-            return <Star key={i} className="h-4 w-4 fill-yellow-400 text-yellow-400" />;
+            return <Star key={i} className="h-4 w-4 fill-orange-500 text-orange-500" />;
           }
           if (i === fullStars && hasHalfStar) {
-            return <StarHalf key={i} className="h-4 w-4 fill-yellow-400 text-yellow-400" />;
+            return <StarHalf key={i} className="h-4 w-4 fill-orange-500 text-orange-500" />;
           }
-          return <Star key={i} className="h-4 w-4 text-muted-foreground/30" />;
+          return <Star key={i} className="h-4 w-4 text-muted-foreground/25" />;
         })}
       </div>
       {count > 0 && (
@@ -84,12 +80,25 @@ const Rating = ({ rating, count }: { rating: number; count: number }) => {
 // MAIN PRODUCT DETAIL PAGE
 // ============================================================
 
+// ============================================================
+// ROUTE ENTRY — keys the content by id so React fully remounts
+// (fresh useState, fresh useQuery instance) whenever the product
+// id changes. Next.js reuses the same component instance across
+// navigations within the same route pattern, so without this key,
+// local state and in-flight queries from the previous product can
+// bleed into the new one.
+// ============================================================
+
 export default function ProductDetailPage() {
   const params = useParams();
+  const id = params.id as string;
+  return <ProductDetailPageContent key={id} />;
+}
+
+function ProductDetailPageContent() {
+  const params = useParams();
   const router = useRouter();
-  const queryClient = useQueryClient();
   const id = Number(params.id);
-  const prevIdRef = useRef<number>(id);
 
   const { isAuthenticated } = useAuth();
   const { addToCart, addToCartLoading } = useCart();
@@ -103,28 +112,12 @@ export default function ProductDetailPage() {
   const [imageError, setImageError] = useState(false);
 
   // ============================================================
-  // FORCE CACHE INVALIDATION ON ID CHANGE
-  // ============================================================
-
-  useEffect(() => {
-    if (prevIdRef.current !== id) {
-      queryClient.removeQueries({ queryKey: ['product'] });
-      queryClient.invalidateQueries({ queryKey: ['product'] });
-      setQuantity(1);
-      setSelectedImage(0);
-      setIsInWishlist(false);
-      setImageError(false);
-      prevIdRef.current = id;
-    }
-  }, [id, queryClient]);
-
-  // ============================================================
   // FETCH PRODUCT - Optimized with staleTime
   // ============================================================
 
-  const { 
-    data: product, 
-    isLoading, 
+  const {
+    data: product,
+    isLoading,
     error,
     isFetching,
   } = useQuery({
@@ -135,14 +128,14 @@ export default function ProductDetailPage() {
     },
     enabled: !isNaN(id) && id > 0,
     retry: 1,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    gcTime: 10 * 60 * 1000, // 10 minutes
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
     refetchOnMount: 'always',
     refetchOnWindowFocus: false,
   });
 
   // ============================================================
-  // CHECK WISHLIST STATUS - Memoized
+  // CHECK WISHLIST STATUS
   // ============================================================
 
   useEffect(() => {
@@ -159,40 +152,54 @@ export default function ProductDetailPage() {
     const stock = product?.stock ?? 0;
     return stock === 0;
   }, [product?.stock]);
+
   const isLowStock = useMemo(() => {
     const stock = product?.stock ?? 0;
     return stock > 0 && stock <= 5;
   }, [product?.stock]);
-  const discount = useMemo(() => 
-    product?.compareAtPrice ? Math.round(((product.compareAtPrice - product.price) / product.compareAtPrice) * 100) : 0,
+
+  const discount = useMemo(
+    () =>
+      product?.compareAtPrice
+        ? Math.round(((product.compareAtPrice - product.price) / product.compareAtPrice) * 100)
+        : 0,
     [product?.compareAtPrice, product?.price]
   );
 
-  const images = useMemo(() => 
-    Array.isArray(product?.images) ? product.images : 
-    product?.imageUrl ? [product.imageUrl] : [],
+  const images = useMemo(
+    () =>
+      Array.isArray(product?.images) ? product.images : product?.imageUrl ? [product.imageUrl] : [],
     [product]
   );
 
-  const averageRating = useMemo(() => 
-    typeof product?.averageRating === 'number' 
-      ? product.averageRating 
-      : Number(product?.averageRating) || 0,
+  const averageRating = useMemo(
+    () => (typeof product?.averageRating === 'number' ? product.averageRating : Number(product?.averageRating) || 0),
     [product?.averageRating]
   );
+
+  // Provide fallback image
+  const mainImageSrc = useMemo(() => {
+    if (!product?.imageUrl || imageError) {
+      return '/placeholder-image.png';
+    }
+    return product.imageUrl;
+  }, [product?.imageUrl, imageError]);
 
   // ============================================================
   // MEMOIZED HANDLERS
   // ============================================================
 
-  const handleQuantityChange = useCallback((value: number) => {
-    if (value < 1) return;
-    if (product && value > product.stock) {
-      toast.error(`Only ${product.stock} items available`);
-      return;
-    }
-    setQuantity(value);
-  }, [product]);
+  const handleQuantityChange = useCallback(
+    (value: number) => {
+      if (value < 1) return;
+      if (product && value > product.stock) {
+        toast.error(`Only ${product.stock} items available`);
+        return;
+      }
+      setQuantity(value);
+    },
+    [product]
+  );
 
   const handleAddToCart = useCallback(async () => {
     if (!product) return;
@@ -215,9 +222,9 @@ export default function ProductDetailPage() {
       router.push('/login');
       return;
     }
-    
+
     if (isWishlistLoading) return;
-    
+
     setIsWishlistLoading(true);
     try {
       if (isInWishlist) {
@@ -238,7 +245,7 @@ export default function ProductDetailPage() {
 
   const handleShare = useCallback(async () => {
     if (!product) return;
-    
+
     if (navigator.share) {
       try {
         await navigator.share({
@@ -273,21 +280,27 @@ export default function ProductDetailPage() {
 
   if (error || !product) {
     return (
-      <div className="container mx-auto px-4 py-12 text-center">
-        <AlertCircle className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-        <h2 className="text-2xl font-semibold mb-2">Product Not Found</h2>
-        <p className="text-muted-foreground mb-6">
-          The product you&apos;re looking for doesn&apos;t exist or has been removed.
+      <div className="container mx-auto px-4 py-20 text-center">
+        <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+          <AlertCircle className="h-7 w-7 text-muted-foreground" />
+        </div>
+        <h2 className="text-2xl font-black tracking-tight">Product not found</h2>
+        <p className="mx-auto mt-2 mb-8 max-w-sm text-muted-foreground">
+          The product you are looking for does not exist or has been removed.
         </p>
-        <div className="flex flex-wrap justify-center gap-4">
+        <div className="flex flex-wrap justify-center gap-3">
           <Link href="/products">
-            <Button>
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Browse Products
+            <Button className="h-11 gap-2 rounded-full bg-zinc-950 px-6 text-white hover:bg-zinc-800">
+              <ArrowLeft className="h-4 w-4" />
+              Browse products
             </Button>
           </Link>
-          <Button variant="outline" onClick={() => router.back()}>
-            Go Back
+          <Button
+            variant="outline"
+            className="h-11 rounded-full px-6"
+            onClick={() => router.back()}
+          >
+            Go back
           </Button>
         </div>
       </div>
@@ -300,73 +313,70 @@ export default function ProductDetailPage() {
 
   return (
     <ErrorBoundary>
-      <div className="container mx-auto px-4 py-4 md:py-6">
-        {/* Breadcrumb – with SEO structure */}
-        <nav className="flex items-center gap-2 text-sm text-muted-foreground mb-4" aria-label="Breadcrumb">
-          <Link href="/" className="hover:text-foreground transition-colors">Home</Link>
+      <div className="container mx-auto px-4 py-6 md:py-10">
+        {/* Breadcrumb */}
+        <nav className="mb-6 flex items-center gap-2 text-sm text-muted-foreground" aria-label="Breadcrumb">
+          <Link href="/" className="transition-colors hover:text-foreground">
+            Home
+          </Link>
           <span aria-hidden="true">/</span>
-          <Link href="/products" className="hover:text-foreground transition-colors">Products</Link>
+          <Link href="/products" className="transition-colors hover:text-foreground">
+            Products
+          </Link>
           <span aria-hidden="true">/</span>
-          <span className="text-foreground font-medium truncate max-w-48" aria-current="page">
+          <span className="max-w-48 truncate font-medium text-foreground" aria-current="page">
             {product.title}
           </span>
         </nav>
 
         {/* Product Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12">
+        <div className="grid grid-cols-1 gap-10 lg:grid-cols-2 lg:gap-14">
           {/* Left Column – Images */}
           <div className="space-y-4">
             {/* Main Image */}
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.4 }}
-              className="relative aspect-square bg-muted/20 rounded-2xl overflow-hidden"
-            >
-              {product.imageUrl && !imageError ? (
-                <Image
-                  src={product.imageUrl}
-                  alt={product.title}
-                  fill
-                  className="object-cover"
-                  priority
-                  sizes="(max-width: 768px) 100vw, 50vw"
-                  onError={() => setImageError(true)}
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center bg-muted/30">
-                  <Package className="h-20 w-20 text-muted-foreground/30" />
-                </div>
-              )}
-              
+            <div className="relative aspect-square overflow-hidden rounded-2xl bg-muted/20 transition-opacity duration-300">
+              <Image
+                src={mainImageSrc}
+                alt={product.title}
+                fill
+                className="object-cover"
+                priority
+                sizes="(max-width: 768px) 100vw, 50vw"
+                onError={() => setImageError(true)}
+              />
+
               {/* Badges */}
-              {isOutOfStock && (
-                <Badge variant="destructive" className="absolute top-4 left-4 text-sm px-4 py-1.5">
-                  Out of Stock
-                </Badge>
-              )}
-              {isLowStock && !isOutOfStock && (
-                <Badge className="absolute top-4 left-4 text-sm px-4 py-1.5 bg-amber-500">
-                  Low Stock
-                </Badge>
-              )}
+              <div className="absolute left-4 top-4 z-10 flex flex-col items-start gap-1.5">
+                {isOutOfStock && (
+                  <span className="rounded-full bg-zinc-950/90 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur-sm">
+                    Out of stock
+                  </span>
+                )}
+                {isLowStock && !isOutOfStock && (
+                  <span className="rounded-full border border-orange-200 bg-white/90 px-3 py-1.5 text-xs font-semibold text-orange-700 backdrop-blur-sm">
+                    Only {product.stock} left
+                  </span>
+                )}
+              </div>
               {discount > 0 && (
-                <Badge className="absolute top-4 right-4 text-sm px-4 py-1.5 bg-red-500">
-                  -{discount}%
-                </Badge>
+                <span className="absolute right-4 top-4 z-10 rounded-full bg-orange-600 px-3 py-1.5 text-xs font-semibold tabular-nums text-white">
+                  −{discount}%
+                </span>
               )}
-            </motion.div>
+            </div>
 
             {/* Thumbnails */}
             {images.length > 1 && (
-              <div className="flex gap-3 overflow-x-auto pb-2" role="tablist" aria-label="Product images">
+              <div className="flex gap-3 overflow-x-auto pb-1" role="tablist" aria-label="Product images">
                 {images.map((img: string, index: number) => (
                   <button
                     key={index}
                     onClick={() => setSelectedImage(index)}
                     className={cn(
-                      "relative w-20 h-20 rounded-lg overflow-hidden border-2 transition-all shrink-0",
-                      selectedImage === index ? "border-orange-500" : "border-transparent hover:border-muted"
+                      'relative h-20 w-20 shrink-0 overflow-hidden rounded-xl border-2 transition-all',
+                      selectedImage === index
+                        ? 'border-orange-600 ring-2 ring-orange-600/15'
+                        : 'border-transparent opacity-80 hover:border-border hover:opacity-100'
                     )}
                     role="tab"
                     aria-selected={selectedImage === index}
@@ -385,89 +395,83 @@ export default function ProductDetailPage() {
           </div>
 
           {/* Right Column – Product Info */}
-          <motion.div 
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.4, delay: 0.1 }}
-            className="space-y-6"
-          >
-            {/* Title */}
-            <div>
-              <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold leading-tight">
+          <div className="space-y-7">
+            {/* Title, rating, price */}
+            <div className="space-y-3">
+              <h1 className="text-3xl font-black leading-tight tracking-tight md:text-4xl">
                 {product.title}
               </h1>
-            </div>
 
-            {/* Rating */}
-            <Rating rating={averageRating} count={product.totalReviews || 0} />
+              <Rating rating={averageRating} count={product.totalReviews || 0} />
 
-            {/* Price */}
-            <div className="flex items-center gap-3">
-              <span className="text-3xl font-bold">{formatPrice(product.price)}</span>
-              {product.compareAtPrice && (
-                <span className="text-lg text-muted-foreground line-through">
-                  {formatPrice(product.compareAtPrice)}
-                </span>
-              )}
-              {discount > 0 && (
-                <Badge className="bg-green-500 text-white text-sm px-3 py-1">
-                  Save {discount}%
-                </Badge>
-              )}
+              <div className="flex items-center gap-3 pt-1">
+                <span className="text-3xl font-bold tabular-nums">{formatPrice(product.price)}</span>
+                {product.compareAtPrice && (
+                  <span className="text-lg text-muted-foreground line-through tabular-nums">
+                    {formatPrice(product.compareAtPrice)}
+                  </span>
+                )}
+                {discount > 0 && (
+                  <span className="rounded-full bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white">
+                    Save {discount}%
+                  </span>
+                )}
+              </div>
             </div>
 
             {/* Stock Status */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 text-sm">
+              <span
+                className={cn(
+                  'h-1.5 w-1.5 rounded-full',
+                  isOutOfStock ? 'bg-red-500' : isLowStock ? 'bg-orange-500' : 'bg-emerald-500'
+                )}
+              />
               {isOutOfStock ? (
-                <span className="text-red-500 font-medium flex items-center gap-1">
-                  <AlertCircle className="h-4 w-4" />
-                  Out of Stock
-                </span>
+                <span className="font-medium text-muted-foreground">Currently unavailable</span>
               ) : (
-                <span className="text-green-600 font-medium flex items-center gap-1">
-                  <CheckCircle className="h-4 w-4" />
-                  In Stock ({product.stock} available)
+                <span className="font-medium text-foreground">
+                  In stock · {product.stock} available
                 </span>
               )}
             </div>
 
             {/* Description */}
-            <div className="prose prose-sm dark:prose-invert max-w-none">
-              <p className="text-muted-foreground leading-relaxed">
-                {product.description}
-              </p>
+            <div className="space-y-2 border-t border-border pt-6">
+              <h3 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                Description
+              </h3>
+              <p className="leading-relaxed text-muted-foreground">{product.description}</p>
             </div>
-
-            <Separator />
 
             {/* Quantity & Add to Cart */}
             {!isOutOfStock && (
-              <div className="space-y-4">
+              <div className="space-y-4 border-t border-border pt-6">
                 <div className="flex items-center gap-4">
-                  <span className="text-sm font-medium">Quantity:</span>
-                  <div className="flex items-center border rounded-lg">
+                  <span className="text-sm font-medium">Quantity</span>
+                  <div className="flex items-center rounded-full border border-border">
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-10 w-10 rounded-none hover:bg-muted"
+                      className="h-11 w-11 rounded-full"
                       onClick={() => handleQuantityChange(quantity - 1)}
                       disabled={quantity <= 1}
                       aria-label="Decrease quantity"
                     >
-                      <Minus className="h-4 w-4" />
+                      <Minus className="h-3.5 w-3.5" />
                     </Button>
-                    <span className="w-12 text-center font-medium text-lg" aria-label={`Quantity: ${quantity}`}>
+                    <span className="w-10 text-center text-sm font-semibold tabular-nums" aria-label={`Quantity: ${quantity}`}>
                       {quantity}
                     </span>
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-10 w-10 rounded-none hover:bg-muted"
+                      className="h-11 w-11 rounded-full"
                       onClick={() => handleQuantityChange(quantity + 1)}
                       disabled={quantity >= product.stock}
                       aria-label="Increase quantity"
                     >
-                      <Plus className="h-4 w-4" />
+                      <Plus className="h-3.5 w-3.5" />
                     </Button>
                   </div>
                 </div>
@@ -475,112 +479,130 @@ export default function ProductDetailPage() {
                 <div className="flex flex-wrap gap-3">
                   <Button
                     size="lg"
-                    className="flex-1 min-w-45 bg-orange-500 hover:bg-orange-600 text-white"
+                    className="h-12 min-w-45 flex-1 gap-2 rounded-full bg-zinc-950 text-white hover:bg-zinc-800"
                     onClick={handleAddToCart}
                     disabled={addToCartLoading}
                   >
                     {addToCartLoading ? (
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
-                      <ShoppingCart className="h-4 w-4 mr-2" />
+                      <ShoppingCart className="h-4 w-4" />
                     )}
-                    Add to Cart
+                    Add to cart
                   </Button>
                   <Button
-                    size="lg"
+                    size="icon"
                     variant="outline"
-                    className="px-6"
+                    className="h-12 w-12 rounded-full hover:border-orange-300 hover:bg-orange-50 dark:hover:bg-orange-950/20"
                     onClick={handleWishlistToggle}
                     disabled={isWishlistLoading}
                     aria-label={isInWishlist ? 'Remove from wishlist' : 'Add to wishlist'}
                   >
-                    <Heart className={cn(
-                      "h-5 w-5 transition-colors",
-                      isInWishlist ? "fill-red-500 text-red-500" : "text-muted-foreground"
-                    )} />
+                    <Heart
+                      className={cn(
+                        'h-5 w-5 transition-colors',
+                        isInWishlist ? 'fill-orange-600 text-orange-600' : 'text-muted-foreground'
+                      )}
+                    />
                   </Button>
                   <Button
-                    size="lg"
+                    size="icon"
                     variant="outline"
-                    className="px-6"
+                    className="h-12 w-12 rounded-full hover:border-orange-300 hover:bg-orange-50 dark:hover:bg-orange-950/20"
                     onClick={handleShare}
                     aria-label="Share product"
                   >
-                    <Share2 className="h-5 w-5" />
+                    <Share2 className="h-5 w-5 text-muted-foreground" />
                   </Button>
                 </div>
 
                 {/* Buy Now Button */}
                 <Button
                   size="lg"
-                  variant="default"
-                  className="w-full bg-gray-900 hover:bg-gray-800 text-white dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100"
+                  className="h-12 w-full rounded-full bg-orange-600 text-white hover:bg-orange-700"
                   onClick={handleAddToCart}
                   disabled={addToCartLoading}
                 >
-                  Buy Now
+                  Buy now
                 </Button>
               </div>
             )}
 
             {/* Product Features */}
-            <div className="grid grid-cols-2 gap-3 pt-4">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Truck className="h-4 w-4 text-orange-500" />
-                Free Shipping
+            <div className="grid grid-cols-2 gap-3 border-t border-border pt-6 text-center sm:grid-cols-4">
+              <div className="flex flex-col items-center gap-1.5">
+                <Truck className="h-4 w-4 text-orange-600" />
+                <p className="text-[11px] text-muted-foreground">Free shipping</p>
               </div>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Shield className="h-4 w-4 text-orange-500" />
-                Secure Payment
+              <div className="flex flex-col items-center gap-1.5">
+                <Shield className="h-4 w-4 text-orange-600" />
+                <p className="text-[11px] text-muted-foreground">Secure payment</p>
               </div>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <RefreshCw className="h-4 w-4 text-orange-500" />
-                Easy Returns
+              <div className="flex flex-col items-center gap-1.5">
+                <RefreshCw className="h-4 w-4 text-orange-600" />
+                <p className="text-[11px] text-muted-foreground">Easy returns</p>
               </div>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Package className="h-4 w-4 text-orange-500" />
-                Quality Guarantee
+              <div className="flex flex-col items-center gap-1.5">
+                <Package className="h-4 w-4 text-orange-600" />
+                <p className="text-[11px] text-muted-foreground">Quality guarantee</p>
               </div>
             </div>
-          </motion.div>
+          </div>
         </div>
 
         {/* Reviews & Details Tabs */}
-        <div className="mt-12">
+        <div className="mt-16">
           <Tabs defaultValue="reviews" className="w-full">
-            <TabsList className="grid w-full max-w-md grid-cols-2" aria-label="Product information tabs">
-              <TabsTrigger value="reviews">Reviews</TabsTrigger>
-              <TabsTrigger value="details">Details</TabsTrigger>
+            <TabsList
+              className="grid w-full max-w-md grid-cols-2 rounded-full bg-muted p-1"
+              aria-label="Product information tabs"
+            >
+              <TabsTrigger value="reviews" className="rounded-full data-[state=active]:shadow-sm">
+                Reviews
+              </TabsTrigger>
+              <TabsTrigger value="details" className="rounded-full data-[state=active]:shadow-sm">
+                Details
+              </TabsTrigger>
             </TabsList>
-            <TabsContent value="reviews" className="mt-6">
+            <TabsContent value="reviews" className="mt-8">
               <div className="space-y-6">
                 <ReviewList productId={product.id} />
                 {isAuthenticated && (
-                  <div className="mt-8">
-                    <h3 className="font-semibold text-lg mb-4">Write a Review</h3>
+                  <div className="mt-8 border-t border-border pt-8">
+                    <h3 className="mb-4 text-lg font-semibold">Write a review</h3>
                     <ReviewForm productId={product.id} />
                   </div>
                 )}
               </div>
             </TabsContent>
-            <TabsContent value="details" className="mt-6">
-              <div className="space-y-4 max-w-2xl">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Product ID</p>
-                    <p className="font-medium">#{product.id}</p>
+            <TabsContent value="details" className="mt-8">
+              <div className="max-w-2xl space-y-4">
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="space-y-1">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                      Product ID
+                    </p>
+                    <p className="font-semibold tabular-nums">#{product.id}</p>
                   </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Category</p>
-                    <p className="font-medium">{product.category?.name || 'Uncategorized'}</p>
+                  <div className="space-y-1">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                      Category
+                    </p>
+                    <p className="font-semibold">{product.category?.name || 'Uncategorized'}</p>
                   </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Stock Status</p>
-                    <p className="font-medium">{isOutOfStock ? 'Out of Stock' : `${product.stock} in stock`}</p>
+                  <div className="space-y-1">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                      Stock status
+                    </p>
+                    <p className="font-semibold">
+                      {isOutOfStock ? 'Out of stock' : `${product.stock} in stock`}
+                    </p>
                   </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Rating</p>
-                    <p className="font-medium">{formatRating(product.averageRating)}</p>
+                  <div className="space-y-1">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                      Rating
+                    </p>
+                    <p className="font-semibold tabular-nums">{formatRating(product.averageRating)}</p>
                   </div>
                 </div>
               </div>
@@ -589,7 +611,9 @@ export default function ProductDetailPage() {
         </div>
 
         {/* Related Products */}
-        <RelatedProducts currentProductId={product.id} categoryId={product.category?.id} />
+        <div className="mt-16">
+          <RelatedProducts currentProductId={product.id} categoryId={product.category?.id} />
+        </div>
       </div>
     </ErrorBoundary>
   );
@@ -601,28 +625,35 @@ export default function ProductDetailPage() {
 
 function ProductDetailSkeleton() {
   return (
-    <div className="container mx-auto px-4 py-4 md:py-6">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12">
+    <div className="container mx-auto px-4 py-6 md:py-10">
+      <Skeleton className="mb-6 h-4 w-56 rounded-full" />
+      <div className="grid grid-cols-1 gap-10 lg:grid-cols-2 lg:gap-14">
         <div className="space-y-4">
           <Skeleton className="aspect-square w-full rounded-2xl" />
           <div className="flex gap-3">
             {[...Array(4)].map((_, i) => (
-              <Skeleton key={i} className="w-20 h-20 rounded-lg" />
+              <Skeleton key={i} className="h-20 w-20 rounded-xl" />
             ))}
           </div>
         </div>
-        <div className="space-y-6">
-          <Skeleton className="h-10 w-3/4" />
-          <Skeleton className="h-6 w-32" />
-          <Skeleton className="h-8 w-40" />
-          <Skeleton className="h-6 w-32" />
-          <div className="space-y-2">
+        <div className="space-y-7">
+          <div className="space-y-3">
+            <Skeleton className="h-10 w-3/4" />
+            <Skeleton className="h-5 w-32" />
+            <Skeleton className="h-9 w-40" />
+          </div>
+          <Skeleton className="h-5 w-40" />
+          <div className="space-y-2 border-t border-border pt-6">
+            <Skeleton className="h-4 w-24" />
             <Skeleton className="h-4 w-full" />
             <Skeleton className="h-4 w-full" />
             <Skeleton className="h-4 w-3/4" />
           </div>
-          <Skeleton className="h-12 w-full" />
-          <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-4 border-t border-border pt-6">
+            <Skeleton className="h-11 w-full rounded-full" />
+            <Skeleton className="h-12 w-full rounded-full" />
+          </div>
+          <div className="grid grid-cols-2 gap-3 border-t border-border pt-6 sm:grid-cols-4">
             {[...Array(4)].map((_, i) => (
               <Skeleton key={i} className="h-10 w-full" />
             ))}

@@ -1,3 +1,4 @@
+// components/cart/CartItem.tsx
 'use client';
 
 import Image from 'next/image';
@@ -7,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { formatPrice } from '@/lib/utils';
 import { useCart } from '@/hooks/useCart';
 import { toast } from 'sonner';
+import { useState, useMemo } from 'react';
 
 interface CartItemProps {
   item: CartItemType;
@@ -14,6 +16,15 @@ interface CartItemProps {
 
 export function CartItem({ item }: CartItemProps) {
   const { updateQuantity, removeItem } = useCart();
+  const [imageError, setImageError] = useState(false);
+
+  // Provide fallback image
+  const imageSrc = useMemo(() => {
+    if (!item.product.imageUrl || imageError) {
+      return '/placeholder-image.png';
+    }
+    return item.product.imageUrl;
+  }, [item.product.imageUrl, imageError]);
 
   const handleUpdateQuantity = async (quantity: number) => {
     try {
@@ -35,18 +46,13 @@ export function CartItem({ item }: CartItemProps) {
   return (
     <div className="flex items-center gap-4 p-4 border rounded-lg bg-white">
       <div className="relative h-20 w-20 shrink-0 bg-muted rounded-md overflow-hidden">
-        {item.product.imageUrl ? (
-          <Image
-            src={item.product.imageUrl}
-            alt={item.product.title}
-            fill
-            className="object-cover"
-          />
-        ) : (
-          <div className="h-full w-full flex items-center justify-center text-muted-foreground">
-            No image
-          </div>
-        )}
+        <Image
+          src={imageSrc}
+          alt={item.product.title}
+          fill
+          className="object-cover"
+          onError={() => setImageError(true)}
+        />
       </div>
 
       <div className="flex-1 min-w-0">

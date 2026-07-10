@@ -9,12 +9,21 @@ import { User, AuthResponse, LoginCredentials, RegisterData, RegisterVendorData 
 export class AuthError extends Error {
   public readonly statusCode: number;
   public readonly errors?: Record<string, string[]>;
+  public retryAfter: number;
+  public requiresTwoFactor?: boolean;
 
-  constructor(message: string, statusCode: number = 500, errors?: Record<string, string[]>) {
+  constructor(
+    message: string, 
+    statusCode: number = 500, 
+    errors?: Record<string, string[]>,
+    requiresTwoFactor: boolean = false
+  ) {
     super(message);
     this.name = 'AuthError';
     this.statusCode = statusCode;
     this.errors = errors;
+    this.retryAfter = 0;
+    this.requiresTwoFactor = requiresTwoFactor;
     Object.setPrototypeOf(this, AuthError.prototype);
   }
 
@@ -34,6 +43,14 @@ export class AuthError extends Error {
     return this.statusCode === 429;
   }
 
+  isNetworkError(): boolean {
+    return this.statusCode === 0;
+  }
+
+  isTwoFactorRequired(): boolean {
+    return this.requiresTwoFactor === true;
+  }
+
   getDisplayMessage(): string {
     if (this.isValidationError() && this.errors) {
       const messages: string[] = [];
@@ -51,7 +68,7 @@ export class AuthError extends Error {
 }
 
 // ============================================================
-// BACKEND RESPONSE TYPES
+// BACKEND RESPONSE TYPES (Defined inside this file)
 // ============================================================
 
 interface BackendUser {
@@ -74,6 +91,7 @@ interface BackendUser {
 interface BackendAuthResponse {
   message: string;
   user: BackendUser;
+  requiresTwoFactor?: boolean;
 }
 
 interface BackendRegisterResponse {
@@ -129,10 +147,17 @@ function createUser(data: BackendUser): User {
 
 function toAuthError(error: any, fallbackMessage: string): AuthError {
   if (error instanceof AuthError) return error;
+  
+  if (error?.statusCode === 0 || error?.message?.includes('Network error')) {
+    return new AuthError('Network error - Please check your connection', 0);
+  }
+  
   const statusCode = error?.statusCode ?? 500;
   const message = error?.message ?? fallbackMessage;
   const errors = error?.errors;
-  return new AuthError(message, statusCode, errors);
+  const requiresTwoFactor = error?.requiresTwoFactor ?? false;
+  
+  return new AuthError(message, statusCode, errors, requiresTwoFactor);
 }
 
 // ============================================================
@@ -141,18 +166,65 @@ function toAuthError(error: any, fallbackMessage: string): AuthError {
 
 export const authService = {
   // ============================================================
-  // AUTHENTICATION
+  // LOGIN
   // ============================================================
 
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
     try {
       const response = await apiClient.post('/auth/login', credentials);
       const data = unwrapData<BackendAuthResponse>(response.data);
-      return { message: data.message, user: createUser(data.user) };
+      
+      return {
+        message: data.message,
+        user: createUser(data.user),
+        requiresTwoFactor: data.requiresTwoFactor || false,
+      };
     } catch (error: any) {
       throw toAuthError(error, 'Login failed. Please try again.');
     }
   },
+
+  // ============================================================
+  // VERIFY 2FA AND COMPLETE LOGIN
+  // ============================================================
+
+  async verifyTwoFactorAndLogin(token: string, email: string, password: string): Promise<AuthResponse> {
+    try {
+      const response = await apiClient.post('/auth/login', {
+        email,
+        password,
+        twoFactorToken: token,
+      });
+      const data = unwrapData<BackendAuthResponse>(response.data);
+      return {
+        message: data.message,
+        user: createUser(data.user),
+        requiresTwoFactor: false,
+      };
+    } catch (error: any) {
+      if (error?.statusCode === 401) {
+        throw new AuthError('Invalid 2FA code. Please try again.', 401);
+      }
+      throw toAuthError(error, 'Failed to verify 2FA code.');
+    }
+  },
+
+  // ============================================================
+  // VERIFY 2FA TOKEN (just validation)
+  // ============================================================
+
+  async verifyTwoFactor(token: string): Promise<{ valid: boolean }> {
+    try {
+      const response = await apiClient.post('/auth/2fa/verify', { token });
+      return unwrapData(response.data);
+    } catch (error: any) {
+      throw toAuthError(error, 'Failed to verify 2FA token.');
+    }
+  },
+
+  // ============================================================
+  // REGISTER
+  // ============================================================
 
   async register(data: RegisterData): Promise<AuthResponse> {
     try {
@@ -171,11 +243,16 @@ export const authService = {
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         },
+        requiresTwoFactor: false,
       };
     } catch (error: any) {
       throw toAuthError(error, 'Registration failed. Please try again.');
     }
   },
+
+  // ============================================================
+  // REGISTER VENDOR
+  // ============================================================
 
   async registerVendor(data: RegisterVendorData): Promise<AuthResponse> {
     try {
@@ -199,17 +276,26 @@ export const authService = {
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         },
+        requiresTwoFactor: false,
       };
     } catch (error: any) {
       throw toAuthError(error, 'Vendor registration failed. Please try again.');
     }
   },
 
+  // ============================================================
+  // EMAIL VERIFICATION
+  // ============================================================
+
   async verifyEmail(email: string, code: string): Promise<AuthResponse> {
     try {
       const response = await apiClient.post('/auth/verify-email', { email, code });
       const data = unwrapData<BackendAuthResponse>(response.data);
-      return { message: data.message, user: createUser(data.user) };
+      return { 
+        message: data.message, 
+        user: createUser(data.user), 
+        requiresTwoFactor: false 
+      };
     } catch (error: any) {
       throw toAuthError(error, 'Verification failed. Please try again.');
     }
@@ -223,6 +309,10 @@ export const authService = {
       throw toAuthError(error, 'Failed to resend verification code.');
     }
   },
+
+  // ============================================================
+  // SESSION MANAGEMENT
+  // ============================================================
 
   async refresh(): Promise<User> {
     try {
@@ -239,6 +329,10 @@ export const authService = {
       const response = await apiClient.get('/auth/me');
       return createUser(unwrapData<BackendUser>(response.data));
     } catch (error: any) {
+      if (error?.statusCode === 0 || error?.message?.includes('Network error')) {
+        console.warn('Backend not available - returning null');
+        throw new AuthError('Backend server is not available. Please try again later.', 0);
+      }
       throw toAuthError(error, 'Session expired. Please login again.');
     }
   },
@@ -302,12 +396,9 @@ export const authService = {
   },
 
   // ============================================================
-  // 🆕 TWO-FACTOR AUTHENTICATION (2FA) METHODS
+  // 2FA SETUP METHODS
   // ============================================================
 
-  /**
-   * Generate 2FA secret and QR code for authenticator app
-   */
   async generateTwoFactor(): Promise<{ secret: string; qrCode: string; otpauthUrl: string }> {
     try {
       const response = await apiClient.post('/auth/2fa/generate');
@@ -317,9 +408,6 @@ export const authService = {
     }
   },
 
-  /**
-   * Enable 2FA by verifying a TOTP token
-   */
   async enableTwoFactor(token: string): Promise<{ verified: boolean; backupCodes: string[] }> {
     try {
       const response = await apiClient.post('/auth/2fa/enable', { token });
@@ -329,21 +417,6 @@ export const authService = {
     }
   },
 
-  /**
-   * Verify a TOTP token during login or for validation
-   */
-  async verifyTwoFactor(token: string): Promise<{ valid: boolean }> {
-    try {
-      const response = await apiClient.post('/auth/2fa/verify', { token });
-      return unwrapData(response.data);
-    } catch (error: any) {
-      throw toAuthError(error, 'Failed to verify 2FA token.');
-    }
-  },
-
-  /**
-   * Disable 2FA by verifying a TOTP token
-   */
   async disableTwoFactor(token: string): Promise<{ message: string }> {
     try {
       const response = await apiClient.post('/auth/2fa/disable', { token });
@@ -353,9 +426,6 @@ export const authService = {
     }
   },
 
-  /**
-   * Regenerate backup codes (requires valid TOTP or existing 2FA)
-   */
   async regenerateBackupCodes(): Promise<{ backupCodes: string[] }> {
     try {
       const response = await apiClient.post('/auth/2fa/backup-codes');

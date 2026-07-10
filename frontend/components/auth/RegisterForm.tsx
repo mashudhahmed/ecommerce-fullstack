@@ -1,351 +1,64 @@
 // components/auth/RegisterForm.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { toast } from 'sonner';
-import { Eye, EyeOff, Loader2, AlertCircle, CheckCircle } from 'lucide-react';
-import { registerSchema, type RegisterInput } from '@/validations/schemas';
-import { useAuth, AuthError } from '@/hooks/useAuth';
-import { Button } from '@/components/ui/button';
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
-import Link from 'next/link';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { useState } from 'react';
+import Image from 'next/image';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Users, Store } from 'lucide-react';
+import { UserRegistrationForm } from './UserRegistrationForm';
+import { VendorRegistrationForm } from './VendorRegistrationForm';
 
 export function RegisterForm() {
-  const router = useRouter();
-  const { register, registerLoading, registerError } = useAuth();
-
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [email, setEmail] = useState<string>('');
-
-  // ✅ Clear errors when component mounts
-  useEffect(() => {
-    setErrorMessage(null);
-    setSuccessMessage(null);
-  }, []);
-
-  const form = useForm<RegisterInput>({
-    resolver: zodResolver(registerSchema),
-    defaultValues: {
-      name: '',
-      email: '',
-      password: '',
-      confirmPassword: '',
-    },
-  });
-
-  const onSubmit = async (data: RegisterInput) => {
-    // Clear previous messages
-    setErrorMessage(null);
-    setSuccessMessage(null);
-    form.clearErrors();
-
-    try {
-      // Send only required fields to backend
-      const payload = {
-        name: data.name,
-        email: data.email,
-        password: data.password,
-      };
-
-      console.log('📤 Registering user:', payload.email);
-
-      const result = await register(payload);
-
-      console.log('✅ Registration response:', result);
-
-      setEmail(data.email);
-
-      // ✅ Show success message
-      setSuccessMessage(result.message || 'Registration successful!');
-      toast.success(result.message || 'Registration successful!');
-
-      // ✅ Redirect to verification page after a delay
-      setTimeout(() => {
-        router.push(`/verify-email?email=${encodeURIComponent(data.email)}`);
-      }, 2000);
-    } catch (error: any) {
-      console.error('❌ Registration error:', error);
-
-      // ✅ Extract meaningful error message
-      let message = 'Registration failed. Please try again.';
-      let isConflict = false;
-      let validationErrors = null;
-
-      // ✅ Handle AuthError
-      if (error instanceof AuthError) {
-        message = error.getDisplayMessage();
-        if (error.isConflict()) {
-          isConflict = true;
-        }
-        if (error.isValidationError()) {
-          validationErrors = error.errors;
-        }
-      }
-      // ✅ Handle plain error
-      else if (error?.message) {
-        message = error.message;
-      } else if (error?.response?.data?.message) {
-        message = error.response.data.message;
-      } else if (error?.data?.message) {
-        message = error.data.message;
-      }
-
-      // ✅ Check for conflict (email already exists)
-      if (message.toLowerCase().includes('already registered') ||
-          message.toLowerCase().includes('email already') ||
-          isConflict) {
-        setErrorMessage('This email is already registered. Please login instead.');
-        toast.error('Email already exists');
-        // Show login link
-        setTimeout(() => {
-          router.push('/login');
-        }, 3000);
-        return;
-      }
-
-      // ✅ Handle validation errors
-      if (validationErrors) {
-        const errorMessages = Object.entries(validationErrors)
-          .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
-          .join('\n');
-        setErrorMessage(errorMessages);
-        toast.error('Please check your input');
-        return;
-      }
-
-      // ✅ Generic error
-      setErrorMessage(message);
-      toast.error(message);
-    }
-  };
-
-  const togglePasswordVisibility = () => setShowPassword(!showPassword);
-  const toggleConfirmPasswordVisibility = () => setShowConfirmPassword(!showConfirmPassword);
-
-  // ✅ Show success state
-  if (successMessage) {
-    return (
-      <Card className="w-full max-w-md mx-auto shadow-lg">
-        <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold text-center">Registration Successful!</CardTitle>
-          <CardDescription className="text-center">
-            Please check your email to verify your account
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Alert variant="default" className="bg-green-50 border-green-200">
-            <CheckCircle className="h-4 w-4 text-green-500" />
-            <AlertTitle>Verification Email Sent</AlertTitle>
-            <AlertDescription>
-              We've sent a verification code to <strong>{email}</strong>.
-              Please check your inbox and spam folder.
-            </AlertDescription>
-          </Alert>
-          <div className="text-center space-y-2">
-            <p className="text-sm text-muted-foreground">
-              Didn't receive the email? Check your spam folder or
-            </p>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setSuccessMessage(null);
-                setErrorMessage(null);
-              }}
-            >
-              Try again
-            </Button>
-          </div>
-        </CardContent>
-        <CardFooter className="flex justify-center border-t pt-6">
-          <Link href="/login" className="text-sm text-primary hover:underline">
-            Go to Login
-          </Link>
-        </CardFooter>
-      </Card>
-    );
-  }
+  const [activeTab, setActiveTab] = useState<'user' | 'vendor'>('user');
 
   return (
-    <Card className="w-full max-w-md mx-auto shadow-lg">
-      <CardHeader className="space-y-1">
+    <Card className="w-full max-w-md mx-auto shadow-lg border-primary/10">
+      <CardHeader className="space-y-1 text-center">
+        <div className="flex justify-center mb-2">
+          <div className="relative h-14 w-14">
+            <Image src="/logo.png" alt="SnapCart" fill className="object-contain" priority />
+          </div>
+        </div>
         <CardTitle className="text-2xl font-bold">Create Account</CardTitle>
         <CardDescription>Sign up to start shopping</CardDescription>
       </CardHeader>
 
       <CardContent>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            {/* ✅ Error Display */}
-            {errorMessage && (
-              <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Error</AlertTitle>
-                <AlertDescription className="whitespace-pre-line">
-                  {errorMessage}
-                </AlertDescription>
-              </Alert>
-            )}
-
-            <FormField
-              control={form.control}
-              name="name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Full Name</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="John Doe"
-                      disabled={registerLoading}
-                      autoComplete="name"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="email"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Email</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="john@example.com"
-                      type="email"
-                      disabled={registerLoading}
-                      autoComplete="email"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="password"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Password</FormLabel>
-                  <FormControl>
-                    <div className="relative">
-                      <Input
-                        type={showPassword ? 'text' : 'password'}
-                        placeholder="Enter password"
-                        disabled={registerLoading}
-                        className="pr-10"
-                        autoComplete="new-password"
-                        {...field}
-                      />
-                      <button
-                        type="button"
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                        onClick={togglePasswordVisibility}
-                        tabIndex={-1}
-                      >
-                        {showPassword ? (
-                          <EyeOff className="h-4 w-4" />
-                        ) : (
-                          <Eye className="h-4 w-4" />
-                        )}
-                      </button>
-                    </div>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="confirmPassword"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Confirm Password</FormLabel>
-                  <FormControl>
-                    <div className="relative">
-                      <Input
-                        type={showConfirmPassword ? 'text' : 'password'}
-                        placeholder="Confirm password"
-                        disabled={registerLoading}
-                        className="pr-10"
-                        autoComplete="new-password"
-                        {...field}
-                      />
-                      <button
-                        type="button"
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                        onClick={toggleConfirmPasswordVisibility}
-                        tabIndex={-1}
-                      >
-                        {showConfirmPassword ? (
-                          <EyeOff className="h-4 w-4" />
-                        ) : (
-                          <Eye className="h-4 w-4" />
-                        )}
-                      </button>
-                    </div>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <Button
-              type="submit"
-              className="w-full"
-              disabled={registerLoading}
-              size="lg"
+        <Tabs 
+          value={activeTab} 
+          onValueChange={(v) => setActiveTab(v as 'user' | 'vendor')}
+          className="w-full"
+        >
+          <TabsList className="grid w-full grid-cols-2 mb-6">
+            <TabsTrigger 
+              value="user" 
+              className="flex items-center gap-2 data-[state=active]:bg-orange-500 data-[state=active]:text-white"
             >
-              {registerLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Creating account...
-                </>
-              ) : (
-                'Create Account'
-              )}
-            </Button>
-          </form>
-        </Form>
-      </CardContent>
+              <Users className="h-4 w-4" />
+              User
+            </TabsTrigger>
+            <TabsTrigger 
+              value="vendor" 
+              className="flex items-center gap-2 data-[state=active]:bg-orange-500 data-[state=active]:text-white"
+            >
+              <Store className="h-4 w-4" />
+              Vendor
+            </TabsTrigger>
+          </TabsList>
 
-      <CardFooter className="flex justify-center border-t pt-6">
-        <p className="text-sm text-muted-foreground">
-          Already have an account?{' '}
-          <Link href="/login" className="text-primary hover:underline font-medium">
-            Login
-          </Link>
-        </p>
-      </CardFooter>
+          <TabsContent value="user">
+            <UserRegistrationForm />
+          </TabsContent>
+
+          <TabsContent value="vendor">
+            <VendorRegistrationForm />
+          </TabsContent>
+        </Tabs>
+      </CardContent>
     </Card>
   );
 }
+
+// ✅ Also export as default for compatibility
+export default RegisterForm;

@@ -2,7 +2,6 @@
 import { apiClient, unwrapData } from '@/lib/api-client';
 import { Order } from '@/types';
 
-// ✅ EXPORTED
 export interface CreateOrderData {
   items: {
     productId: number;
@@ -29,10 +28,9 @@ export interface AdminOrderStats {
   cancelledOrders: number;
 }
 
-// ✅ EXPORTED
 export const orderService = {
   // ============================================================
-  // GET USER ORDERS
+  // GET USER ORDERS - Returns empty array for unauthenticated
   // ============================================================
   async getOrders(): Promise<Order[]> {
     try {
@@ -41,9 +39,14 @@ export const orderService = {
       return Array.isArray(data) ? data : [];
     } catch (error: any) {
       const status = error?.response?.status || error?.statusCode || 'unknown';
-      const message = error?.response?.data?.message || error?.message || 'Unknown error';
-      console.error(`❌ Failed to fetch orders (${status}):`, message);
-      if (status === 401 || status === 403) return [];
+      
+      // Return empty array for auth errors
+      if (status === 401 || status === 403) {
+        console.log('User not authenticated, returning empty orders');
+        return [];
+      }
+      
+      console.error('Failed to fetch orders:', error?.message || 'Unknown error');
       return [];
     }
   },
@@ -78,7 +81,7 @@ export const orderService = {
   },
 
   // ============================================================
-  // GET ORDER SUMMARY
+  // GET ORDER SUMMARY - Returns empty for unauthenticated
   // ============================================================
   async getOrderSummary(): Promise<OrderSummary> {
     try {
@@ -92,8 +95,24 @@ export const orderService = {
       };
     } catch (error: any) {
       const status = error?.response?.status || error?.statusCode || 'unknown';
-      console.error(`❌ Failed to fetch order summary (${status}):`, error?.message || 'Unknown error');
-      return { totalOrders: 0, totalSpent: 0, pendingOrders: 0, recentOrders: [] };
+      
+      if (status === 401 || status === 403) {
+        console.log('User not authenticated, returning empty summary');
+        return {
+          totalOrders: 0,
+          totalSpent: 0,
+          pendingOrders: 0,
+          recentOrders: [],
+        };
+      }
+      
+      console.error('Failed to fetch order summary:', error?.message || 'Unknown error');
+      return {
+        totalOrders: 0,
+        totalSpent: 0,
+        pendingOrders: 0,
+        recentOrders: [],
+      };
     }
   },
 
@@ -107,8 +126,8 @@ export const orderService = {
       return Array.isArray(data) ? data : [];
     } catch (error: any) {
       const status = error?.response?.status || error?.statusCode || 'unknown';
-      console.error(`❌ Failed to fetch vendor orders (${status}):`, error?.message || 'Unknown error');
       if (status === 401 || status === 403) return [];
+      console.error('Failed to fetch vendor orders:', error?.message || 'Unknown error');
       return [];
     }
   },
@@ -122,7 +141,8 @@ export const orderService = {
       return unwrapData(response.data) || {};
     } catch (error: any) {
       const status = error?.response?.status || error?.statusCode || 'unknown';
-      console.error(`❌ Failed to fetch vendor order summary (${status}):`, error?.message || 'Unknown error');
+      if (status === 401 || status === 403) return {};
+      console.error('Failed to fetch vendor order summary:', error?.message || 'Unknown error');
       return {};
     }
   },
@@ -145,7 +165,7 @@ export const orderService = {
       return Array.isArray(data) ? data : [];
     } catch (error: any) {
       const status = error?.response?.status || error?.statusCode || 'unknown';
-      console.error(`❌ Failed to fetch all orders (${status}):`, error?.message || 'Unknown error');
+      console.error('Failed to fetch all orders:', error?.message || 'Unknown error');
       return [];
     }
   },
@@ -168,7 +188,7 @@ export const orderService = {
       };
     } catch (error: any) {
       const status = error?.response?.status || error?.statusCode || 'unknown';
-      console.error(`❌ Failed to fetch admin order stats (${status}):`, error?.message || 'Unknown error');
+      console.error('Failed to fetch admin order stats:', error?.message || 'Unknown error');
       return {
         totalOrders: 0,
         totalRevenue: 0,

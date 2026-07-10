@@ -1,19 +1,23 @@
 // hooks/useWishlist.ts
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { wishlistService } from '@/services/wishlist.service';
+import { useAuth } from './useAuth';
 import { toast } from 'sonner';
 
 export function useWishlist() {
+  const { isAuthenticated } = useAuth();
   const queryClient = useQueryClient();
 
   const { data: wishlist, isLoading } = useQuery({
     queryKey: ['wishlist'],
     queryFn: () => wishlistService.getWishlist(),
+    enabled: isAuthenticated,
   });
 
   const { data: count } = useQuery({
     queryKey: ['wishlist', 'count'],
     queryFn: wishlistService.getWishlistCount,
+    enabled: isAuthenticated,
   });
 
   const addMutation = useMutation({
@@ -21,7 +25,6 @@ export function useWishlist() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['wishlist'] });
       queryClient.invalidateQueries({ queryKey: ['wishlist', 'count'] });
-      toast.success('Added to wishlist');
     },
     onError: (error: any) => {
       if (error?.statusCode === 409) {
@@ -37,7 +40,6 @@ export function useWishlist() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['wishlist'] });
       queryClient.invalidateQueries({ queryKey: ['wishlist', 'count'] });
-      toast.success('Removed from wishlist');
     },
     onError: (error: any) => {
       toast.error(error?.message || 'Failed to remove from wishlist');
@@ -49,7 +51,6 @@ export function useWishlist() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['wishlist'] });
       queryClient.invalidateQueries({ queryKey: ['wishlist', 'count'] });
-      toast.success('Wishlist cleared');
     },
     onError: (error: any) => {
       toast.error(error?.message || 'Failed to clear wishlist');
@@ -57,6 +58,7 @@ export function useWishlist() {
   });
 
   const checkInWishlist = async (productId: number): Promise<boolean> => {
+    if (!isAuthenticated) return false;
     return wishlistService.isInWishlist(productId);
   };
 

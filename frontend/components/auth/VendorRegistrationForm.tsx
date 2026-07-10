@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Eye, EyeOff, Loader2, AlertCircle, Mail, Lock, User, 
   Building2, Phone, MapPin, FileText, ArrowRight, Store 
@@ -148,19 +149,25 @@ export function VendorRegistrationForm() {
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-        {errorMessage && (
-          <div className="rounded-lg bg-red-50 dark:bg-red-950/20 p-4 border border-red-200 dark:border-red-800 animate-fade-in">
-            <div className="flex items-start gap-3">
-              <AlertCircle className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <p className="text-sm font-medium text-red-700 dark:text-red-400">
+        <AnimatePresence>
+          {errorMessage && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+            >
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Error</AlertTitle>
+                <AlertDescription className="whitespace-pre-line">
                   {errorMessage}
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
+                </AlertDescription>
+              </Alert>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
+        {/* Common Fields */}
         <FormField
           control={form.control}
           name="name"
@@ -281,6 +288,7 @@ export function VendorRegistrationForm() {
           )}
         />
 
+        {/* ✅ Vendor Specific Fields */}
         <div className="space-y-4 border-t pt-4 mt-2">
           <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
             <Store className="h-4 w-4" />
@@ -396,6 +404,7 @@ export function VendorRegistrationForm() {
           />
         </div>
 
+        {/* Terms & Submit */}
         <div className="flex items-start gap-2 pt-1">
           <input
             type="checkbox"
@@ -438,5 +447,3 @@ export function VendorRegistrationForm() {
     </Form>
   );
 }
-
-export default VendorRegistrationForm;

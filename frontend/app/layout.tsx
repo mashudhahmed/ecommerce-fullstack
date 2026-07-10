@@ -12,14 +12,17 @@ import Loading from './loading';
 const geist = Geist({ subsets: ['latin'], variable: '--font-sans' });
 const inter = Inter({ subsets: ['latin'] });
 
-// ✅ Generate metadata using utility
-export const metadata: Metadata = generateMetadata({
-  title: 'Home',
-  description: 'Shop the best products at SnapCart - Your one-stop e-commerce destination',
-  url: '/',
-  type: 'website',
-  keywords: ['ecommerce', 'shop', 'products', 'snapcart', 'online shopping'],
-});
+// ✅ Generate metadata using utility with metadataBase
+export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'),
+  ...generateMetadata({
+    title: 'Home',
+    description: 'Shop the best products at SnapCart - Your one-stop e-commerce destination',
+    url: '/',
+    type: 'website',
+    keywords: ['ecommerce', 'shop', 'products', 'snapcart', 'online shopping'],
+  }),
+};
 
 export default function RootLayout({
   children,

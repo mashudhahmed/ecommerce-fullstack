@@ -27,7 +27,7 @@ export function generateMetadata({
   const siteName = 'SnapCart';
   const fullTitle = `${title} | ${siteName}`;
 
-  // ✅ Base OpenGraph with type
+  // ✅ Build openGraph with proper typing
   const openGraph: any = {
     title: fullTitle,
     description,
@@ -44,7 +44,7 @@ export function generateMetadata({
     type: type === 'website' ? 'website' : 'article',
   };
 
-  // ✅ Add dates if provided
+  // ✅ Add dates only if provided (using any to bypass strict typing)
   if (publishedTime) {
     openGraph.publishedTime = publishedTime;
   }
@@ -53,7 +53,6 @@ export function generateMetadata({
     openGraph.modifiedTime = modifiedTime;
   }
 
-  // ✅ Build metadata with proper typing
   const metadata: Metadata = {
     title: fullTitle,
     description,

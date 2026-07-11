@@ -1,4 +1,4 @@
-// src/config/validation.config.ts
+// backend/src/config/validation.config.ts
 import * as Joi from 'joi';
 
 export const validationSchema = Joi.object({
@@ -29,4 +29,14 @@ export const validationSchema = Joi.object({
   ADMIN_NOTIFICATION_EMAILS: Joi.string().optional(),
 
   CORS_ORIGIN: Joi.string().optional(),
+
+  // ✅ Add Cloudinary validation (optional)
+  CLOUDINARY_CLOUD_NAME: Joi.string().optional(),
+  CLOUDINARY_API_KEY: Joi.string().optional(),
+  CLOUDINARY_API_SECRET: Joi.string().optional(),
+  CLOUDINARY_FOLDER: Joi.string().default('snapcart/products'),
+
+  // ✅ Add upload validation
+  UPLOAD_DIRECTORY: Joi.string().default('./uploads'),
+  UPLOAD_MAX_SIZE: Joi.number().default(5242880),
 });

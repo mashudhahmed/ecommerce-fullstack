@@ -1,3 +1,4 @@
+// backend/src/config/configuration.ts
 export default () => ({
   app: {
     frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3000',
@@ -29,5 +30,17 @@ export default () => ({
   },
   cors: {
     origin: process.env.CORS_ORIGIN?.split(',') || ['http://localhost:3000', 'http://localhost:3001'],
+  },
+  // ✅ Add Cloudinary configuration
+  cloudinary: {
+    cloudName: process.env.CLOUDINARY_CLOUD_NAME,
+    apiKey: process.env.CLOUDINARY_API_KEY,
+    apiSecret: process.env.CLOUDINARY_API_SECRET,
+    folder: process.env.CLOUDINARY_FOLDER || 'snapcart/products',
+  },
+  // ✅ Add upload configuration
+  upload: {
+    directory: process.env.UPLOAD_DIRECTORY || './uploads',
+    maxSize: parseInt(process.env.UPLOAD_MAX_SIZE || '5242880', 10),
   },
 });

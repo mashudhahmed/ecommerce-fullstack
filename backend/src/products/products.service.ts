@@ -1,19 +1,19 @@
-// src/products/products.service.ts
+// backend/src/products/products.service.ts
 import {
   Injectable,
   NotFoundException,
-  ConflictException,
   Logger,
   BadRequestException,
   ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, In, MoreThan, LessThan } from 'typeorm';
+import { Repository, DataSource, In } from 'typeorm';
 import { Product } from './products.entity';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { UserRole } from '../user/user.entity';
 import { UserService } from '../user/user.service';
+import { Category } from '../categories/category.entity';
 import { CacheService } from '../common/cache/cache.service';
 import { MetricsService } from '../monitoring/metrics.service';
 import { Trace } from '../common/decorators/tracing.decorator';
@@ -29,12 +29,18 @@ export class ProductsService {
   constructor(
     @InjectRepository(Product)
     private readonly productRepository: Repository<Product>,
+    @InjectRepository(Category)
+    private readonly categoryRepository: Repository<Category>,
     private readonly userService: UserService,
     private readonly dataSource: DataSource,
     private readonly cacheService: CacheService,
     private readonly metricsService: MetricsService,
     private readonly eventsService: EventsService,
   ) {}
+
+  // ============================================================
+  // CREATE PRODUCT WITH CATEGORY VALIDATION
+  // ============================================================
 
   @Trace('products.create')
   @QueryTimeout(10000)
@@ -51,13 +57,27 @@ export class ProductsService {
       throw new ForbiddenException('Your vendor account is pending approval');
     }
 
+    // ✅ Validate category exists
+    const category = await this.categoryRepository.findOne({
+      where: { id: createProductDto.categoryId, isActive: true },
+    });
+
+    if (!category) {
+      throw new BadRequestException(
+        `Category with ID ${createProductDto.categoryId} not found or inactive`
+      );
+    }
+
+    // Create product with category
     const product = this.productRepository.create({
       ...createProductDto,
       owner: user,
+      category,
+      isActive: createProductDto.isActive ?? true,
     });
 
     const savedProduct = await this.productRepository.save(product);
-    this.logger.log(`Product created: ${savedProduct.title} by user ${userId}`);
+    this.logger.log(`Product created: ${savedProduct.title} by user ${userId} (Category: ${category.name})`);
 
     this.metricsService.recordProductCreation(userId);
     const duration = (Date.now() - startTime) / 1000;
@@ -75,6 +95,10 @@ export class ProductsService {
     return savedProduct;
   }
 
+  // ============================================================
+  // FIND ALL WITH CATEGORY
+  // ============================================================
+
   @Trace('products.findAll')
   @QueryTimeout(15000)
   async findAll(): Promise<Product[]> {
@@ -91,7 +115,7 @@ export class ProductsService {
 
     const products = await this.productRepository.find({
       where: { isActive: true },
-      relations: ['owner', 'category'],
+      relations: ['owner', 'category', 'images', 'variants'],
       order: { createdAt: 'DESC' },
     });
 
@@ -101,6 +125,10 @@ export class ProductsService {
     await this.cacheService.set(cacheKey, products, this.CACHE_TTL);
     return products;
   }
+
+  // ============================================================
+  // FIND ALL PAGINATED
+  // ============================================================
 
   @Trace('products.findAllPaginated')
   @QueryTimeout(10000)
@@ -132,7 +160,7 @@ export class ProductsService {
 
     const [data, total] = await this.productRepository.findAndCount({
       where: { isActive: true },
-      relations: ['owner', 'category'],
+      relations: ['owner', 'category', 'images'],
       order: { createdAt: 'DESC' },
       skip,
       take: limit,
@@ -153,6 +181,10 @@ export class ProductsService {
     return result;
   }
 
+  // ============================================================
+  // FIND ONE WITH CATEGORY
+  // ============================================================
+
   @Trace('products.findOne')
   @QueryTimeout(5000)
   async findOne(id: number, bypassCache: boolean = false): Promise<Product> {
@@ -172,7 +204,7 @@ export class ProductsService {
 
     const product = await this.productRepository.findOne({
       where: { id, isActive: true },
-      relations: ['owner', 'category'],
+      relations: ['owner', 'category', 'images', 'variants'],
     });
 
     if (!product) {
@@ -192,112 +224,37 @@ export class ProductsService {
     return this.findOne(id, true);
   }
 
-  @Trace('products.findByIds')
-  @QueryTimeout(10000)
-  async findByIds(ids: number[]): Promise<Product[]> {
-    if (!ids || ids.length === 0) return [];
+  // ============================================================
+  // FIND BY CATEGORY
+  // ============================================================
 
-    const cacheKey = `products:ids:${ids.sort().join(',')}`;
+  @Trace('products.findByCategory')
+  @QueryTimeout(10000)
+  async findByCategory(categoryId: number): Promise<Product[]> {
+    const cacheKey = `products:category:${categoryId}`;
     const cached = await this.cacheService.get<Product[]>(cacheKey);
-    if (cached && Array.isArray(cached) && cached.length > 0) {
+    if (cached && Array.isArray(cached)) {
       return cached;
     }
 
     const startTime = Date.now();
 
     const products = await this.productRepository.find({
-      where: { id: In(ids), isActive: true },
-      relations: ['owner', 'category'],
+      where: { category: { id: categoryId }, isActive: true },
+      relations: ['owner', 'category', 'images'],
+      order: { createdAt: 'DESC' },
     });
 
     const duration = (Date.now() - startTime) / 1000;
-    this.metricsService.recordDbQuery('findByIds', 'products', duration);
+    this.metricsService.recordDbQuery('findByCategory', 'products', duration);
 
     await this.cacheService.set(cacheKey, products, this.CACHE_TTL);
     return products;
   }
 
-  @Trace('products.findInStock')
-  @QueryTimeout(10000)
-  async findInStock(): Promise<Product[]> {
-    const cacheKey = 'products:in-stock';
-    const cached = await this.cacheService.get<Product[]>(cacheKey);
-    if (cached && Array.isArray(cached)) {
-      return cached;
-    }
-
-    const startTime = Date.now();
-
-    const products = await this.productRepository
-      .createQueryBuilder('product')
-      .leftJoinAndSelect('product.owner', 'owner')
-      .leftJoinAndSelect('product.category', 'category')
-      .where('product.stock > 0')
-      .andWhere('product.isActive = true')
-      .orderBy('product.createdAt', 'DESC')
-      .getMany();
-
-    const duration = (Date.now() - startTime) / 1000;
-    this.metricsService.recordDbQuery('findInStock', 'products', duration);
-
-    await this.cacheService.set(cacheKey, products, this.CACHE_TTL);
-    return products;
-  }
-
-  @Trace('products.findOutOfStock')
-  @QueryTimeout(10000)
-  async findOutOfStock(): Promise<Product[]> {
-    const cacheKey = 'products:out-of-stock';
-    const cached = await this.cacheService.get<Product[]>(cacheKey);
-    if (cached && Array.isArray(cached)) {
-      return cached;
-    }
-
-    const startTime = Date.now();
-
-    const products = await this.productRepository
-      .createQueryBuilder('product')
-      .leftJoinAndSelect('product.owner', 'owner')
-      .leftJoinAndSelect('product.category', 'category')
-      .where('product.stock = 0')
-      .andWhere('product.isActive = true')
-      .orderBy('product.createdAt', 'DESC')
-      .getMany();
-
-    const duration = (Date.now() - startTime) / 1000;
-    this.metricsService.recordDbQuery('findOutOfStock', 'products', duration);
-
-    await this.cacheService.set(cacheKey, products, this.CACHE_TTL);
-    return products;
-  }
-
-  @Trace('products.findLowStock')
-  @QueryTimeout(10000)
-  async findLowStock(threshold: number = 10): Promise<Product[]> {
-    const cacheKey = `products:low-stock:${threshold}`;
-    const cached = await this.cacheService.get<Product[]>(cacheKey);
-    if (cached && Array.isArray(cached)) {
-      return cached;
-    }
-
-    const startTime = Date.now();
-
-    const products = await this.productRepository
-      .createQueryBuilder('product')
-      .leftJoinAndSelect('product.owner', 'owner')
-      .leftJoinAndSelect('product.category', 'category')
-      .where('product.stock < :threshold', { threshold })
-      .andWhere('product.stock > 0')
-      .andWhere('product.isActive = true')
-      .orderBy('product.stock', 'ASC')
-      .getMany();
-
-    const duration = (Date.now() - startTime) / 1000;
-    this.metricsService.recordDbQuery('findLowStock', 'products', duration);
-
-    await this.cacheService.set(cacheKey, products, this.CACHE_TTL);
-    return products;
-  }
+  // ============================================================
+  // FIND BY VENDOR
+  // ============================================================
 
   @Trace('products.findByVendor')
   @QueryTimeout(10000)
@@ -315,7 +272,7 @@ export class ProductsService {
         owner: { id: vendorId },
         isActive: true,
       },
-      relations: ['category'],
+      relations: ['category', 'images'],
       order: { createdAt: 'DESC' },
     });
 
@@ -325,6 +282,107 @@ export class ProductsService {
     await this.cacheService.set(cacheKey, products, this.CACHE_TTL);
     return products;
   }
+
+  // ============================================================
+  // FIND IN STOCK
+  // ============================================================
+
+  @Trace('products.findInStock')
+  @QueryTimeout(10000)
+  async findInStock(): Promise<Product[]> {
+    const cacheKey = 'products:in-stock';
+    const cached = await this.cacheService.get<Product[]>(cacheKey);
+    if (cached && Array.isArray(cached)) {
+      return cached;
+    }
+
+    const startTime = Date.now();
+
+    const products = await this.productRepository
+      .createQueryBuilder('product')
+      .leftJoinAndSelect('product.owner', 'owner')
+      .leftJoinAndSelect('product.category', 'category')
+      .leftJoinAndSelect('product.images', 'images')
+      .where('product.stock > 0')
+      .andWhere('product.isActive = true')
+      .orderBy('product.createdAt', 'DESC')
+      .getMany();
+
+    const duration = (Date.now() - startTime) / 1000;
+    this.metricsService.recordDbQuery('findInStock', 'products', duration);
+
+    await this.cacheService.set(cacheKey, products, this.CACHE_TTL);
+    return products;
+  }
+
+  // ============================================================
+  // FIND OUT OF STOCK
+  // ============================================================
+
+  @Trace('products.findOutOfStock')
+  @QueryTimeout(10000)
+  async findOutOfStock(): Promise<Product[]> {
+    const cacheKey = 'products:out-of-stock';
+    const cached = await this.cacheService.get<Product[]>(cacheKey);
+    if (cached && Array.isArray(cached)) {
+      return cached;
+    }
+
+    const startTime = Date.now();
+
+    const products = await this.productRepository
+      .createQueryBuilder('product')
+      .leftJoinAndSelect('product.owner', 'owner')
+      .leftJoinAndSelect('product.category', 'category')
+      .leftJoinAndSelect('product.images', 'images')
+      .where('product.stock = 0')
+      .andWhere('product.isActive = true')
+      .orderBy('product.createdAt', 'DESC')
+      .getMany();
+
+    const duration = (Date.now() - startTime) / 1000;
+    this.metricsService.recordDbQuery('findOutOfStock', 'products', duration);
+
+    await this.cacheService.set(cacheKey, products, this.CACHE_TTL);
+    return products;
+  }
+
+  // ============================================================
+  // FIND LOW STOCK
+  // ============================================================
+
+  @Trace('products.findLowStock')
+  @QueryTimeout(10000)
+  async findLowStock(threshold: number = 10): Promise<Product[]> {
+    const cacheKey = `products:low-stock:${threshold}`;
+    const cached = await this.cacheService.get<Product[]>(cacheKey);
+    if (cached && Array.isArray(cached)) {
+      return cached;
+    }
+
+    const startTime = Date.now();
+
+    const products = await this.productRepository
+      .createQueryBuilder('product')
+      .leftJoinAndSelect('product.owner', 'owner')
+      .leftJoinAndSelect('product.category', 'category')
+      .leftJoinAndSelect('product.images', 'images')
+      .where('product.stock < :threshold', { threshold })
+      .andWhere('product.stock > 0')
+      .andWhere('product.isActive = true')
+      .orderBy('product.stock', 'ASC')
+      .getMany();
+
+    const duration = (Date.now() - startTime) / 1000;
+    this.metricsService.recordDbQuery('findLowStock', 'products', duration);
+
+    await this.cacheService.set(cacheKey, products, this.CACHE_TTL);
+    return products;
+  }
+
+  // ============================================================
+  // UPDATE PRODUCT
+  // ============================================================
 
   @Trace('products.update')
   @QueryTimeout(10000)
@@ -338,9 +396,22 @@ export class ProductsService {
 
     const product = await this.findOne(id);
 
+    // Check ownership
     if (![UserRole.ADMIN, UserRole.SUPER_ADMIN].includes(userRole)) {
       if (!product.owner || product.owner.id !== userId) {
         throw new ForbiddenException('You can only update your own products');
+      }
+    }
+
+    // If category is being updated, validate it exists
+    if (updateProductDto.categoryId) {
+      const category = await this.categoryRepository.findOne({
+        where: { id: updateProductDto.categoryId, isActive: true },
+      });
+      if (!category) {
+        throw new BadRequestException(
+          `Category with ID ${updateProductDto.categoryId} not found or inactive`
+        );
       }
     }
 
@@ -362,6 +433,42 @@ export class ProductsService {
 
     return updatedProduct;
   }
+
+  // ============================================================
+  // UPDATE STOCK
+  // ============================================================
+
+  @Trace('products.reduceStock')
+  @QueryTimeout(10000)
+  async reduceStock(productId: number, quantity: number): Promise<void> {
+    const startTime = Date.now();
+
+    const product = await this.findOne(productId);
+    product.reduceStock(quantity);
+    await this.productRepository.save(product);
+    await this.cacheService.del(`product:${productId}`);
+
+    const duration = (Date.now() - startTime) / 1000;
+    this.metricsService.recordDbQuery('update', 'products', duration);
+  }
+
+  @Trace('products.increaseStock')
+  @QueryTimeout(10000)
+  async increaseStock(productId: number, quantity: number): Promise<void> {
+    const startTime = Date.now();
+
+    const product = await this.findOne(productId);
+    product.stock += quantity;
+    await this.productRepository.save(product);
+    await this.cacheService.del(`product:${productId}`);
+
+    const duration = (Date.now() - startTime) / 1000;
+    this.metricsService.recordDbQuery('update', 'products', duration);
+  }
+
+  // ============================================================
+  // SOFT DELETE
+  // ============================================================
 
   @Trace('products.remove')
   @QueryTimeout(10000)
@@ -393,6 +500,10 @@ export class ProductsService {
     await this.invalidateProductCaches(id);
   }
 
+  // ============================================================
+  // PERMANENT DELETE
+  // ============================================================
+
   @Trace('products.permanentlyDelete')
   @QueryTimeout(10000)
   async permanentlyDelete(id: number, userRole: UserRole): Promise<void> {
@@ -419,39 +530,9 @@ export class ProductsService {
     await this.invalidateProductCaches(id);
   }
 
-  @Trace('products.checkStock')
-  async checkStock(productId: number, quantity: number): Promise<boolean> {
-    const product = await this.findOne(productId);
-    return product.isInStock(quantity);
-  }
-
-  @Trace('products.reduceStock')
-  @QueryTimeout(10000)
-  async reduceStock(productId: number, quantity: number): Promise<void> {
-    const startTime = Date.now();
-
-    const product = await this.findOne(productId);
-    product.reduceStock(quantity);
-    await this.productRepository.save(product);
-    await this.cacheService.del(`product:${productId}`);
-
-    const duration = (Date.now() - startTime) / 1000;
-    this.metricsService.recordDbQuery('update', 'products', duration);
-  }
-
-  @Trace('products.increaseStock')
-  @QueryTimeout(10000)
-  async increaseStock(productId: number, quantity: number): Promise<void> {
-    const startTime = Date.now();
-
-    const product = await this.findOne(productId);
-    product.stock += quantity;
-    await this.productRepository.save(product);
-    await this.cacheService.del(`product:${productId}`);
-
-    const duration = (Date.now() - startTime) / 1000;
-    this.metricsService.recordDbQuery('update', 'products', duration);
-  }
+  // ============================================================
+  // BULK OPERATIONS
+  // ============================================================
 
   @Trace('products.bulkUpdateStock')
   @QueryTimeout(30000)
@@ -516,69 +597,9 @@ export class ProductsService {
     }
   }
 
-  @Trace('products.bulkCreateProducts')
-  @QueryTimeout(60000)
-  async bulkCreateProducts(products: CreateProductDto[], userId: number): Promise<Product[]> {
-    const MAX_BULK = BULK_LIMITS.PRODUCTS.MAX_BULK_UPLOAD;
-
-    if (products.length > MAX_BULK) {
-      throw new BadRequestException(
-        `Maximum ${MAX_BULK} products can be created at once. ` +
-        `You provided ${products.length}. Please split into smaller batches.`
-      );
-    }
-
-    if (products.length === 0) {
-      throw new BadRequestException('No products provided');
-    }
-
-    const startTime = Date.now();
-
-    const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
-
-    try {
-      const user = await this.userService.findByIdOrFail(userId);
-
-      if (user.role === UserRole.USER) {
-        throw new ForbiddenException('Only vendors and admins can create products');
-      }
-
-      if (user.role === UserRole.VENDOR && !user.isVendorApproved) {
-        throw new ForbiddenException('Your vendor account is pending approval');
-      }
-
-      const productEntities = products.map((p) =>
-        this.productRepository.create({ ...p, owner: user })
-      );
-
-      const saved = await queryRunner.manager.save(Product, productEntities);
-      await queryRunner.commitTransaction();
-
-      const duration = (Date.now() - startTime) / 1000;
-      this.metricsService.recordDbQuery('bulkInsert', 'products', duration);
-
-      for (const p of saved) {
-        this.metricsService.recordProductCreation(userId);
-        this.eventsService.emitProductCreated({
-          productId: p.id,
-          vendorId: userId,
-          title: p.title,
-          action: 'created',
-        });
-      }
-
-      this.logger.log(`Bulk created ${saved.length} products for vendor ${userId}`);
-      await this.invalidateProductCaches();
-      return saved;
-    } catch (error) {
-      await queryRunner.rollbackTransaction();
-      throw error;
-    } finally {
-      await queryRunner.release();
-    }
-  }
+  // ============================================================
+  // GET VENDOR STATS
+  // ============================================================
 
   @Trace('products.getVendorStats')
   @QueryTimeout(10000)
@@ -596,7 +617,6 @@ export class ProductsService {
       outOfStockCount: number;
     }>(cacheKey);
     
-    // ✅ FIX: Proper type checking for cache
     if (cached && typeof cached === 'object' && 'totalProducts' in cached) {
       this.metricsService.recordCacheHit('vendor:product:stats');
       return cached;
@@ -623,6 +643,10 @@ export class ProductsService {
     return result;
   }
 
+  // ============================================================
+  // SEARCH
+  // ============================================================
+
   @Trace('products.searchProducts')
   @QueryTimeout(10000)
   async searchProducts(query: string, limit: number = 20): Promise<Product[]> {
@@ -642,6 +666,7 @@ export class ProductsService {
       .createQueryBuilder('product')
       .leftJoinAndSelect('product.owner', 'owner')
       .leftJoinAndSelect('product.category', 'category')
+      .leftJoinAndSelect('product.images', 'images')
       .where('product.isActive = true')
       .andWhere(
         '(product.title ILIKE :query OR product.description ILIKE :query)',
@@ -658,29 +683,9 @@ export class ProductsService {
     return results;
   }
 
-  @Trace('products.findByCategory')
-  @QueryTimeout(10000)
-  async findByCategory(categoryId: number): Promise<Product[]> {
-    const cacheKey = `products:category:${categoryId}`;
-    const cached = await this.cacheService.get<Product[]>(cacheKey);
-    if (cached && Array.isArray(cached)) {
-      return cached;
-    }
-
-    const startTime = Date.now();
-
-    const products = await this.productRepository.find({
-      where: { category: { id: categoryId }, isActive: true },
-      relations: ['owner', 'category'],
-      order: { createdAt: 'DESC' },
-    });
-
-    const duration = (Date.now() - startTime) / 1000;
-    this.metricsService.recordDbQuery('findByCategory', 'products', duration);
-
-    await this.cacheService.set(cacheKey, products, this.CACHE_TTL);
-    return products;
-  }
+  // ============================================================
+  // CACHE INVALIDATION
+  // ============================================================
 
   private async invalidateProductCaches(productId?: number): Promise<void> {
     if (productId) {

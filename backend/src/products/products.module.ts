@@ -1,19 +1,18 @@
-// src/products/products.module.ts
+// backend/src/products/products.module.ts
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Product } from './products.entity';
+import { ProductImage } from './product-image.entity';
+import { ProductVariant } from './product-variant.entity';
 import { ProductsService } from './products.service';
 import { ProductsController } from './product.controller';
 import { UserModule } from '../user/user.module';
-// CacheModule, MonitoringModule, EventsModule are global - no need to import
+import { Category } from '../categories/category.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Product]),
+    TypeOrmModule.forFeature([Product, ProductImage, ProductVariant, Category]),
     UserModule,
-    // CacheModule is @Global()
-    // MonitoringModule is @Global()
-    // EventsModule is @Global()
   ],
   controllers: [ProductsController],
   providers: [ProductsService],

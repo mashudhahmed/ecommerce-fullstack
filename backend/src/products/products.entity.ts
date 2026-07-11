@@ -1,3 +1,4 @@
+// backend/src/products/products.entity.ts
 import {
   Entity,
   PrimaryGeneratedColumn,
@@ -6,13 +7,18 @@ import {
   ManyToOne,
   CreateDateColumn,
   UpdateDateColumn,
+  Index,
 } from 'typeorm';
 import { OrderItem } from '../orders/order-item.entity';
 import { User } from '../user/user.entity';
 import { Expose } from 'class-transformer';
 import { Category } from '../categories/category.entity';
+import { ProductImage } from './product-image.entity';
+import { ProductVariant } from './product-variant.entity';
 
 @Entity('products')
+@Index(['ownerId', 'isActive'])
+@Index(['categoryId', 'isActive'])
 export class Product {
   @PrimaryGeneratedColumn()
   @Expose()
@@ -42,12 +48,63 @@ export class Product {
   @Expose()
   isActive!: boolean;
 
+  // ✅ Category Relation (Required)
+  @ManyToOne(() => Category, (category) => category.products, { nullable: false })
+  @Expose()
+  category!: Category;
+
+  @Column()
+  categoryId!: number;
+
+  // ✅ Additional Fields
+  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
+  @Expose()
+  compareAtPrice?: number;
+
+  @Column({ nullable: true })
+  @Expose()
+  sku?: string;
+
+  @Column({ default: false })
+  @Expose()
+  isTrending!: boolean;
+
+  @Column({ default: false })
+  @Expose()
+  isNew!: boolean;
+
+  @Column({ type: 'jsonb', nullable: true })
+  @Expose()
+  additionalImages?: string[];
+
+  // ✅ Rating Fields
+  @Column({ type: 'decimal', precision: 3, scale: 2, default: 0 })
+  @Expose()
+  averageRating!: number;
+
+  @Column({ default: 0 })
+  @Expose()
+  totalReviews!: number;
+
+  // ✅ Owner Relation
   @ManyToOne(() => User, (u) => u.products, { nullable: true, eager: true })
   @Expose()
   owner?: User;
 
+  @Column({ nullable: true })
+  ownerId?: number;
+
+  // ✅ Relations
   @OneToMany(() => OrderItem, (oi) => oi.product)
   orderItems!: OrderItem[];
+
+  @OneToMany(() => ProductImage, (image) => image.product, { cascade: true })
+  @Expose()
+  images!: ProductImage[];
+
+  @OneToMany(() => ProductVariant, (variant) => variant.product, { cascade: true })
+  @Expose()
+  variants!: ProductVariant[];
 
   @CreateDateColumn()
   @Expose()
@@ -56,21 +113,6 @@ export class Product {
   @UpdateDateColumn()
   @Expose()
   updatedAt!: Date;
-
-  // Add after stock field:
-@Column({ type: 'decimal', precision: 3, scale: 2, default: 0 })
-@Expose()
-averageRating!: number;
-
-@Column({ default: 0 })
-@Expose()
-totalReviews!: number;
-
-// Add category relationship:
-@ManyToOne(() => Category, (category) => category.products, { nullable: true })
-@Expose()
-category?: Category;
-
 
   // Helper methods
   isInStock(quantity: number): boolean {
@@ -82,5 +124,19 @@ category?: Category;
       throw new Error(`Insufficient stock for product ${this.title}`);
     }
     this.stock -= quantity;
+  }
+
+  getDiscountedPrice(): number | null {
+    if (this.compareAtPrice && this.compareAtPrice > this.price) {
+      return this.compareAtPrice;
+    }
+    return null;
+  }
+
+  getDiscountPercentage(): number | null {
+    if (this.compareAtPrice && this.compareAtPrice > this.price) {
+      return Math.round(((this.compareAtPrice - this.price) / this.compareAtPrice) * 100);
+    }
+    return null;
   }
 }

@@ -1,4 +1,4 @@
-// src/common/types/multer-file.type.ts
+// backend/src/common/types/multer-file.type.ts
 export interface MulterFile {
   fieldname: string;
   originalname: string;

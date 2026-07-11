@@ -1,4 +1,4 @@
-// src/files/files.controller.ts
+// backend/src/files/files.controller.ts
 import {
   Controller,
   Post,
@@ -11,7 +11,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiBearerAuth, ApiConsumes, ApiBody } from '@nestjs/swagger';
 import { FilesService } from './files.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
-import type { MulterFile } from '../common/types/multer-file.type';
+import { MulterFile } from '../common/types/multer-file.type';
 
 @ApiTags('Files')
 @Controller('files')

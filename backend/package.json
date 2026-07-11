@@ -55,6 +55,7 @@
     "bcrypt": "^5.1.1",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
+    "cloudinary": "^2.10.0",
     "compression": "^1.7.5",
     "cookie-parser": "^1.4.7",
     "csurf": "^1.11.0",
@@ -75,6 +76,7 @@
     "rxjs": "^7.8.1",
     "socket.io": "^4.8.3",
     "speakeasy": "^2.0.0",
+    "streamifier": "^0.1.1",
     "swagger-ui-express": "^5.0.1",
     "typeorm": "^0.3.20",
     "uuid": "^11.0.3"

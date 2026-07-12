@@ -1,68 +1,47 @@
 // components/orders/OrderStatusBadge.tsx
 'use client';
 
-import { Badge } from '@/components/ui/badge';
-import { Clock, Package, Truck, CheckCircle, XCircle } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { ORDER_STATUS_CONFIG, type OrderStatus } from '@/lib/order-status';
 
 interface OrderStatusBadgeProps {
-  status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
+  status: OrderStatus;
   showIcon?: boolean;
   size?: 'sm' | 'default' | 'lg';
 }
 
-const statusConfig: Record<
-  OrderStatusBadgeProps['status'],
-  { label: string; variant: 'default' | 'destructive' | 'outline' | 'secondary'; icon: any; color: string }
-> = {
-  pending: { 
-    label: 'Pending', 
-    variant: 'secondary', 
-    icon: Clock,
-    color: 'bg-yellow-100 text-yellow-800 border-yellow-200'
-  },
-  processing: { 
-    label: 'Processing', 
-    variant: 'default', 
-    icon: Package,
-    color: 'bg-blue-100 text-blue-800 border-blue-200'
-  },
-  shipped: { 
-    label: 'Shipped', 
-    variant: 'default', 
-    icon: Truck,
-    color: 'bg-purple-100 text-purple-800 border-purple-200'
-  },
-  delivered: { 
-    label: 'Delivered', 
-    variant: 'default', 
-    icon: CheckCircle,
-    color: 'bg-green-100 text-green-800 border-green-200'
-  },
-  cancelled: { 
-    label: 'Cancelled', 
-    variant: 'destructive', 
-    icon: XCircle,
-    color: 'bg-red-100 text-red-800 border-red-200'
-  },
+const sizeClasses = {
+  sm: 'text-[11px] px-2 py-1 gap-1',
+  default: 'text-xs px-2.5 py-1 gap-1.5',
+  lg: 'text-sm px-3 py-1.5 gap-1.5',
+};
+
+const iconSize = {
+  sm: 'h-3 w-3',
+  default: 'h-3.5 w-3.5',
+  lg: 'h-4 w-4',
 };
 
 export function OrderStatusBadge({ status, showIcon = true, size = 'default' }: OrderStatusBadgeProps) {
-  const config = statusConfig[status];
+  const config = ORDER_STATUS_CONFIG[status];
   const Icon = config.icon;
 
-  const sizeClasses = {
-    sm: 'text-xs px-2 py-0.5',
-    default: 'text-sm px-3 py-1',
-    lg: 'text-base px-4 py-1.5',
-  };
-
   return (
-    <Badge 
-      variant={config.variant}
-      className={`${sizeClasses[size]} ${config.color} border`}
+    <span
+      className={cn(
+        'inline-flex items-center rounded-full border font-semibold',
+        config.bg,
+        config.text,
+        config.border,
+        sizeClasses[size]
+      )}
     >
-      {showIcon && <Icon className={`${size === 'sm' ? 'h-3 w-3' : 'h-4 w-4'} mr-1.5`} />}
+      {showIcon ? (
+        <Icon className={iconSize[size]} />
+      ) : (
+        <span className={cn('h-1.5 w-1.5 rounded-full', config.dot)} />
+      )}
       {config.label}
-    </Badge>
+    </span>
   );
 }

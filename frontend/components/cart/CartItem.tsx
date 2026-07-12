@@ -1,6 +1,7 @@
-// components/cart/CartItem.tsx
+// frontend/components/cart/CartItem.tsx
 'use client';
 
+import { useState, useMemo } from 'react';
 import Image from 'next/image';
 import { Minus, Plus, Trash2 } from 'lucide-react';
 import { CartItem as CartItemType } from '@/types';
@@ -8,7 +9,6 @@ import { Button } from '@/components/ui/button';
 import { formatPrice } from '@/lib/utils';
 import { useCart } from '@/hooks/useCart';
 import { toast } from 'sonner';
-import { useState, useMemo } from 'react';
 
 interface CartItemProps {
   item: CartItemType;
@@ -18,7 +18,6 @@ export function CartItem({ item }: CartItemProps) {
   const { updateQuantity, removeItem } = useCart();
   const [imageError, setImageError] = useState(false);
 
-  // Provide fallback image
   const imageSrc = useMemo(() => {
     if (!item.product.imageUrl || imageError) {
       return '/placeholder-image.png';
@@ -44,55 +43,61 @@ export function CartItem({ item }: CartItemProps) {
   };
 
   return (
-    <div className="flex items-center gap-4 p-4 border rounded-lg bg-white">
-      <div className="relative h-20 w-20 shrink-0 bg-muted rounded-md overflow-hidden">
+    <div className="flex items-center gap-4 rounded-2xl border border-border/60 bg-background p-4 transition-colors hover:border-orange-200">
+      <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-muted/20">
         <Image
           src={imageSrc}
           alt={item.product.title}
           fill
           className="object-cover"
+          sizes="80px"
           onError={() => setImageError(true)}
         />
       </div>
 
-      <div className="flex-1 min-w-0">
-        <h3 className="font-medium truncate">{item.product.title}</h3>
-        <p className="text-sm text-muted-foreground">
+      <div className="min-w-0 flex-1">
+        <h3 className="truncate font-semibold">{item.product.title}</h3>
+        <p className="mt-0.5 text-sm text-muted-foreground tabular-nums">
           {formatPrice(item.product.price)}
         </p>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center rounded-full border border-border">
         <Button
-          variant="outline"
+          variant="ghost"
           size="icon"
-          className="h-8 w-8"
+          className="h-9 w-9 rounded-full"
           onClick={() => handleUpdateQuantity(item.quantity - 1)}
           disabled={item.quantity <= 1}
+          aria-label="Decrease quantity"
         >
-          <Minus className="h-3 w-3" />
+          <Minus className="h-3.5 w-3.5" />
         </Button>
-        <span className="w-8 text-center font-medium">{item.quantity}</span>
+        <span className="w-8 text-center text-sm font-semibold tabular-nums">
+          {item.quantity}
+        </span>
         <Button
-          variant="outline"
+          variant="ghost"
           size="icon"
-          className="h-8 w-8"
+          className="h-9 w-9 rounded-full"
           onClick={() => handleUpdateQuantity(item.quantity + 1)}
           disabled={item.quantity >= item.product.stock}
+          aria-label="Increase quantity"
         >
-          <Plus className="h-3 w-3" />
+          <Plus className="h-3.5 w-3.5" />
         </Button>
       </div>
 
-      <div className="text-right min-w-20">
-        <p className="font-semibold">{formatPrice(item.subtotal)}</p>
+      <div className="min-w-20 text-right">
+        <p className="font-bold tabular-nums">{formatPrice(item.subtotal)}</p>
       </div>
 
       <Button
         variant="ghost"
         size="icon"
-        className="text-muted-foreground hover:text-destructive"
+        className="rounded-full text-muted-foreground hover:bg-red-50 hover:text-red-600"
         onClick={handleRemove}
+        aria-label="Remove item"
       >
         <Trash2 className="h-4 w-4" />
       </Button>

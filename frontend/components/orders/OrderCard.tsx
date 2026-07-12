@@ -1,17 +1,16 @@
 // components/orders/OrderCard.tsx
 'use client';
 
-import Link from 'next/link';
 import Image from 'next/image';
 import { Order } from '@/types';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { formatPrice, formatDate, cn } from '@/lib/utils';
+import { OrderStatusBadge } from '@/components/orders/OrderStatusBadge';
+import { formatPrice, formatDate } from '@/lib/utils';
 import { useOrders } from '@/hooks/useOrders';
 import { toast } from 'sonner';
-import { Eye, Package, Clock, Truck, CheckCircle, XCircle, ChevronRight } from 'lucide-react';
-import { useState, useMemo } from 'react';
+import { Eye, ChevronRight } from 'lucide-react';
+import { useMemo } from 'react';
 
 interface OrderCardProps {
   order: Order;
@@ -19,25 +18,8 @@ interface OrderCardProps {
   onViewDetails?: () => void;
 }
 
-const STATUS_ICONS = {
-  pending: Clock,
-  processing: Package,
-  shipped: Truck,
-  delivered: CheckCircle,
-  cancelled: XCircle,
-};
-
-const STATUS_COLORS = {
-  pending: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-  processing: 'bg-blue-100 text-blue-800 border-blue-200',
-  shipped: 'bg-purple-100 text-purple-800 border-purple-200',
-  delivered: 'bg-green-100 text-green-800 border-green-200',
-  cancelled: 'bg-red-100 text-red-800 border-red-200',
-};
-
 export function OrderCard({ order, viewMode = 'list', onViewDetails }: OrderCardProps) {
   const { cancelOrder, isCancellingOrder } = useOrders();
-  const StatusIcon = STATUS_ICONS[order.status] || Package;
 
   const handleCancel = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -53,7 +35,6 @@ export function OrderCard({ order, viewMode = 'list', onViewDetails }: OrderCard
 
   const canCancel = ['pending', 'processing'].includes(order.status);
 
-  // Get first product image for display
   const firstItem = order.items?.[0];
   const imageSrc = useMemo(() => {
     if (!firstItem?.product?.imageUrl) {
@@ -64,36 +45,56 @@ export function OrderCard({ order, viewMode = 'list', onViewDetails }: OrderCard
 
   if (viewMode === 'grid') {
     return (
-      <Card className="hover:shadow-lg transition-all duration-300 cursor-pointer group h-full flex flex-col" onClick={onViewDetails}>
-        <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
+      <Card
+        className="group flex h-full cursor-pointer flex-col overflow-hidden rounded-2xl border border-border/60 transition-all duration-300 hover:-translate-y-0.5 hover:border-orange-300 hover:shadow-xl hover:shadow-orange-950/5"
+        onClick={onViewDetails}
+      >
+        <div className="relative aspect-[2.4/1] w-full overflow-hidden bg-muted/20">
+          <Image
+            src={imageSrc}
+            alt={firstItem?.product?.title || 'Product'}
+            fill
+            className="object-cover transition-transform duration-500 group-hover:scale-105"
+            sizes="(max-width: 768px) 100vw, 33vw"
+          />
+          {order.items.length > 1 && (
+            <span className="absolute bottom-2 right-2 rounded-full bg-zinc-950/80 px-2 py-0.5 text-[11px] font-semibold text-white backdrop-blur-sm">
+              +{order.items.length - 1} more
+            </span>
+          )}
+        </div>
+
+        <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2 pt-4">
           <div>
-            <p className="font-semibold text-sm">Order #{order.id}</p>
+            <p className="text-sm font-semibold">Order #{order.id}</p>
             <p className="text-xs text-muted-foreground">{formatDate(order.createdAt)}</p>
           </div>
-          <Badge className={cn("border", STATUS_COLORS[order.status])}>
-            <StatusIcon className="h-3 w-3 mr-1" />
-            {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
-          </Badge>
+          <OrderStatusBadge status={order.status} size="sm" />
         </CardHeader>
-        <CardContent className="flex-1">
-          <div className="space-y-1">
-            <p className="text-sm text-muted-foreground">
-              {order.items.length} item{order.items.length > 1 ? 's' : ''}
-            </p>
-            <p className="text-xl font-bold">{formatPrice(order.total)}</p>
-          </div>
+
+        <CardContent className="flex-1 pt-0">
+          <p className="text-sm text-muted-foreground">
+            {order.items.length} item{order.items.length > 1 ? 's' : ''}
+          </p>
+          <p className="mt-1 text-xl font-black tabular-nums">{formatPrice(order.total)}</p>
         </CardContent>
-        <CardFooter className="pt-0 flex justify-between">
-          <Button variant="ghost" size="sm" className="gap-1 group-hover:gap-2 transition-all">
-            View Details
-            <ChevronRight className="h-3 w-3 group-hover:translate-x-0.5 transition-transform" />
+
+        <CardFooter className="flex justify-between pt-0">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-1 rounded-full text-muted-foreground transition-all group-hover:gap-1.5 group-hover:text-foreground"
+          >
+            View details
+            <ChevronRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
           </Button>
           {canCancel && (
             <Button
-              variant="destructive"
+              variant="outline"
               size="sm"
               onClick={handleCancel}
               disabled={isCancellingOrder}
+              className="rounded-full border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
             >
               Cancel
             </Button>
@@ -105,49 +106,50 @@ export function OrderCard({ order, viewMode = 'list', onViewDetails }: OrderCard
 
   // List view
   return (
-    <Card className="hover:shadow-lg transition-all duration-300 cursor-pointer group" onClick={onViewDetails}>
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 gap-4">
-        <div className="flex items-start gap-4 flex-1 min-w-0">
-          <div className="relative h-12 w-12 shrink-0 rounded-lg overflow-hidden bg-muted">
+    <Card
+      className="group cursor-pointer rounded-2xl border border-border/60 transition-all duration-300 hover:border-orange-300 hover:shadow-lg hover:shadow-orange-950/5"
+      onClick={onViewDetails}
+    >
+      <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 flex-1 items-start gap-4">
+          <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-muted/20">
             <Image
               src={imageSrc}
               alt={firstItem?.product?.title || 'Product'}
               fill
               className="object-cover"
+              sizes="56px"
             />
           </div>
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex flex-wrap items-center gap-2">
               <p className="font-semibold">Order #{order.id}</p>
-              <Badge className={cn("border text-xs", STATUS_COLORS[order.status])}>
-                <StatusIcon className="h-2.5 w-2.5 mr-1" />
-                {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
-              </Badge>
+              <OrderStatusBadge status={order.status} size="sm" />
             </div>
-            <p className="text-sm text-muted-foreground">
-              {formatDate(order.createdAt)}
-            </p>
-            <p className="text-sm text-muted-foreground truncate">
+            <p className="mt-0.5 text-sm text-muted-foreground">{formatDate(order.createdAt)}</p>
+            <p className="truncate text-sm text-muted-foreground">
               {order.items.length} item{order.items.length > 1 ? 's' : ''}
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-4 ml-auto sm:ml-0">
-          <div className="text-right">
-            <p className="text-lg font-bold">{formatPrice(order.total)}</p>
-          </div>
+        <div className="ml-auto flex items-center gap-4 sm:ml-0">
+          <p className="text-lg font-black tabular-nums">{formatPrice(order.total)}</p>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" className="h-8 w-8 group-hover:bg-primary/10 transition-colors">
-              <Eye className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9 rounded-full transition-colors group-hover:bg-orange-50"
+            >
+              <Eye className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-orange-600" />
             </Button>
             {canCancel && (
               <Button
-                variant="destructive"
+                variant="outline"
                 size="sm"
                 onClick={handleCancel}
                 disabled={isCancellingOrder}
-                className="h-8"
+                className="h-9 rounded-full border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
               >
                 Cancel
               </Button>

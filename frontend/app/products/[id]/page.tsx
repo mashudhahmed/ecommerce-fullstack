@@ -232,7 +232,7 @@ function ProductDetailPageContent() {
         setIsInWishlist(false);
         toast.success('Removed from wishlist');
       } else {
-        await addToWishlist(product.id);
+        await addToWishlist(product);
         setIsInWishlist(true);
         toast.success('Added to wishlist');
       }

@@ -49,37 +49,34 @@ export function OrderFilters({ onFilterChange }: OrderFiltersProps) {
     setIsOpen(false);
   };
 
-  const hasFilters = Object.values(filters).some((v) => v !== '');
+  const activeCount = Object.values(filters).filter((v) => v !== '').length;
 
   return (
     <Sheet open={isOpen} onOpenChange={setIsOpen}>
       <SheetTrigger asChild>
-        <Button variant="outline" className="gap-2 relative">
+        <Button variant="outline" className="relative gap-2 rounded-full">
           <Filter className="h-4 w-4" />
           Filters
-          {hasFilters && (
-            <span className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-primary text-[8px] text-primary-foreground flex items-center justify-center">
-              {Object.values(filters).filter((v) => v !== '').length}
+          {activeCount > 0 && (
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-orange-600 text-[11px] font-semibold text-white">
+              {activeCount}
             </span>
           )}
         </Button>
       </SheetTrigger>
       <SheetContent>
         <SheetHeader>
-          <SheetTitle>Filter Orders</SheetTitle>
-          <SheetDescription>
-            Apply filters to narrow down your orders
-          </SheetDescription>
+          <SheetTitle>Filter orders</SheetTitle>
+          <SheetDescription>Narrow down your orders by status, amount, or date.</SheetDescription>
         </SheetHeader>
         <div className="space-y-6 py-6">
           <div className="space-y-2">
-            <Label>Status</Label>
-            <Select
-              value={filters.status}
-              onValueChange={(value) => handleChange('status', value)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="All Status" />
+            <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Status
+            </Label>
+            <Select value={filters.status} onValueChange={(value) => handleChange('status', value)}>
+              <SelectTrigger className="rounded-xl">
+                <SelectValue placeholder="All statuses" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="">All</SelectItem>
@@ -93,49 +90,56 @@ export function OrderFilters({ onFilterChange }: OrderFiltersProps) {
           </div>
 
           <div className="space-y-2">
-            <Label>Total Amount Range</Label>
+            <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Total amount range
+            </Label>
             <div className="flex gap-2">
               <Input
                 type="number"
                 placeholder="Min"
                 value={filters.minTotal}
                 onChange={(e) => handleChange('minTotal', e.target.value)}
-                className="w-1/2"
+                className="w-1/2 rounded-xl"
               />
               <Input
                 type="number"
                 placeholder="Max"
                 value={filters.maxTotal}
                 onChange={(e) => handleChange('maxTotal', e.target.value)}
-                className="w-1/2"
+                className="w-1/2 rounded-xl"
               />
             </div>
           </div>
 
           <div className="space-y-2">
-            <Label>Date Range</Label>
+            <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Date range
+            </Label>
             <div className="flex gap-2">
               <Input
                 type="date"
                 value={filters.startDate}
                 onChange={(e) => handleChange('startDate', e.target.value)}
-                className="w-1/2"
+                className="w-1/2 rounded-xl"
               />
               <Input
                 type="date"
                 value={filters.endDate}
                 onChange={(e) => handleChange('endDate', e.target.value)}
-                className="w-1/2"
+                className="w-1/2 rounded-xl"
               />
             </div>
           </div>
 
           <div className="flex gap-2 pt-4">
-            <Button className="flex-1" onClick={() => setIsOpen(false)}>
-              Apply Filters
+            <Button
+              className="flex-1 rounded-full bg-orange-600 text-white hover:bg-orange-700"
+              onClick={() => setIsOpen(false)}
+            >
+              Apply filters
             </Button>
-            <Button variant="outline" onClick={clearFilters}>
-              <X className="h-4 w-4 mr-2" />
+            <Button variant="outline" className="rounded-full" onClick={clearFilters}>
+              <X className="mr-2 h-4 w-4" />
               Clear
             </Button>
           </div>

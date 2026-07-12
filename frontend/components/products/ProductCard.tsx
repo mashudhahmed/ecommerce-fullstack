@@ -1,7 +1,7 @@
 // components/products/ProductCard.tsx
 'use client';
 
-import { useState, memo, useCallback, useMemo, useEffect } from 'react';
+import { useState, memo, useCallback, useMemo } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { ShoppingCart, Heart, Eye, Star, StarHalf } from 'lucide-react';
@@ -58,12 +58,16 @@ export const ProductCard = memo(function ProductCard({
   priority = false,
 }: ProductCardProps) {
   const { addToCart, addToCartLoading } = useCart();
-  const { addToWishlist, removeFromWishlist, checkInWishlist } = useWishlist();
+  const { addToWishlist, removeFromWishlist, isInWishlist: checkIsInWishlist } = useWishlist();
   const { isAuthenticated } = useAuth();
   const [isHovered, setIsHovered] = useState(false);
-  const [isInWishlist, setIsInWishlist] = useState(false);
-  const [imageError, setImageError] = useState(false);
   const [isWishlistLoading, setIsWishlistLoading] = useState(false);
+  const [imageError, setImageError] = useState(false);
+
+  // ✅ Instant, synchronous store lookup — no per-card network call on
+  // mount. Previously this fired a `checkInWishlist(id)` request for
+  // every single card rendered in a grid.
+  const isInWishlist = checkIsInWishlist(product.id);
 
   // Memoized computed values
   const isOutOfStock = useMemo(() => product.stock === 0, [product.stock]);
@@ -83,13 +87,6 @@ export const ProductCard = memo(function ProductCard({
     }
     return product.imageUrl;
   }, [product.imageUrl, imageError]);
-
-  // Check if product is in wishlist on mount
-  useEffect(() => {
-    if (isAuthenticated) {
-      checkInWishlist(product.id).then(setIsInWishlist);
-    }
-  }, [isAuthenticated, product.id, checkInWishlist]);
 
   // Memoized handlers
   const handleAddToCart = useCallback(
@@ -128,11 +125,9 @@ export const ProductCard = memo(function ProductCard({
       try {
         if (isInWishlist) {
           await removeFromWishlist(product.id);
-          setIsInWishlist(false);
           toast.success('Removed from wishlist');
         } else {
-          await addToWishlist(product.id);
-          setIsInWishlist(true);
+          await addToWishlist(product);
           toast.success('Added to wishlist');
         }
       } catch (error: any) {
@@ -142,7 +137,7 @@ export const ProductCard = memo(function ProductCard({
         setIsWishlistLoading(false);
       }
     },
-    [isAuthenticated, isInWishlist, isWishlistLoading, addToWishlist, removeFromWishlist, product.id]
+    [isAuthenticated, isInWishlist, isWishlistLoading, addToWishlist, removeFromWishlist, product]
   );
 
   return (

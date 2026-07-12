@@ -20,10 +20,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
-import { formatDate } from '@/lib/utils';
-import { Search, Trash2, CheckCircle, XCircle, UserCog } from 'lucide-react';
-import { toast } from 'sonner';
+import { formatDate, cn } from '@/lib/utils';
+import { Search, Trash2, CheckCircle, XCircle } from 'lucide-react';
 
 export default function SuperAdminUsersPage() {
   const {
@@ -51,7 +49,7 @@ export default function SuperAdminUsersPage() {
     if (selectedUsers.length === filteredUsers?.length) {
       setSelectedUsers([]);
     } else {
-      setSelectedUsers(filteredUsers?.map((u: { id: any; }) => u.id) || []);
+      setSelectedUsers(filteredUsers?.map((u: { id: any }) => u.id) || []);
     }
   };
 
@@ -96,128 +94,175 @@ export default function SuperAdminUsersPage() {
     }
   };
 
+  const roleBadgeClass = (role: string) => {
+    switch (role) {
+      case 'superadmin':
+        return 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-400';
+      case 'admin':
+        return 'bg-violet-50 text-violet-700 dark:bg-violet-950/30 dark:text-violet-400';
+      case 'vendor':
+        return 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400';
+      default:
+        return 'bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-400';
+    }
+  };
+
   if (usersLoading) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+      <div className="flex h-64 items-center justify-center">
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-orange-600" />
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <h1 className="text-3xl font-bold">User Management</h1>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-black tracking-tight">User management</h1>
+          <p className="text-muted-foreground">Manage every account on the platform</p>
+        </div>
         {selectedUsers.length > 0 && (
-          <Button variant="destructive" onClick={handleBulkDelete}>
+          <Button
+            className="rounded-full bg-red-600 text-white hover:bg-red-700"
+            onClick={handleBulkDelete}
+          >
             <Trash2 className="mr-2 h-4 w-4" />
-            Delete Selected ({selectedUsers.length})
+            Delete selected ({selectedUsers.length})
           </Button>
         )}
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+      <div className="flex flex-col gap-3 sm:flex-row">
+        <div className="relative max-w-sm flex-1">
+          <Search className="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Search users..."
+            placeholder="Search users…"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-9"
+            className="h-10 rounded-full border-border bg-muted/40 pl-10 focus-visible:border-orange-300"
           />
         </div>
         <Select value={roleFilter} onValueChange={setRoleFilter}>
-          <SelectTrigger className="w-40">
-            <SelectValue placeholder="All Roles" />
+          <SelectTrigger className="h-10 w-40 rounded-full">
+            <SelectValue placeholder="All roles" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="">All</SelectItem>
             <SelectItem value="user">User</SelectItem>
             <SelectItem value="vendor">Vendor</SelectItem>
             <SelectItem value="admin">Admin</SelectItem>
-            <SelectItem value="superadmin">SuperAdmin</SelectItem>
+            <SelectItem value="superadmin">Super admin</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
-      <div className="border rounded-lg overflow-hidden">
+      <div className="overflow-hidden rounded-2xl border border-border">
         <Table>
           <TableHeader>
-            <TableRow>
+            <TableRow className="hover:bg-transparent">
               <TableHead className="w-10">
                 <input
                   type="checkbox"
                   checked={
-                    selectedUsers.length === filteredUsers?.length &&
-                    filteredUsers?.length > 0
+                    !!filteredUsers?.length && selectedUsers.length === filteredUsers.length
                   }
                   onChange={toggleSelectAll}
+                  className="h-4 w-4 rounded border-border accent-orange-600"
                 />
               </TableHead>
-              <TableHead>Name</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Role</TableHead>
-              <TableHead>Verified</TableHead>
-              <TableHead>Joined</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
+              <TableHead className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                Name
+              </TableHead>
+              <TableHead className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                Email
+              </TableHead>
+              <TableHead className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                Role
+              </TableHead>
+              <TableHead className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                Verified
+              </TableHead>
+              <TableHead className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                Joined
+              </TableHead>
+              <TableHead className="text-right text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                Actions
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filteredUsers?.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={7} className="py-12 text-center text-muted-foreground">
                   No users found
                 </TableCell>
               </TableRow>
             ) : (
               filteredUsers?.map((user) => (
-                <TableRow key={user.id}>
+                <TableRow key={user.id} className="hover:bg-muted/30">
                   <TableCell>
                     <input
                       type="checkbox"
                       checked={selectedUsers.includes(user.id)}
                       onChange={() => toggleSelect(user.id)}
+                      className="h-4 w-4 rounded border-border accent-orange-600"
                     />
                   </TableCell>
                   <TableCell className="font-medium">{user.name}</TableCell>
-                  <TableCell>{user.email}</TableCell>
+                  <TableCell className="text-muted-foreground">{user.email}</TableCell>
                   <TableCell>
-                    <Select
-                      value={user.role}
-                      onValueChange={(value) => handleRoleChange(user.id, value)}
-                      disabled={user.role === 'superadmin'}
-                    >
-                      <SelectTrigger className="w-28">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="user">User</SelectItem>
-                        <SelectItem value="vendor">Vendor</SelectItem>
-                        <SelectItem value="admin">Admin</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    {user.role === 'superadmin' ? (
+                      <span
+                        className={cn(
+                          'w-fit rounded-full px-2.5 py-1 text-[11px] font-semibold',
+                          roleBadgeClass(user.role)
+                        )}
+                      >
+                        Super admin
+                      </span>
+                    ) : (
+                      <Select
+                        value={user.role}
+                        onValueChange={(value) => handleRoleChange(user.id, value)}
+                      >
+                        <SelectTrigger className="h-8 w-28 rounded-full text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="user">User</SelectItem>
+                          <SelectItem value="vendor">Vendor</SelectItem>
+                          <SelectItem value="admin">Admin</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
                   </TableCell>
                   <TableCell>
-                    <Button
-                      variant="ghost"
-                      size="sm"
+                    <button
+                      type="button"
                       onClick={() => handleStatusToggle(user.id, user.isVerified)}
                       disabled={user.role === 'superadmin'}
+                      className="flex h-8 w-8 items-center justify-center rounded-full transition-colors hover:bg-muted disabled:opacity-40"
+                      aria-label={user.isVerified ? 'Unverify user' : 'Verify user'}
                     >
                       {user.isVerified ? (
-                        <CheckCircle className="h-4 w-4 text-green-500" />
+                        <CheckCircle className="h-4 w-4 text-emerald-500" />
                       ) : (
                         <XCircle className="h-4 w-4 text-red-500" />
                       )}
-                    </Button>
+                    </button>
                   </TableCell>
-                  <TableCell className="text-sm">{formatDate(user.createdAt)}</TableCell>
+                  <TableCell className="text-sm tabular-nums text-muted-foreground">
+                    {formatDate(user.createdAt)}
+                  </TableCell>
                   <TableCell className="text-right">
                     <Button
-                      variant="destructive"
+                      variant="ghost"
                       size="icon"
+                      className="rounded-full text-red-600 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950/20"
                       onClick={() => handleDeleteUser(user.id)}
                       disabled={user.role === 'superadmin'}
+                      aria-label={`Delete ${user.name}`}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>

@@ -1,4 +1,4 @@
-// services/product.service.ts
+// frontend/services/product.service.ts
 import { apiClient, unwrapData } from '@/lib/api-client';
 import { Product, PaginatedResponse } from '@/types';
 
@@ -9,6 +9,11 @@ export interface CreateProductData {
   stock: number;
   imageUrl?: string;
   categoryId?: number;
+  compareAtPrice?: number;
+  sku?: string;
+  isTrending?: boolean;
+  isNew?: boolean;
+  additionalImages?: string[];
 }
 
 export interface ProductFilters {
@@ -43,7 +48,7 @@ export const productService = {
       const paginated = unwrapData<PaginatedResponse<Product>>(response.data);
       return paginated?.items || [];
     } catch (error: any) {
-      console.error('❌ Failed to fetch products:', error?.message || error);
+      console.error('Failed to fetch products:', error?.message || error);
       return [];
     }
   },
@@ -53,27 +58,25 @@ export const productService = {
   // ============================================================
   async getProduct(id: number): Promise<Product | null> {
     try {
-      // ✅ Add timestamp to prevent browser caching
       const response = await apiClient.get(`/products/${id}?fresh=true&_t=${Date.now()}`);
       return unwrapData<Product>(response.data) || null;
     } catch (error: any) {
       if (error?.response?.status === 404) return null;
-      console.error(`❌ Failed to fetch product ${id}:`, error?.message || error);
+      console.error(`Failed to fetch product ${id}:`, error?.message || error);
       throw error;
     }
   },
 
   // ============================================================
-  // GET SINGLE PRODUCT WITH NO CACHE (alias for clarity)
+  // GET SINGLE PRODUCT WITH NO CACHE
   // ============================================================
   async getProductFresh(id: number): Promise<Product | null> {
     try {
-      // ✅ Force fresh fetch from backend
       const response = await apiClient.get(`/products/${id}?fresh=true&_t=${Date.now()}`);
       return unwrapData<Product>(response.data) || null;
     } catch (error: any) {
       if (error?.response?.status === 404) return null;
-      console.error(`❌ Failed to fetch product ${id}:`, error?.message || error);
+      console.error(`Failed to fetch product ${id}:`, error?.message || error);
       throw error;
     }
   },
@@ -86,7 +89,7 @@ export const productService = {
       const response = await apiClient.get('/products/in-stock');
       return unwrapData<Product[]>(response.data) || [];
     } catch (error: any) {
-      console.error('❌ Failed to fetch in-stock products:', error?.message || error);
+      console.error('Failed to fetch in-stock products:', error?.message || error);
       return [];
     }
   },
@@ -99,7 +102,7 @@ export const productService = {
       const response = await apiClient.get('/products/out-of-stock');
       return unwrapData<Product[]>(response.data) || [];
     } catch (error: any) {
-      console.error('❌ Failed to fetch out-of-stock products:', error?.message || error);
+      console.error('Failed to fetch out-of-stock products:', error?.message || error);
       return [];
     }
   },
@@ -112,7 +115,7 @@ export const productService = {
       const response = await apiClient.get(`/products/low-stock?threshold=${threshold}`);
       return unwrapData<Product[]>(response.data) || [];
     } catch (error: any) {
-      console.error('❌ Failed to fetch low-stock products:', error?.message || error);
+      console.error('Failed to fetch low-stock products:', error?.message || error);
       return [];
     }
   },
@@ -128,7 +131,7 @@ export const productService = {
       const paginated = unwrapData<PaginatedResponse<Product>>(response.data);
       return paginated?.items || [];
     } catch (error: any) {
-      console.error('❌ Failed to search products:', error?.message || error);
+      console.error('Failed to search products:', error?.message || error);
       return [];
     }
   },
@@ -178,7 +181,7 @@ export const productService = {
       const response = await apiClient.get('/products/vendor/my');
       return unwrapData<Product[]>(response.data) || [];
     } catch (error: any) {
-      console.error('❌ Failed to fetch vendor products:', error?.message || error);
+      console.error('Failed to fetch vendor products:', error?.message || error);
       return [];
     }
   },
@@ -201,7 +204,7 @@ export const productService = {
         outOfStockCount: 0,
       };
     } catch (error: any) {
-      console.error('❌ Failed to fetch vendor stats:', error?.message || error);
+      console.error('Failed to fetch vendor stats:', error?.message || error);
       return {
         totalProducts: 0,
         totalStock: 0,
@@ -236,7 +239,7 @@ export const productService = {
         totalPages: 0,
       };
     } catch (error: any) {
-      console.error('❌ Failed to fetch paginated products:', error?.message || error);
+      console.error('Failed to fetch paginated products:', error?.message || error);
       return {
         items: [],
         total: 0,
@@ -256,7 +259,7 @@ export const productService = {
       const paginated = unwrapData<PaginatedResponse<Product>>(response.data);
       return paginated?.items || [];
     } catch (error: any) {
-      console.error('❌ Failed to fetch products by category:', error?.message || error);
+      console.error('Failed to fetch products by category:', error?.message || error);
       return [];
     }
   },

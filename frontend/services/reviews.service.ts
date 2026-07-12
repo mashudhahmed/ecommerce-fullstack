@@ -18,6 +18,12 @@ export interface Review {
   images?: string[];
   createdAt: string;
   updatedAt: string;
+  isApproved?: boolean;
+  metadata?: {
+    verifiedPurchase?: boolean;
+    helpfulCount?: number;
+    reportedCount?: number;
+  };
 }
 
 export interface ReviewStats {
@@ -86,11 +92,35 @@ export const reviewsService = {
     return data.data;
   },
 
-  async updateReview(reviewId: number, reviewData: {
-    rating?: number;
-    title?: string;
-    comment?: string;
-  }): Promise<Review> {
+  // ✅ Upload images separately if needed
+  async uploadReviewImages(files: File[]): Promise<string[]> {
+    const formData = new FormData();
+    files.forEach((file) => {
+      formData.append('images', file);
+    });
+
+    const { data } = await apiClient.post<ApiResponse<{ urls: string[] }>>(
+      '/files/upload-multiple',
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      }
+    );
+    return data.data.urls;
+  },
+
+  async updateReview(
+    reviewId: number,
+    reviewData: {
+      rating?: number;
+      title?: string;
+      comment?: string;
+      images?: string[];
+      existingImages?: string[];
+    }
+  ): Promise<Review> {
     const { data } = await apiClient.put<ApiResponse<Review>>(
       `/reviews/${reviewId}`,
       reviewData

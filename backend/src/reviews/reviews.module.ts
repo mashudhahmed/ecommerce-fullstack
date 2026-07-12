@@ -8,9 +8,13 @@ import { ReviewAnalyticsService } from './review-analytics.service';
 import { Product } from '../products/products.entity';
 import { Order } from '../orders/order.entity';
 import { User } from '../user/user.entity';
+import { FilesModule } from '../files/files.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Review, Product, Order, User])],
+  imports: [
+    TypeOrmModule.forFeature([Review, Product, Order, User]),
+    FilesModule,
+  ],
   controllers: [ReviewsController],
   providers: [ReviewsService, ReviewAnalyticsService],
   exports: [ReviewsService, ReviewAnalyticsService],

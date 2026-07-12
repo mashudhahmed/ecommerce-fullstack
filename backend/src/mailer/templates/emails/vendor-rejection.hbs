@@ -1,0 +1,15 @@
+<h2>Vendor account update</h2>
+
+<p>Hello {{name}},</p>
+<p>We've reviewed your vendor registration request.</p>
+<p>Unfortunately, we're unable to approve your vendor account at this time.</p>
+
+{{#if reason}}
+<div class="danger-box">
+  <p><strong>Reason:</strong> {{reason}}</p>
+</div>
+{{/if}}
+
+<p style="color: #71717a; font-size: 14px;">
+  Questions? <a href="{{frontendUrl}}/support" style="color: #ea580c; font-weight: 600; text-decoration: none;">Contact our support team</a>.
+</p>

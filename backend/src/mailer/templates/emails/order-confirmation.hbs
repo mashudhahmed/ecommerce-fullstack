@@ -1,0 +1,23 @@
+<h2>✅ Order confirmed — #{{orderId}}</h2>
+
+<p>Hello {{customerName}},</p>
+<p>Thank you for your order! We've received it and it's now being processed.</p>
+
+<div class="detail-panel">
+  <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;color:#71717a;margin-bottom:12px;">Order items</p>
+  {{#each items}}
+    <div class="order-item">
+      <span>{{this.name}} <span style="color:#a1a1aa;">&times; {{this.quantity}}</span></span>
+      <span class="value">${{this.price}}</span>
+    </div>
+  {{/each}}
+  <div class="order-total">Total &nbsp;${{total}}</div>
+</div>
+
+<div style="text-align: center; margin: 24px 0;">
+  {{> button url=frontendUrl text="View order"}}
+</div>
+
+<p style="color: #71717a; font-size: 14px;">
+  You'll get another email as soon as your order ships.
+</p>

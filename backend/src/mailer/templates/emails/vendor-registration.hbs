@@ -1,0 +1,27 @@
+<h2>New vendor registration</h2>
+
+<p>A new vendor has registered and is awaiting approval:</p>
+
+<div class="detail-panel">
+  <div class="row"><span class="label">Name</span><span class="value">{{vendor.name}}</span></div>
+  <div class="row"><span class="label">Email</span><span class="value">{{vendor.email}}</span></div>
+  <div class="row"><span class="label">Business name</span><span class="value">{{vendor.businessName}}</span></div>
+  {{#if vendor.businessDescription}}
+  <div class="row"><span class="label">Description</span><span class="value">{{vendor.businessDescription}}</span></div>
+  {{/if}}
+  {{#if vendor.phone}}
+  <div class="row"><span class="label">Phone</span><span class="value">{{vendor.phone}}</span></div>
+  {{/if}}
+  {{#if vendor.address}}
+  <div class="row"><span class="label">Address</span><span class="value">{{vendor.address}}</span></div>
+  {{/if}}
+  {{#if vendor.registration}}
+  <div class="row"><span class="label">Registration</span><span class="value">{{vendor.registration}}</span></div>
+  {{/if}}
+</div>
+
+<p>Please review this vendor's application in the admin panel.</p>
+
+<div style="text-align: center; margin: 20px 0;">
+  {{> button url=adminUrl text="Review vendor"}}
+</div>

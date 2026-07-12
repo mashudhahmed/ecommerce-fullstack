@@ -1,0 +1,17 @@
+<h2>🔑 Your 2FA backup codes</h2>
+
+<p>Hello {{name}},</p>
+<p>Here are your backup codes for two-factor authentication. Store them somewhere safe:</p>
+
+<div class="badge-grid">
+  {{#each codes}}
+    <span class="badge">{{this}}</span>
+  {{/each}}
+</div>
+
+<div class="warning-box">
+  <p style="margin-bottom: 6px;"><strong>⚠️ Important</strong></p>
+  <p style="margin: 0;">
+    Each code works once. Keep them private, and use one to sign in if you ever lose access to your authenticator app.
+  </p>
+</div>

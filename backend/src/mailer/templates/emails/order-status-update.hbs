@@ -1,0 +1,17 @@
+<h2>Order status update</h2>
+
+<p>Hello {{customerName}},</p>
+<p>Your order <strong>#{{orderId}}</strong> status has been updated to:</p>
+
+<div style="text-align: center; margin: 20px 0;">
+  <span class="status-badge">{{status}}</span>
+</div>
+
+<div class="detail-panel">
+  <div class="row"><span class="label">Order total</span><span class="value">${{total}}</span></div>
+  <div class="row"><span class="label">Order date</span><span class="value">{{orderDate}}</span></div>
+</div>
+
+<div style="text-align: center; margin: 20px 0;">
+  {{> button url=frontendUrl text="View order details"}}
+</div>

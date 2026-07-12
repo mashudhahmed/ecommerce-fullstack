@@ -1,0 +1,27 @@
+<h2>🔐 Login notification</h2>
+
+<p>Hello {{name}},</p>
+<p>Your account was successfully accessed on:</p>
+
+<div class="detail-panel">
+  <div class="row">
+    <span class="label">Date &amp; time</span>
+    <span class="value">{{loginTime}}</span>
+  </div>
+  {{#if ipAddress}}
+  <div class="row">
+    <span class="label">IP address</span>
+    <span class="value">{{ipAddress}}</span>
+  </div>
+  {{/if}}
+  {{#if userAgent}}
+  <div class="row">
+    <span class="label">Device</span>
+    <span class="value">{{userAgent}}</span>
+  </div>
+  {{/if}}
+</div>
+
+<div class="warning-box">
+  <p><strong>⚠️ If this wasn't you,</strong> please contact support immediately.</p>
+</div>

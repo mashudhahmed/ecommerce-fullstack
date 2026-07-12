@@ -1,248 +1,435 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
+import * as handlebars from 'handlebars';
+import * as fs from 'fs';
+import * as path from 'path';
 import { User } from '../user/user.entity';
 
+// ✅ Industry Standard: Use proper type
+type TemplateFunction = HandlebarsTemplateDelegate;
+
 @Injectable()
-export class MailerService {
+export class MailerService implements OnModuleInit {
   private transporter: nodemailer.Transporter;
   private readonly logger = new Logger(MailerService.name);
   private readonly fromName: string;
   private readonly fromEmail: string;
+  private readonly frontendUrl: string;
+  private readonly adminUrl: string;
+  private templates: Map<string, TemplateFunction> = new Map();
+  private templatesLoaded = false;
+  private readonly templatePaths: {
+    emails: string;
+    partials: string;
+    layouts: string;
+  };
 
   constructor(private configService: ConfigService) {
-    this.fromName = this.configService.get('email.fromName') || 'E-Commerce Store';
+    this.fromName = this.configService.get('email.fromName') || 'SnapCart';
     this.fromEmail = this.configService.get('email.user') || '';
+    this.frontendUrl = this.configService.get('app.frontendUrl') || 'http://localhost:3000';
+    this.adminUrl = `${this.frontendUrl}/admin`;
 
-    this.transporter = nodemailer.createTransport({
-      host: this.configService.get('email.host'),
-      port: this.configService.get('email.port'),
-      secure: this.configService.get('email.secure') || false,
-      auth: {
-        user: this.fromEmail,
-        pass: this.configService.get('email.pass'),
-      },
-      tls: {
-        rejectUnauthorized: false,
-      },
-    });
+    // ✅ Production-ready: Initialize transporter with proper error handling
+    this.initializeTransporter();
+
+    // ✅ Resolve template paths with multiple fallbacks
+    this.templatePaths = this.resolveTemplatePaths();
+  }
+
+  private initializeTransporter(): void {
+    try {
+      this.transporter = nodemailer.createTransport({
+        host: this.configService.get('email.host'),
+        port: this.configService.get('email.port'),
+        secure: this.configService.get('email.secure') || false,
+        auth: {
+          user: this.fromEmail,
+          pass: this.configService.get('email.pass'),
+        },
+        tls: {
+          rejectUnauthorized: false,
+        },
+        // ✅ Connection timeout for reliability
+        connectionTimeout: 5000,
+        greetingTimeout: 5000,
+        socketTimeout: 10000,
+      });
+
+      // ✅ Verify SMTP connection on startup
+      this.verifyConnection();
+    } catch (error) {
+      this.logger.error('❌ Failed to initialize email transporter:', error);
+    }
+  }
+
+  private async verifyConnection(): Promise<void> {
+    try {
+      await this.transporter.verify();
+      this.logger.log('✅ SMTP connection verified successfully');
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      this.logger.warn('⚠️ SMTP connection verification failed. Email sending may not work:', msg);
+    }
+  }
+
+  private resolveTemplatePaths(): { emails: string; partials: string; layouts: string } {
+    // ✅ Try multiple possible paths (in order of priority)
+    const possiblePaths = [
+      // 1. From src directory (development)
+      path.join(__dirname, '..', '..', 'src', 'mailer', 'templates'),
+      // 2. From dist directory (production)
+      path.join(__dirname, 'templates'),
+      // 3. From project root (fallback)
+      path.join(process.cwd(), 'src', 'mailer', 'templates'),
+      // 4. From current directory (last resort)
+      path.join(process.cwd(), 'templates'),
+    ];
+
+    let templatesPath = '';
+    for (const p of possiblePaths) {
+      const emailsPath = path.join(p, 'emails');
+      if (fs.existsSync(emailsPath)) {
+        templatesPath = p;
+        this.logger.log(`✅ Found templates at: ${templatesPath}`);
+        break;
+      }
+    }
+
+    if (!templatesPath) {
+      // ✅ Use fallback path and log warning
+      templatesPath = path.join(__dirname, 'templates');
+      this.logger.warn(`⚠️ Templates not found in any expected location. Using fallback: ${templatesPath}`);
+    }
+
+    return {
+      emails: path.join(templatesPath, 'emails'),
+      partials: path.join(templatesPath, 'partials'),
+      layouts: path.join(templatesPath, 'layouts'),
+    };
+  }
+
+  async onModuleInit(): Promise<void> {
+    await this.loadTemplates();
+  }
+
+  private async loadTemplates(): Promise<void> {
+    try {
+      this.logger.log(`📁 Loading email templates from: ${this.templatePaths.emails}`);
+
+      // ✅ Check if directories exist
+      const dirsExist = this.ensureDirectoriesExist();
+      if (!dirsExist) {
+        this.logger.error('❌ Template directories are missing. Email templates will not work.');
+        return;
+      }
+
+      // ✅ Register partials
+      await this.registerPartials();
+
+      // ✅ Load layout
+      const layoutTemplate = await this.loadLayout();
+      if (!layoutTemplate) {
+        this.logger.error('❌ Layout template not found. Email templates will not work.');
+        return;
+      }
+
+      // ✅ Load email templates
+      await this.loadEmailTemplates(layoutTemplate);
+
+      this.templatesLoaded = true;
+      this.logger.log(`✅ Loaded ${this.templates.size} email templates successfully`);
+
+      // ✅ Log available templates for debugging
+      this.logTemplateNames();
+
+    } catch (error) {
+      this.logger.error('❌ Failed to load email templates:', error);
+      this.templatesLoaded = false;
+    }
+  }
+
+  private ensureDirectoriesExist(): boolean {
+    const dirs = [
+      { path: this.templatePaths.emails, name: 'emails' },
+      { path: this.templatePaths.partials, name: 'partials' },
+      { path: this.templatePaths.layouts, name: 'layouts' },
+    ];
+
+    let allExist = true;
+    for (const dir of dirs) {
+      if (!fs.existsSync(dir.path)) {
+        this.logger.warn(`⚠️ ${dir.name} directory not found: ${dir.path}`);
+        // ✅ Create directory if it doesn't exist
+        try {
+          fs.mkdirSync(dir.path, { recursive: true });
+          this.logger.log(`✅ Created ${dir.name} directory: ${dir.path}`);
+        } catch (error) {
+          this.logger.error(`❌ Failed to create ${dir.name} directory:`, error);
+          allExist = false;
+        }
+      }
+    }
+    return allExist;
+  }
+
+  private async registerPartials(): Promise<void> {
+    try {
+      if (!fs.existsSync(this.templatePaths.partials)) {
+        return;
+      }
+
+      const files = fs.readdirSync(this.templatePaths.partials);
+      let registered = 0;
+
+      for (const file of files) {
+        if (file.endsWith('.hbs')) {
+          const name = path.basename(file, '.hbs');
+          const content = fs.readFileSync(
+            path.join(this.templatePaths.partials, file),
+            'utf-8'
+          );
+          handlebars.registerPartial(name, content);
+          registered++;
+        }
+      }
+
+      if (registered > 0) {
+        this.logger.log(`✅ Registered ${registered} partials`);
+      }
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      this.logger.warn('⚠️ Failed to register partials:', msg);
+    }
+  }
+
+  private async loadLayout(): Promise<TemplateFunction | null> {
+    try {
+      const layoutPath = path.join(this.templatePaths.layouts, 'main.hbs');
+      
+      if (!fs.existsSync(layoutPath)) {
+        this.logger.warn(`⚠️ Layout file not found: ${layoutPath}`);
+        return null;
+      }
+
+      const content = fs.readFileSync(layoutPath, 'utf-8');
+      return handlebars.compile(content);
+    } catch (error) {
+      this.logger.error('❌ Failed to load layout:', error);
+      return null;
+    }
+  }
+
+  private async loadEmailTemplates(layoutTemplate: TemplateFunction): Promise<void> {
+    try {
+      const files = fs.readdirSync(this.templatePaths.emails);
+
+      if (files.length === 0) {
+        this.logger.warn('⚠️ No email templates found in directory');
+        return;
+      }
+
+      let loaded = 0;
+
+      for (const file of files) {
+        if (!file.endsWith('.hbs')) continue;
+
+        const name = path.basename(file, '.hbs');
+        const filePath = path.join(this.templatePaths.emails, file);
+        const content = fs.readFileSync(filePath, 'utf-8');
+
+        // ✅ Skip empty files
+        if (content.trim().length === 0) {
+          this.logger.warn(`⚠️ Template "${name}" is empty, skipping`);
+          continue;
+        }
+
+        // ✅ Compile template with layout
+        const emailTemplate = handlebars.compile(content);
+        this.templates.set(name, (data: any) => {
+          const body = emailTemplate(data);
+          return layoutTemplate({
+            ...data,
+            body,
+            frontendUrl: this.frontendUrl,
+            year: new Date().getFullYear(),
+          });
+        });
+
+        loaded++;
+      }
+
+      this.logger.log(`✅ Loaded ${loaded} email templates`);
+
+    } catch (error) {
+      this.logger.error('❌ Failed to load email templates:', error);
+    }
+  }
+
+  private logTemplateNames(): void {
+    const names = Array.from(this.templates.keys());
+    if (names.length > 0) {
+      this.logger.log(`📋 Available templates: ${names.join(', ')}`);
+    } else {
+      this.logger.warn('⚠️ No templates loaded');
+    }
+  }
+
+  private renderTemplate(templateName: string, data: any): string {
+    // ✅ Check if templates are loaded
+    if (!this.templatesLoaded) {
+      this.logger.warn(`⚠️ Templates not loaded, attempting to reload...`);
+      this.loadTemplates();
+      
+      if (!this.templatesLoaded) {
+        throw new Error('Email templates failed to load. Please check template files.');
+      }
+    }
+
+    const template = this.templates.get(templateName);
+    if (!template) {
+      const available = Array.from(this.templates.keys());
+      this.logger.error(`❌ Template "${templateName}" not found`);
+      this.logger.log(`📋 Available templates: ${available.join(', ') || 'None'}`);
+      
+      // ✅ Try to load templates again (in case they were added after startup)
+      this.loadTemplates();
+      
+      // ✅ Check again
+      const retryTemplate = this.templates.get(templateName);
+      if (retryTemplate) {
+        this.logger.log(`✅ Template "${templateName}" loaded on retry`);
+        return retryTemplate({
+          ...data,
+          year: new Date().getFullYear(),
+          frontendUrl: this.frontendUrl,
+          adminUrl: this.adminUrl,
+        });
+      }
+
+      // ✅ Return fallback HTML if template not found
+      this.logger.error(`❌ Template "${templateName}" still not found after retry`);
+      return this.getFallbackTemplate(templateName, data);
+    }
+
+    try {
+      return template({
+        ...data,
+        year: new Date().getFullYear(),
+        frontendUrl: this.frontendUrl,
+        adminUrl: this.adminUrl,
+      });
+    } catch (error) {
+      this.logger.error(`❌ Error rendering template "${templateName}":`, error);
+      return this.getFallbackTemplate(templateName, data);
+    }
+  }
+
+  private getFallbackTemplate(templateName: string, data: any): string {
+    // ✅ Simple fallback template when .hbs files are missing
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head><meta charset="UTF-8"><title>${templateName}</title></head>
+      <body style="font-family: Arial, sans-serif; padding: 20px;">
+        <div style="max-width: 600px; margin: 0 auto; background: #f8f9fa; padding: 30px; border-radius: 8px;">
+          <h2 style="color: #f97316;">SnapCart</h2>
+          <hr style="border: none; border-top: 1px solid #e0e0e0;">
+          <div style="padding: 20px 0;">
+            <p>Hello ${data.name || 'User'},</p>
+            <p>${this.getFallbackMessage(templateName, data)}</p>
+          </div>
+          <hr style="border: none; border-top: 1px solid #e0e0e0;">
+          <p style="color: #888; font-size: 12px; text-align: center;">
+            &copy; ${new Date().getFullYear()} SnapCart. All rights reserved.
+          </p>
+        </div>
+      </body>
+      </html>
+    `;
+  }
+
+  private getFallbackMessage(templateName: string, data: any): string {
+    const messages: Record<string, string> = {
+      'verification': `Your verification code is: <strong>${data.code}</strong>`,
+      'password-reset': `Your password reset code is: <strong>${data.code}</strong>`,
+      'two-factor-code': `Your 2FA verification code is: <strong>${data.code}</strong>`,
+      'welcome': `Welcome to SnapCart! We're excited to have you.`,
+      'order-confirmation': `Your order #${data.orderId} has been confirmed. Total: $${data.total}`,
+      'order-status-update': `Your order #${data.orderId} status is now: ${data.status}`,
+      'vendor-approval': `Your vendor account has been approved!`,
+      'vendor-rejection': `Your vendor application has been reviewed.`,
+      'login-notification': `Your account was accessed at ${data.loginTime}`,
+      'password-changed': `Your password has been changed successfully.`,
+      'account-deletion': `Your account has been deleted.`,
+      'two-factor-backup-codes': `Your backup codes have been generated.`,
+      'vendor-registration': `A new vendor has registered.`,
+    };
+    return messages[templateName] || `Email template "${templateName}" is not available.`;
   }
 
   // ============================================================
-  // ✅ NEW: Send 2FA verification code via email
+  // PUBLIC EMAIL METHODS
   // ============================================================
-  async sendTwoFactorCode(to: string, code: string, userName: string) {
-    const html = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
-        <div style="text-align: center; margin-bottom: 20px;">
-          <h2 style="color: #f97316;">🔐 Two-Factor Authentication</h2>
-        </div>
-        
-        <p>Hello ${userName},</p>
-        
-        <p>Enter the 6-digit verification code below to complete your login:</p>
-        
-        <div style="text-align: center; margin: 30px 0; padding: 20px; background: #f8f9fa; border: 2px dashed #dee2e6; border-radius: 10px;">
-          <div style="font-size: 36px; font-weight: bold; letter-spacing: 10px; color: #f97316;">
-            ${code}
-          </div>
-        </div>
-        
-        <div style="background: #fff3cd; padding: 15px; border-radius: 5px; margin-top: 20px;">
-          <p style="margin: 0; color: #856404; font-size: 14px;">
-            <strong>⚠️ Security Note:</strong> This code will expire in <strong>5 minutes</strong>.
-            If you didn't request this code, please ignore this email and secure your account.
-          </p>
-        </div>
-        
-        <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 20px 0;" />
-        
-        <p style="color: #666; font-size: 12px; text-align: center;">
-          This is an automated message from SnapCart. Please do not reply to this email.
-        </p>
-      </div>
-    `;
 
+  async sendTwoFactorCode(to: string, code: string, userName: string) {
+    const html = this.renderTemplate('two-factor-code', { name: userName, code });
     return this.sendMail(to, '🔐 Your 2FA Verification Code', html);
   }
 
-  // ============================================================
-  // ✅ NEW: Send 2FA backup codes via email
-  // ============================================================
   async sendTwoFactorBackupCodes(to: string, backupCodes: string[], userName: string) {
-    const codesHtml = backupCodes.map(code => `<div style="display: inline-block; padding: 8px 16px; margin: 4px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; font-family: monospace; font-size: 16px;">${code}</div>`).join('');
-
-    const html = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
-        <div style="text-align: center; margin-bottom: 20px;">
-          <h2 style="color: #f97316;">🔑 Your 2FA Backup Codes</h2>
-        </div>
-        
-        <p>Hello ${userName},</p>
-        
-        <p>Here are your backup codes for two-factor authentication. Store them in a safe place:</p>
-        
-        <div style="text-align: center; margin: 20px 0; padding: 20px; background: #f8f9fa; border: 2px solid #dee2e6; border-radius: 10px;">
-          ${codesHtml}
-        </div>
-        
-        <div style="background: #fff3cd; padding: 15px; border-radius: 5px; margin-top: 20px;">
-          <p style="margin: 0; color: #856404; font-size: 14px;">
-            <strong>⚠️ Important:</strong> Each backup code can be used only once. 
-            If you lose your authenticator app, you can use these codes to log in.
-          </p>
-        </div>
-        
-        <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 20px 0;" />
-        
-        <p style="color: #666; font-size: 12px; text-align: center;">
-          This is an automated message from SnapCart. Please do not reply to this email.
-        </p>
-      </div>
-    `;
-
+    const html = this.renderTemplate('two-factor-backup-codes', { name: userName, codes: backupCodes });
     return this.sendMail(to, '🔑 Your 2FA Backup Codes', html);
   }
 
-  // ============================================================
-  // EXISTING METHODS (Keep all your existing methods below)
-  // ============================================================
-
   async sendVerificationEmail(to: string, verificationCode: string, userName: string) {
-    const html = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #333;">Verify Your Email Address</h2>
-        <p>Hello ${userName},</p>
-        <p>Thank you for registering! Use the 6-digit verification code below to activate your account:</p>
-        
-        <div style="text-align: center; margin: 30px 0;">
-          <div style="display: inline-block; padding: 20px; background: #f8f9fa; border: 2px dashed #dee2e6; border-radius: 10px;">
-            <div style="font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #28a745;">
-              ${verificationCode}
-            </div>
-          </div>
-        </div>
-
-        <p style="text-align: center; font-size: 14px; color: #666;">
-          Enter this code on the verification page to activate your account.
-        </p>
-
-        <div style="background: #fff3cd; padding: 15px; border-radius: 5px; margin-top: 20px;">
-          <p style="margin: 0; color: #856404;">
-            <strong>Note:</strong> This code will expire in 24 hours.
-          </p>
-        </div>
-        
-        <p style="margin-top: 20px; color: #666;">
-          If you didn't create an account, please ignore this email.
-        </p>
-      </div>
-    `;
-
+    const html = this.renderTemplate('verification', { name: userName, code: verificationCode });
     return this.sendMail(to, 'Verify Your Email Address', html);
   }
 
   async sendWelcomeEmail(to: string, userName: string) {
-    const html = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #333;">Welcome to Our Store, ${userName}!</h2>
-        <p>We're excited to have you as a new member of our community.</p>
-        <p>Start shopping now and discover our amazing products!</p>
-        <div style="margin-top: 20px; padding: 15px; background: #f0f8ff; border-radius: 5px;">
-          <a href="${this.configService.get('app.frontendUrl') || '#'}" style="display: inline-block; padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 5px;">Browse Products</a>
-        </div>
-      </div>
-    `;
-
-    return this.sendMail(to, `Welcome to Our Store, ${userName}!`, html);
+    const html = this.renderTemplate('welcome', { name: userName });
+    return this.sendMail(to, `Welcome to SnapCart, ${userName}!`, html);
   }
 
   async sendPasswordResetCode(to: string, resetCode: string, userName: string) {
-    const html = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #333;">Password Reset Code</h2>
-        <p>Hello ${userName},</p>
-        <p>We received a request to reset your password. Use the 6-digit code below to verify your identity:</p>
-        
-        <div style="text-align: center; margin: 30px 0;">
-          <div style="display: inline-block; padding: 20px; background: #f8f9fa; border: 2px dashed #dee2e6; border-radius: 10px;">
-            <div style="font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #dc3545;">
-              ${resetCode}
-            </div>
-          </div>
-        </div>
-
-        <div style="background: #fff3cd; padding: 15px; border-radius: 5px; margin-top: 20px;">
-          <p style="margin: 0; color: #856404;">
-            <strong>Security Note:</strong> This code will expire in 15 minutes.
-          </p>
-        </div>
-      </div>
-    `;
-
+    const html = this.renderTemplate('password-reset', { name: userName, code: resetCode });
     return this.sendMail(to, 'Password Reset Code', html);
   }
 
-  async sendLoginNotification(to: string, userName: string) {
-    const loginTime = new Date().toLocaleString();
-    const html = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #333;">Login Notification</h2>
-        <p>Hello ${userName},</p>
-        <p>Your account was successfully accessed on:</p>
-        <div style="background: #f9f9f9; padding: 15px; border-radius: 5px; margin: 15px 0;">
-          <strong>Date & Time:</strong> ${loginTime}
-        </div>
-        <p>If this wasn't you, please contact support immediately.</p>
-      </div>
-    `;
-
+  async sendLoginNotification(to: string, userName: string, ipAddress?: string, userAgent?: string) {
+    const html = this.renderTemplate('login-notification', {
+      name: userName,
+      loginTime: new Date().toLocaleString(),
+      ipAddress,
+      userAgent,
+    });
     return this.sendMail(to, 'Login Notification', html);
   }
 
   async sendPasswordChangedConfirmation(to: string, userName: string) {
-    const html = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #333;">Password Changed Successfully</h2>
-        <p>Hello ${userName},</p>
-        <p>Your password has been successfully changed.</p>
-        <p>If you didn't make this change, please contact support immediately.</p>
-      </div>
-    `;
-
+    const html = this.renderTemplate('password-changed', { name: userName });
     return this.sendMail(to, 'Password Changed Successfully', html);
   }
 
   async sendAccountDeletionEmail(to: string, userName: string) {
-    const html = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #333;">Account Successfully Deleted</h2>
-        <p>Hello ${userName},</p>
-        <p>Your account has been successfully deleted from our system.</p>
-        <p>We're sorry to see you go. If this was a mistake, you can always register again.</p>
-      </div>
-    `;
-
+    const html = this.renderTemplate('account-deletion', { name: userName });
     return this.sendMail(to, 'Account Deletion Confirmation', html);
   }
 
   async sendVendorRegistrationNotification(vendor: User) {
-    const html = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #333;">New Vendor Registration</h2>
-        <p>A new vendor has registered and is awaiting approval:</p>
-        <div style="background: #f9f9f9; padding: 15px; border-radius: 5px; margin: 15px 0;">
-          <p><strong>Name:</strong> ${vendor.name}</p>
-          <p><strong>Email:</strong> ${vendor.email}</p>
-          <p><strong>Business Name:</strong> ${vendor.vendorBusinessName || 'N/A'}</p>
-          <p><strong>Business Description:</strong> ${vendor.vendorBusinessDescription || 'N/A'}</p>
-          <p><strong>Phone:</strong> ${vendor.vendorPhoneNumber || 'N/A'}</p>
-          <p><strong>Address:</strong> ${vendor.vendorAddress || 'N/A'}</p>
-          <p><strong>Registration:</strong> ${vendor.vendorBusinessRegistration || 'N/A'}</p>
-        </div>
-        <p>Please review and approve/reject this vendor request.</p>
-      </div>
-    `;
+    const html = this.renderTemplate('vendor-registration', {
+      vendor: {
+        name: vendor.name,
+        email: vendor.email,
+        businessName: vendor.vendorBusinessName || 'N/A',
+        businessDescription: vendor.vendorBusinessDescription,
+        phone: vendor.vendorPhoneNumber,
+        address: vendor.vendorAddress,
+        registration: vendor.vendorBusinessRegistration,
+      },
+    });
 
     const adminEmails = this.configService.get('email.adminEmails')?.split(',') || [];
     if (adminEmails.length === 0) {
@@ -256,83 +443,50 @@ export class MailerService {
   }
 
   async sendVendorApprovalEmail(to: string, userName: string) {
-    const html = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #333;">Vendor Account Approved!</h2>
-        <p>Hello ${userName},</p>
-        <p>We're happy to inform you that your vendor account has been approved.</p>
-        <p>You can now start listing your products on our platform.</p>
-        <div style="margin-top: 20px; padding: 15px; background: #f0f8ff; border-radius: 5px;">
-          <a href="${this.configService.get('app.frontendUrl')}/vendor/dashboard" style="display: inline-block; padding: 10px 20px; background: #28a745; color: white; text-decoration: none; border-radius: 5px;">Go to Vendor Dashboard</a>
-        </div>
-      </div>
-    `;
-
+    const html = this.renderTemplate('vendor-approval', { name: userName });
     return this.sendMail(to, 'Vendor Account Approved!', html);
   }
 
   async sendVendorRejectionEmail(to: string, userName: string, reason?: string) {
-    const html = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #333;">Vendor Account Update</h2>
-        <p>Hello ${userName},</p>
-        <p>We have reviewed your vendor registration request.</p>
-        <p>Unfortunately, we are unable to approve your vendor account at this time.</p>
-        ${reason ? `<p><strong>Reason:</strong> ${reason}</p>` : ''}
-        <p>If you have any questions, please contact our support team.</p>
-      </div>
-    `;
-
+    const html = this.renderTemplate('vendor-rejection', { name: userName, reason });
     return this.sendMail(to, 'Vendor Account Update', html);
   }
 
   async sendOrderConfirmation(to: string, order: any) {
-    const itemsHtml = (order.items || [])
-      .map(
-        (item: any) =>
-          `<li>${item.product?.title || 'Product'} x ${item.quantity} — $${item.price}</li>`,
-      )
-      .join('');
-
-    const html = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2>Order Confirmation #${order.id}</h2>
-        <p><strong>Total:</strong> $${order.total}</p>
-        <h3>Items:</h3>
-        <ul>${itemsHtml}</ul>
-        <p>Thank you for your order!</p>
-      </div>
-    `;
-
+    const html = this.renderTemplate('order-confirmation', {
+      customerName: order.user?.name || 'Customer',
+      orderId: order.id,
+      items: (order.items || []).map((item: any) => ({
+        name: item.product?.title || 'Product',
+        quantity: item.quantity,
+        price: Number(item.price).toFixed(2),
+      })),
+      total: Number(order.total).toFixed(2),
+    });
     return this.sendMail(to, `Order Confirmation #${order.id}`, html);
   }
 
   async sendOrderStatusUpdate(to: string, order: any, status: string) {
-    const html = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #333;">Order Status Update</h2>
-        <p>Hello ${order.user?.name || 'Customer'},</p>
-        <p>Your order <strong>#${order.id}</strong> status has been updated.</p>
-        
-        <div style="text-align: center; margin: 30px 0;">
-          <div style="display: inline-block; padding: 15px 30px; background: #007bff; color: white; border-radius: 5px; font-size: 20px; font-weight: bold;">
-            ${status.toUpperCase()}
-          </div>
-        </div>
-
-        <div style="background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 15px 0;">
-          <p><strong>Order Total:</strong> $${order.total}</p>
-          <p><strong>Order Date:</strong> ${new Date(order.createdAt).toLocaleDateString()}</p>
-        </div>
-
-        <p style="margin-top: 20px;">Thank you for shopping with us!</p>
-      </div>
-    `;
-
+    const html = this.renderTemplate('order-status-update', {
+      customerName: order.user?.name || 'Customer',
+      orderId: order.id,
+      status: status.toUpperCase(),
+      total: Number(order.total).toFixed(2),
+      orderDate: new Date(order.createdAt).toLocaleDateString(),
+    });
     return this.sendMail(to, `Order Status Update - #${order.id}`, html);
   }
 
+  // ============================================================
+  // BASE SEND METHOD
+  // ============================================================
+
   async sendMail(to: string, subject: string, html: string) {
+    if (!to || !html) {
+      this.logger.error('❌ Invalid email parameters: missing "to" or "html"');
+      throw new Error('Invalid email parameters');
+    }
+
     try {
       const info = await this.transporter.sendMail({
         from: `"${this.fromName}" <${this.fromEmail}>`,
@@ -340,12 +494,24 @@ export class MailerService {
         subject,
         html,
       });
-      this.logger.log(`Email sent to ${to}: ${subject}`);
+      this.logger.log(`📧 Email sent to ${to}: ${subject}`);
       return info;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this.logger.error(`Failed to send email to ${to}: ${errorMessage}`);
+      this.logger.error(`❌ Failed to send email to ${to}: ${errorMessage}`);
       throw error;
     }
+  }
+
+  // ✅ Utility method to check template availability
+  getLoadedTemplates(): string[] {
+    return Array.from(this.templates.keys());
+  }
+
+  // ✅ Utility method to reload templates dynamically
+  async reloadTemplates(): Promise<void> {
+    this.logger.log('🔄 Reloading email templates...');
+    this.templates.clear();
+    await this.loadTemplates();
   }
 }

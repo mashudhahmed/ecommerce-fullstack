@@ -1,4 +1,4 @@
-// validations/schemas.ts
+// frontend/validations/schemas.ts
 import { z } from 'zod';
 
 // ============================================================
@@ -28,7 +28,7 @@ export const registerSchema = z.object({
 });
 
 // ============================================================
-// VENDOR REGISTRATION (NEW)
+// VENDOR REGISTRATION
 // ============================================================
 
 export const registerVendorSchema = z.object({
@@ -122,7 +122,7 @@ export const verifyEmailSchema = z.object({
 });
 
 // ============================================================
-// PRODUCT
+// PRODUCT - UPDATED WITH CATEGORY AND OPTIONAL FIELDS
 // ============================================================
 
 export const productSchema = z.object({
@@ -130,26 +130,70 @@ export const productSchema = z.object({
     .min(2, 'Title must be at least 2 characters')
     .max(150, 'Title cannot exceed 150 characters'),
 
-  price: z.number({
-    error: 'Price must be a number',
-  })
+  // ✅ Fixed: Removed invalid_type_error, using refine instead
+  price: z.number()
     .positive('Price must be greater than 0')
-    .max(1000000, 'Price is too high'),
+    .max(1000000, 'Price is too high')
+    .refine((val) => !isNaN(val), 'Price must be a number'),
 
   description: z.string()
     .min(10, 'Description must be at least 10 characters')
-    .max(2000, 'Description cannot exceed 2000 characters'),
+    .max(2000, 'Description cannot exceed 2000 characters')
+    .optional()
+    .or(z.literal('')),
 
-  stock: z.number({
-    error: 'Stock must be a number',
-  })
+  // ✅ Fixed: Removed invalid_type_error, using refine instead
+  stock: z.number()
     .int('Stock must be a whole number')
-    .min(0, 'Stock cannot be negative'),
+    .min(0, 'Stock cannot be negative')
+    .refine((val) => !isNaN(val), 'Stock must be a number'),
 
   imageUrl: z.string()
     .url('Must be a valid URL')
     .optional()
     .or(z.literal('')),
+
+  // ✅ Fixed: Removed invalid_type_error, using refine instead
+  categoryId: z.number()
+    .int('Category ID must be a whole number')
+    .positive('Please select a category')
+    .refine((val) => !isNaN(val), 'Category ID must be a number')
+    .optional(),
+
+  compareAtPrice: z.number()
+    .positive('Compare at price must be greater than 0')
+    .optional()
+    .or(z.literal('')),
+
+  sku: z.string()
+    .max(50, 'SKU cannot exceed 50 characters')
+    .optional()
+    .or(z.literal('')),
+
+  isActive: z.boolean().default(true).optional(),
+
+  isTrending: z.boolean().default(false).optional(),
+
+  isNew: z.boolean().default(false).optional(),
+
+  additionalImages: z.array(z.string().url('Invalid image URL'))
+    .optional()
+    .default([]),
+});
+
+// ============================================================
+// PRODUCT FILTERS
+// ============================================================
+
+export const productFiltersSchema = z.object({
+  search: z.string().optional(),
+  categoryId: z.number().int().positive().optional(),
+  minPrice: z.number().positive().optional(),
+  maxPrice: z.number().positive().optional(),
+  inStock: z.boolean().optional(),
+  sortBy: z.enum(['price_asc', 'price_desc', 'newest', 'popular', 'rating']).optional(),
+  page: z.number().int().positive().default(1),
+  limit: z.number().int().positive().max(100).default(20),
 });
 
 // ============================================================
@@ -163,3 +207,4 @@ export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
 export type VerifyEmailInput = z.infer<typeof verifyEmailSchema>;
 export type ProductInput = z.infer<typeof productSchema>;
+export type ProductFiltersInput = z.infer<typeof productFiltersSchema>;

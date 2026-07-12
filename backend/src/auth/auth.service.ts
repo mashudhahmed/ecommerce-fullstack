@@ -61,16 +61,22 @@ export class AuthService {
   async registerUser(dto: RegisterUserDto) {
     this.logger.log(`📝 User registration attempt: ${dto.email}`);
 
-    const existingUser = await this.userService.findByEmail(dto.email);
+    // ✅ Normalize email
+    const email = dto.email.toLowerCase().trim();
+
+    // ✅ Check if user exists using the fixed findByEmail
+    const existingUser = await this.userService.findByEmail(email);
+    
     if (existingUser) {
-      throw new ConflictException('Email already registered');
+      this.logger.warn(`⚠️ Registration attempt with existing email: ${email}`);
+      throw new ConflictException('Email already registered. Please login instead.');
     }
 
     const hashedPassword = await bcrypt.hash(dto.password, BCRYPT_ROUNDS);
 
     const user = await this.userService.create({
       name: dto.name,
-      email: dto.email,
+      email: email,
       password: hashedPassword,
       role: UserRole.USER,
       isVerified: false,
@@ -106,16 +112,22 @@ export class AuthService {
   async registerVendor(dto: RegisterVendorDto) {
     this.logger.log(`📝 Vendor registration attempt: ${dto.email}`);
 
-    const existingUser = await this.userService.findByEmail(dto.email);
+    // ✅ Normalize email
+    const email = dto.email.toLowerCase().trim();
+
+    // ✅ Check if user exists using the fixed findByEmail
+    const existingUser = await this.userService.findByEmail(email);
+    
     if (existingUser) {
-      throw new ConflictException('Email already registered');
+      this.logger.warn(`⚠️ Vendor registration attempt with existing email: ${email}`);
+      throw new ConflictException('Email already registered. Please login instead.');
     }
 
     const hashedPassword = await bcrypt.hash(dto.password, BCRYPT_ROUNDS);
 
     const user = await this.userService.create({
       name: dto.name,
-      email: dto.email,
+      email: email,
       password: hashedPassword,
       role: UserRole.VENDOR,
       isVerified: false,
@@ -449,45 +461,80 @@ export class AuthService {
   // ============================================================
   // PASSWORD RESET FLOW
   // ============================================================
+
+  /**
+   * Request password reset - sends 6-digit code to user's email
+   * Always returns success message for security (prevents email enumeration)
+   */
   async requestPasswordReset(email: string) {
     this.logger.log(`🔑 Password reset requested for: ${email}`);
 
+    // ✅ Always return this message for security
     const genericResponse = {
       message: 'If the email exists, a reset code has been sent',
     };
 
+    // Find user
     const user = await this.userService.findByEmail(email);
-    if (!user) return genericResponse;
+    if (!user) {
+      this.logger.warn(`⚠️ Password reset requested for non-existent email: ${email}`);
+      return genericResponse;
+    }
 
+    // Generate and save reset code
     const resetCode = this.userService.generateSixDigitCode();
-    const expiry = new Date(Date.now() + 15 * 60 * 1000);
+    const expiry = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
     await this.userService.updateResetCode(email, resetCode, expiry);
 
-    this.fireAndForget(
-      this.mailerService.sendPasswordResetCode(user.email, resetCode, user.name),
-      `reset code to ${user.email}`,
-    );
+    // ✅ Send email with the code
+    try {
+      await this.mailerService.sendPasswordResetCode(user.email, resetCode, user.name);
+      this.logger.log(`✅ Reset code sent to ${email}`);
+    } catch (error) {
+      this.logger.error(`❌ Failed to send reset code to ${email}`, error);
+      // Still return success to prevent email enumeration
+    }
 
     return genericResponse;
   }
 
+  /**
+   * Verify reset code - validates the 6-digit code
+   * Returns verification token for password reset
+   */
   async verifyResetCode(email: string, code: string) {
     this.logger.log(`🔑 Verifying reset code for: ${email}`);
 
-    await this.userService.verifyResetCode(email, code);
+    try {
+      // ✅ Verify the code exists and is valid
+      const user = await this.userService.verifyResetCode(email, code);
+      
+      if (!user) {
+        throw new BadRequestException('Invalid or expired verification code');
+      }
 
-    const rawToken = crypto.randomBytes(32).toString('hex');
-    const tokenHash = this.hashToken(rawToken);
-    const expiry = new Date(Date.now() + 10 * 60 * 1000);
+      // ✅ Generate verification token for next step
+      const rawToken = crypto.randomBytes(32).toString('hex');
+      const tokenHash = this.hashToken(rawToken);
+      const expiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
-    await this.userService.setPasswordResetToken(email, tokenHash, expiry);
+      await this.userService.setPasswordResetToken(email, tokenHash, expiry);
 
-    return {
-      message: 'Code verified successfully',
-      verificationToken: rawToken,
-    };
+      this.logger.log(`✅ Reset code verified for: ${email}`);
+
+      return {
+        message: 'Code verified successfully',
+        verificationToken: rawToken,
+      };
+    } catch (error) {
+      this.logger.error(`❌ Failed to verify reset code for: ${email}`, error);
+      throw new BadRequestException('Invalid or expired verification code');
+    }
   }
 
+  /**
+   * Reset password - uses verification token to set new password
+   */
   async resetPassword(verificationToken: string, newPassword: string) {
     this.logger.log(`🔐 Resetting password with token`);
 
@@ -497,19 +544,28 @@ export class AuthService {
     if (!user) {
       throw new BadRequestException('Invalid verification token');
     }
+
+    // ✅ Check if token is expired
     if (user.resetTokenExpiry && user.resetTokenExpiry < new Date()) {
       throw new BadRequestException('Verification token expired');
     }
 
+    // ✅ Hash new password
     const hashedPassword = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+    
+    // ✅ Reset password and clear all reset tokens
     await this.userService.resetPassword(user.email, hashedPassword);
 
+    // ✅ Logout from all sessions
     await this.logoutAll(user.id);
 
+    // ✅ Send confirmation email
     this.fireAndForget(
       this.mailerService.sendPasswordChangedConfirmation(user.email, user.name),
       `password changed email to ${user.email}`,
     );
+
+    this.logger.log(`✅ Password reset successfully for: ${user.email}`);
 
     return { message: 'Password reset successfully' };
   }

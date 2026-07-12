@@ -25,65 +25,47 @@ export class UserService {
   ) {}
 
   // ============================================================
-  // FIND METHODS
+  // FIND METHODS - FIXED
   // ============================================================
 
+  // ✅ FIXED: Removed select clause to ensure user is found
   async findByEmail(email: string): Promise<User | null> {
     if (!email) return null;
-    return this.userRepository.findOne({
-      where: { email },
-      select: [
-        'id',
-        'name',
-        'email',
-        'role',
-        'isVerified',
-        'isVendorApproved',
-        'isVendorRejected',
-        'vendorBusinessName',
-        'vendorBusinessDescription',
-        'vendorPhoneNumber',
-        'vendorAddress',
-        'vendorBusinessRegistration',
-        'createdAt',
-        'updatedAt',
-      ],
-    });
+    try {
+      return this.userRepository.findOne({
+        where: { email: email.toLowerCase().trim() },
+      });
+    } catch (error: any) {
+      this.logger.error(`Error finding user by email: ${error?.message ?? String(error)}`);
+      return null;
+    }
   }
 
+  // ✅ KEPT: For password queries (uses QueryBuilder)
   async findByEmailWithPassword(email: string): Promise<User | null> {
     if (!email) return null;
     return this.userRepository
       .createQueryBuilder('user')
       .addSelect('user.password')
-      .where('user.email = :email', { email })
+      .where('user.email = :email', { email: email.toLowerCase().trim() })
       .andWhere('user.deletedAt IS NULL')
       .getOne();
   }
 
+  // ✅ FIXED: Removed select clause
   async findById(id: number): Promise<User | null> {
     if (!id) return null;
-    return this.userRepository.findOne({
-      where: { id },
-      select: [
-        'id',
-        'name',
-        'email',
-        'role',
-        'isVerified',
-        'isVendorApproved',
-        'isVendorRejected',
-        'vendorBusinessName',
-        'vendorBusinessDescription',
-        'vendorPhoneNumber',
-        'vendorAddress',
-        'vendorBusinessRegistration',
-        'createdAt',
-        'updatedAt',
-      ],
-    });
+    try {
+      return this.userRepository.findOne({
+        where: { id },
+      });
+    } catch (error: any) {
+      this.logger.error(`Error finding user by id: ${error?.message ?? String(error)}`);
+      return null;
+    }
   }
 
+  // ✅ KEPT: For password queries
   async findByIdWithPassword(id: number): Promise<User | null> {
     if (!id) return null;
     return this.userRepository
@@ -401,7 +383,11 @@ export class UserService {
       throw new BadRequestException('Name is required');
     }
 
-    const existingUser = await this.findByEmail(userData.email);
+    // ✅ Normalize email
+    const email = userData.email.toLowerCase().trim();
+
+    // ✅ Check if user exists using the fixed findByEmail
+    const existingUser = await this.findByEmail(email);
     if (existingUser) {
       throw new ConflictException('Email already registered');
     }
@@ -410,7 +396,10 @@ export class UserService {
       userData.password = await bcrypt.hash(userData.password, BCRYPT_ROUNDS);
     }
 
-    const user = this.userRepository.create(userData);
+    const user = this.userRepository.create({
+      ...userData,
+      email, // Use normalized email
+    });
     const savedUser = await this.userRepository.save(user);
     this.logger.log(`User created: ${savedUser.email}`);
     return savedUser;
@@ -631,26 +620,26 @@ export class UserService {
     return !user;
   }
 
-  // Add avatar to getPublicProfile method
-getPublicProfile(user: User): Partial<User> {
-  return {
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    role: user.role,
-    isVerified: user.isVerified,
-    isVendorApproved: user.isVendorApproved,
-    isVendorRejected: user.isVendorRejected,
-    avatar: user.avatar, // ✅ Add this line
-    vendorBusinessName: user.vendorBusinessName,
-    vendorBusinessDescription: user.vendorBusinessDescription,
-    vendorPhoneNumber: user.vendorPhoneNumber,
-    vendorAddress: user.vendorAddress,
-    vendorBusinessRegistration: user.vendorBusinessRegistration,
-    createdAt: user.createdAt,
-    updatedAt: user.updatedAt,
-  };
-}
+  getPublicProfile(user: User): Partial<User> {
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      isVerified: user.isVerified,
+      isVendorApproved: user.isVendorApproved,
+      isVendorRejected: user.isVendorRejected,
+      avatar: user.avatar,
+      vendorBusinessName: user.vendorBusinessName,
+      vendorBusinessDescription: user.vendorBusinessDescription,
+      vendorPhoneNumber: user.vendorPhoneNumber,
+      vendorAddress: user.vendorAddress,
+      vendorBusinessRegistration: user.vendorBusinessRegistration,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    };
+  }
+
   async findByIds(ids: number[]): Promise<User[]> {
     if (!ids || ids.length === 0) return [];
     return this.userRepository.find({

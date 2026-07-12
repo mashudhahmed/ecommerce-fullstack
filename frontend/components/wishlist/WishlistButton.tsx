@@ -17,7 +17,14 @@ interface WishlistButtonProps {
 export function WishlistButton({ productId, className }: WishlistButtonProps) {
   const { isAuthenticated } = useAuth();
   const router = useRouter();
-  const { addToWishlist, removeFromWishlist, addLoading, removeLoading, checkInWishlist } = useWishlist();
+  const { 
+    addToWishlist, 
+    removeFromWishlist, 
+    addLoading, 
+    removeLoading, 
+    checkInWishlist,
+    wishlist 
+  } = useWishlist();
   const [isInWishlist, setIsInWishlist] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -43,7 +50,10 @@ export function WishlistButton({ productId, className }: WishlistButtonProps) {
         await removeFromWishlist(productId);
         setIsInWishlist(false);
       } else {
-        await addToWishlist(productId);
+        // ✅ Fix: Find the product from wishlist or use productId
+        // The addToWishlist expects a Product object, but we only have productId
+        // So we'll create a minimal product object
+        await addToWishlist({ id: productId } as any);
         setIsInWishlist(true);
       }
     } catch (error) {

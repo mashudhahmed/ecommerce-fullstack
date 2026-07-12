@@ -21,6 +21,10 @@ import {
   ChevronDown,
   ShoppingBag,
   Heart,
+  Search,
+  Plus,
+  Minus,
+  Trash2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -43,7 +47,9 @@ import { useCart } from '@/hooks/useCart';
 import { useWishlist } from '@/hooks/useWishlist';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import { notificationService, Notification } from '@/services/notification.service';
-import { getInitials, cn, formatDate } from '@/lib/utils';
+import { productService } from '@/services/product.service';
+import { Product } from '@/types';
+import { getInitials, cn, formatDate, formatPrice } from '@/lib/utils';
 import { toast } from 'sonner';
 
 // ============================================================
@@ -54,7 +60,36 @@ export function Header() {
   const router = useRouter();
   const pathname = usePathname();
   const { user, isAuthenticated, isLoading, logout } = useAuth();
-  const { totalItems } = useCart();
+  const {
+    items: cartItems,
+    totalItems,
+    totalPrice,
+    removeItem,
+    updateQuantity,
+    updateQuantityServer,
+    removeItemServer,
+  } = useCart();
+
+  // ✅ Optimistic: update the local store immediately (instant UI), then
+  // persist to the backend. The server mutations already toast on
+  // failure (see useCart.ts), so we just swallow the rejection here to
+  // avoid an unhandled-promise warning — the UI has already reflected
+  // the attempted change either way.
+  const handleQuantityChange = useCallback(
+    (productId: number, quantity: number) => {
+      updateQuantity(productId, quantity);
+      updateQuantityServer({ productId, quantity }).catch(() => {});
+    },
+    [updateQuantity, updateQuantityServer]
+  );
+
+  const handleRemoveItem = useCallback(
+    (productId: number) => {
+      removeItem(productId);
+      removeItemServer(productId).catch(() => {});
+    },
+    [removeItem, removeItemServer]
+  );
   const { count: wishlistCount } = useWishlist();
 
   // State
@@ -64,6 +99,8 @@ export function Header() {
   const [isLoadingNotifications, setIsLoadingNotifications] = useState(false);
   const [notificationError, setNotificationError] = useState<string | null>(null);
   const [isPopoverOpen, setIsPopoverOpen] = useState(false);
+  const [isCartOpen, setIsCartOpen] = useState(false);
+  const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
 
   // Refs
   const notificationInterval = useRef<NodeJS.Timeout | null>(null);
@@ -216,6 +253,14 @@ export function Header() {
     }
   }, [lastMessage, handleNewNotification]);
 
+  // ✅ Close mini-cart automatically on route change (e.g. after
+  // clicking "View cart" / "Checkout")
+  useEffect(() => {
+    setIsCartOpen(false);
+    setIsMobileMenuOpen(false);
+    setIsMobileSearchOpen(false);
+  }, [pathname]);
+
   // ============================================================
   // AUTH HANDLERS
   // ============================================================
@@ -253,6 +298,8 @@ export function Header() {
     }
   }, []);
 
+  // ✅ Role-based nav — unchanged from before: guests get the base set,
+  // vendor/admin/superadmin each layer on their own panel link.
   const getNavItems = useCallback(() => {
     const items = [
       { href: '/products', label: 'Products', icon: ShoppingBag },
@@ -288,9 +335,9 @@ export function Header() {
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border bg-background/80 backdrop-blur-sm">
       <div className="container mx-auto px-4">
-        <div className="flex h-16 items-center justify-between gap-2">
+        <div className="flex h-16 items-center justify-between gap-3">
           {/* Logo */}
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             <Button
               variant="ghost"
               size="icon"
@@ -312,14 +359,19 @@ export function Header() {
                   priority
                 />
               </div>
-              <span className="text-xl font-black tracking-tight text-foreground transition-colors duration-200 group-hover:text-orange-600">
+              <span className="hidden text-xl font-black tracking-tight text-foreground transition-colors duration-200 group-hover:text-orange-600 sm:inline">
                 SnapCart
               </span>
             </Link>
           </div>
 
+          {/* Search — desktop, centered/flexible */}
+          <div className="hidden flex-1 justify-center px-4 md:flex">
+            <HeaderSearch className="w-full max-w-lg" />
+          </div>
+
           {/* Desktop Navigation */}
-          <nav className="hidden items-center gap-1 lg:flex" aria-label="Main navigation">
+          <nav className="hidden shrink-0 items-center gap-1 lg:flex" aria-label="Main navigation">
             {navItems.map((item) => (
               <Link
                 key={item.href}
@@ -338,7 +390,22 @@ export function Header() {
           </nav>
 
           {/* Right Side */}
-          <div className="flex items-center gap-1">
+          <div className="flex shrink-0 items-center gap-1">
+            {/* Search — mobile/tablet icon toggle, opens the same search overlay row */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="rounded-full md:hidden"
+              onClick={() => {
+                setIsMobileMenuOpen(false);
+                setIsMobileSearchOpen((prev) => !prev);
+              }}
+              aria-label="Toggle search"
+              aria-expanded={isMobileSearchOpen}
+            >
+              <Search className="h-5 w-5" />
+            </Button>
+
             {/* Wishlist */}
             <Link href="/wishlist" className="relative" aria-label="Wishlist">
               <Button variant="ghost" size="icon" className="relative rounded-full" aria-label="View wishlist">
@@ -351,17 +418,127 @@ export function Header() {
               </Button>
             </Link>
 
-            {/* Cart */}
-            <Link href="/cart" className="relative" aria-label="Shopping cart">
-              <Button variant="ghost" size="icon" className="relative rounded-full" aria-label="View cart">
-                <ShoppingCart className="h-5 w-5" />
-                {totalItems > 0 && isAuthenticated && (
-                  <span className="absolute -top-1 -right-1 flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-orange-600 px-1 text-[10px] font-semibold tabular-nums text-white">
-                    {totalItems}
-                  </span>
+            {/* Cart — mini-cart preview popover */}
+            <Popover open={isCartOpen} onOpenChange={setIsCartOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="relative rounded-full"
+                  aria-label={`Shopping cart${totalItems > 0 ? ` (${totalItems} items)` : ''}`}
+                >
+                  <ShoppingCart className="h-5 w-5" />
+                  {totalItems > 0 && (
+                    <span className="absolute -top-1 -right-1 flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-orange-600 px-1 text-[10px] font-semibold tabular-nums text-white">
+                      {totalItems}
+                    </span>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-90 rounded-2xl p-0" align="end">
+                <div className="flex items-center justify-between border-b border-border p-4">
+                  <h4 className="text-sm font-semibold">
+                    Your cart {totalItems > 0 && <span className="text-muted-foreground">({totalItems})</span>}
+                  </h4>
+                </div>
+
+                {cartItems.length === 0 ? (
+                  <div className="p-8 text-center text-muted-foreground">
+                    <ShoppingCart className="mx-auto mb-2 h-8 w-8 opacity-40" />
+                    <p className="text-sm">Your cart is empty</p>
+                    <Link
+                      href="/products"
+                      className="mt-3 inline-block text-sm font-medium text-orange-600 hover:text-orange-700"
+                      onClick={() => setIsCartOpen(false)}
+                    >
+                      Browse products →
+                    </Link>
+                  </div>
+                ) : (
+                  <>
+                    <div className="max-h-80 divide-y divide-border overflow-y-auto">
+                      {cartItems.map((item) => (
+                        <div key={item.id} className="flex gap-3 p-3">
+                          <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-muted/30">
+                            <Image
+                              src={item.product.imageUrl || '/placeholder-image.png'}
+                              alt={item.product.title}
+                              fill
+                              className="object-cover"
+                              sizes="56px"
+                            />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <Link
+                              href={`/products/${item.product.id}`}
+                              className="line-clamp-1 text-sm font-medium hover:text-orange-600"
+                              onClick={() => setIsCartOpen(false)}
+                            >
+                              {item.product.title}
+                            </Link>
+                            <p className="mt-0.5 text-xs text-muted-foreground tabular-nums">
+                              {formatPrice(item.product.price)}
+                            </p>
+                            <div className="mt-1.5 flex items-center gap-2">
+                              <div className="flex items-center rounded-full border border-border">
+                                <button
+                                  type="button"
+                                  className="flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground hover:bg-muted disabled:opacity-40"
+                                  onClick={() => handleQuantityChange(item.product.id, item.quantity - 1)}
+                                  disabled={item.quantity <= 1}
+                                  aria-label="Decrease quantity"
+                                >
+                                  <Minus className="h-3 w-3" />
+                                </button>
+                                <span className="w-6 text-center text-xs font-semibold tabular-nums">
+                                  {item.quantity}
+                                </span>
+                                <button
+                                  type="button"
+                                  className="flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground hover:bg-muted disabled:opacity-40"
+                                  onClick={() => handleQuantityChange(item.product.id, item.quantity + 1)}
+                                  disabled={item.quantity >= item.product.stock}
+                                  aria-label="Increase quantity"
+                                >
+                                  <Plus className="h-3 w-3" />
+                                </button>
+                              </div>
+                              <button
+                                type="button"
+                                className="ml-auto text-muted-foreground transition-colors hover:text-red-600"
+                                onClick={() => handleRemoveItem(item.product.id)}
+                                aria-label={`Remove ${item.product.title} from cart`}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="space-y-3 border-t border-border p-4">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Subtotal</span>
+                        <span className="font-bold tabular-nums">{formatPrice(totalPrice)}</span>
+                      </div>
+                      <div className="flex gap-2">
+                        <Link href="/cart" className="flex-1" onClick={() => setIsCartOpen(false)}>
+                          <Button variant="outline" className="w-full rounded-full">
+                            View cart
+                          </Button>
+                        </Link>
+                        <Link href="/checkout" className="flex-1" onClick={() => setIsCartOpen(false)}>
+                          <Button className="w-full rounded-full bg-zinc-950 text-white hover:bg-zinc-800">
+                            Checkout
+                          </Button>
+                        </Link>
+                      </div>
+                    </div>
+                  </>
                 )}
-              </Button>
-            </Link>
+              </PopoverContent>
+            </Popover>
 
             {/* Notifications */}
             {isAuthenticated && (
@@ -557,6 +734,7 @@ export function Header() {
                     </Link>
                   </DropdownMenuItem>
 
+                  {/* ✅ Role-gated links — only rendered for the matching role(s) */}
                   {(user?.role === 'admin' || user?.role === 'superadmin') && (
                     <DropdownMenuItem asChild>
                       <Link href="/admin" className="flex cursor-pointer items-center gap-2">
@@ -624,6 +802,13 @@ export function Header() {
           </div>
         </div>
 
+        {/* Search — mobile row, toggled by the search icon */}
+        {isMobileSearchOpen && (
+          <div className="pb-3 md:hidden">
+            <HeaderSearch className="w-full" autoFocus />
+          </div>
+        )}
+
         {/* Mobile Menu */}
         {isMobileMenuOpen && (
           <div className="border-t border-border bg-background lg:hidden">
@@ -672,6 +857,166 @@ export function Header() {
 }
 
 // ============================================================
+// HEADER SEARCH — debounced live suggestions, shared between the
+// desktop inline bar and the mobile toggle row.
+// ============================================================
+
+function HeaderSearch({ className, autoFocus = false }: { className?: string; autoFocus?: boolean }) {
+  const router = useRouter();
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<Product[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (autoFocus) {
+      inputRef.current?.focus();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ✅ Debounced fetch — waits 300ms after typing stops before hitting
+  // the search endpoint, and cancels any in-flight timer on each
+  // keystroke so we don't fire a request per character.
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    const trimmed = query.trim();
+    if (trimmed.length < 2) {
+      setResults([]);
+      setIsSearching(false);
+      return;
+    }
+
+    setIsSearching(true);
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const products = await productService.searchProducts(trimmed, 5);
+        setResults(products);
+      } catch (error) {
+        console.error('Search failed:', error);
+        setResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300);
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [query]);
+
+  // ✅ Close suggestions on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const goToResults = useCallback(
+    (q: string) => {
+      const trimmed = q.trim();
+      if (!trimmed) return;
+      setIsOpen(false);
+      router.push(`/products?search=${encodeURIComponent(trimmed)}`);
+    },
+    [router]
+  );
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    goToResults(query);
+  };
+
+  const showDropdown = isOpen && query.trim().length >= 2;
+
+  return (
+    <div ref={containerRef} className={cn('relative', className)}>
+      <form onSubmit={handleSubmit}>
+        <div className="relative">
+          <Search className="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            ref={inputRef}
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onFocus={() => setIsOpen(true)}
+            placeholder="Search products…"
+            className="h-10 w-full rounded-full border border-border bg-muted/40 pl-10 pr-4 text-sm outline-hidden transition-colors placeholder:text-muted-foreground focus:border-orange-300 focus:bg-background"
+            aria-label="Search products"
+          />
+        </div>
+      </form>
+
+      {showDropdown && (
+        <div className="absolute top-full left-0 z-50 mt-2 w-full overflow-hidden rounded-2xl border border-border bg-background shadow-xl">
+          {isSearching ? (
+            <div className="space-y-3 p-4">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="flex items-center gap-3">
+                  <Skeleton className="h-10 w-10 rounded-lg" />
+                  <div className="flex-1 space-y-1.5">
+                    <Skeleton className="h-3.5 w-3/4" />
+                    <Skeleton className="h-3 w-1/3" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : results.length === 0 ? (
+            <div className="p-6 text-center text-sm text-muted-foreground">
+              No products found for "{query}"
+            </div>
+          ) : (
+            <>
+              <div className="divide-y divide-border">
+                {results.map((product) => (
+                  <Link
+                    key={product.id}
+                    href={`/products/${product.id}`}
+                    className="flex items-center gap-3 p-3 transition-colors hover:bg-muted/50"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-muted/30">
+                      <Image
+                        src={product.imageUrl || '/placeholder-image.png'}
+                        alt={product.title}
+                        fill
+                        className="object-cover"
+                        sizes="40px"
+                      />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="line-clamp-1 text-sm font-medium">{product.title}</p>
+                      <p className="text-xs text-muted-foreground tabular-nums">
+                        {formatPrice(product.price)}
+                      </p>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => goToResults(query)}
+                className="w-full border-t border-border p-3 text-center text-sm font-medium text-orange-600 transition-colors hover:bg-muted/50 hover:text-orange-700"
+              >
+                See all results for "{query}" →
+              </button>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
 // SKELETON LOADING STATE
 // ============================================================
 
@@ -684,6 +1029,7 @@ function HeaderSkeleton() {
             <Skeleton className="h-8 w-8 rounded-xl" />
             <Skeleton className="hidden h-6 w-24 sm:inline" />
           </div>
+          <Skeleton className="hidden h-10 w-full max-w-lg rounded-full md:block" />
           <div className="flex items-center gap-2">
             <Skeleton className="h-9 w-9 rounded-full" />
             <Skeleton className="h-9 w-9 rounded-full" />

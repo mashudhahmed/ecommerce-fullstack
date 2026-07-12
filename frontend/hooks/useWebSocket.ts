@@ -2,7 +2,9 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { io, Socket } from 'socket.io-client';
+// ✅ Fix: Use default import for socket.io-client v4
+import io from 'socket.io-client';
+import type { Socket } from 'socket.io-client';
 import { useAuth } from './useAuth';
 
 interface WebSocketOptions {
@@ -26,7 +28,7 @@ export function useWebSocket(options: WebSocketOptions = {}) {
     onReconnect,
   } = options;
 
-  const { user, isAuthenticated, isAuthenticated: isAuthReady } = useAuth();
+  const { isAuthenticated, isAuthenticated: isAuthReady } = useAuth();
   const socketRef = useRef<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [lastMessage, setLastMessage] = useState<any>(null);
@@ -81,20 +83,19 @@ export function useWebSocket(options: WebSocketOptions = {}) {
         onConnect?.();
       });
 
-      socket.on('disconnect', (reason) => {
+      socket.on('disconnect', (reason: string) => {
         if (!mountedRef.current) return;
         setIsConnected(false);
         isConnectingRef.current = false;
         console.log(`❌ WebSocket disconnected: ${reason}`);
         onDisconnect?.();
         
-        // ✅ Only attempt reconnection for specific reasons
         if (['io server disconnect', 'transport close', 'transport error'].includes(reason)) {
           attemptReconnect();
         }
       });
 
-      socket.on('connect_error', (error) => {
+      socket.on('connect_error', (error: Error) => {
         isConnectingRef.current = false;
         setConnectionError(error.message);
         console.error('WebSocket connection error:', error.message);
@@ -107,7 +108,6 @@ export function useWebSocket(options: WebSocketOptions = {}) {
         onMessage?.(data);
       });
 
-      // ✅ Handle specific events
       socket.on('notification', (data: any) => {
         onMessage?.({ event: 'notification', data });
       });
@@ -196,17 +196,6 @@ export function useWebSocket(options: WebSocketOptions = {}) {
       disconnect();
     }
   }, [autoConnect, isAuthenticated, isAuthReady, connect, disconnect]);
-
-  // ✅ Reconnect when token changes (login/logout)
-  useEffect(() => {
-    if (isAuthenticated && autoConnect) {
-      // Check if token changed
-      const token = getToken();
-      if (token && socketRef.current) {
-        // Optional: reconnect if needed
-      }
-    }
-  }, [isAuthenticated, autoConnect, getToken]);
 
   return {
     isConnected,

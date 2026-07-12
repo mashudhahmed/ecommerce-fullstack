@@ -58,9 +58,6 @@ export class User {
   @Expose()
   isVendorRejected!: boolean;
 
-  // Widened to accept null: the column is nullable at the DB level, and
-  // approveVendor()/rejectVendor() explicitly clear or set this value,
-  // so the TS type needs to match what TypeORM actually returns/accepts.
   @Column({ nullable: true, type: 'text' })
   @Expose()
   vendorRejectionReason?: string | null;
@@ -84,6 +81,11 @@ export class User {
   @Column({ nullable: true })
   @Expose()
   vendorBusinessRegistration?: string;
+
+  // ✅ NEW: Avatar field for profile images
+  @Column({ nullable: true })
+  @Expose()
+  avatar?: string;
 
   @Exclude()
   @Column({ type: 'varchar', length: 6, nullable: true })

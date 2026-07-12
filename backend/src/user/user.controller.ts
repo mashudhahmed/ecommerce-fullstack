@@ -15,6 +15,8 @@ import {
   HttpStatus,
   BadRequestException,
   ForbiddenException,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -22,7 +24,9 @@ import {
   ApiResponse,
   ApiBearerAuth,
   ApiBody,
+  ApiConsumes,
 } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -30,13 +34,18 @@ import { UserService } from './user.service';
 import { UserRole } from './user.entity';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { ChangeEmailDto } from './dto/change-email.dto';
+import { FilesService } from '../files/files.service';
+import { MulterFile } from '../common/types/multer-file.type';
 
 @ApiTags('Users')
 @Controller('users')
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class UserController {
-  constructor(private readonly userService: UserService) {}
+  constructor(
+    private readonly userService: UserService,
+    private readonly filesService: FilesService,
+  ) {}
 
   // ============================================================
   // PROFILE ENDPOINTS (Authenticated User)
@@ -62,6 +71,76 @@ export class UserController {
   ) {
     const user = await this.userService.update(req.user.id, updateData);
     return this.userService.getPublicProfile(user);
+  }
+
+  // ✅ NEW: Upload avatar endpoint
+  @Patch('profile/avatar')
+  @ApiOperation({ summary: 'Upload user avatar' })
+  @ApiResponse({ status: 200, description: 'Avatar updated successfully' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        avatar: {
+          type: 'string',
+          format: 'binary',
+          description: 'Avatar image file (PNG, JPG, WebP)',
+        },
+      },
+    },
+  })
+  @UseInterceptors(FileInterceptor('avatar'))
+  async uploadAvatar(
+    @Request() req: { user: { id: number } },
+    @UploadedFile() file: MulterFile,
+  ) {
+    if (!file) {
+      throw new BadRequestException('No file uploaded');
+    }
+
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (!allowedTypes.includes(file.mimetype)) {
+      throw new BadRequestException('Invalid file type. Allowed: JPEG, PNG, WebP, GIF');
+    }
+
+    // Validate file size (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      throw new BadRequestException('File size exceeds 5MB limit');
+    }
+
+    try {
+      const uploadResult = await this.filesService.uploadFile(file, {
+        folder: 'avatars',
+      });
+
+      const updatedUser = await this.userService.update(req.user.id, {
+        avatar: uploadResult.url,
+      });
+
+      return {
+        message: 'Avatar updated successfully',
+        avatar: uploadResult.url,
+        user: this.userService.getPublicProfile(updatedUser),
+      };
+    } catch (error: any) {
+      throw new BadRequestException(`Avatar upload failed: ${error.message}`);
+    }
+  }
+
+  // ✅ NEW: Remove avatar endpoint
+  @Delete('profile/avatar')
+  @ApiOperation({ summary: 'Remove user avatar' })
+  @ApiResponse({ status: 200, description: 'Avatar removed successfully' })
+  async removeAvatar(@Request() req: { user: { id: number } }) {
+    const user = await this.userService.findByIdOrFail(req.user.id);
+    
+    // If there's an avatar URL, we could delete it from Cloudinary here
+    // For now, just remove the avatar field
+    await this.userService.update(req.user.id, { avatar: null });
+    
+    return { message: 'Avatar removed successfully' };
   }
 
   @Patch('profile/email')
@@ -99,7 +178,6 @@ export class UserController {
     @Query('role') role?: UserRole,
     @Query('isVerified') isVerified?: boolean,
   ) {
-    // SuperAdmin can see all, Admin can see all except SuperAdmin
     if (req.user.role === UserRole.ADMIN) {
       return this.userService.findAll({
         excludeSuperAdmin: true,
@@ -121,7 +199,6 @@ export class UserController {
     @Request() req: { user: { role: UserRole } },
   ) {
     const user = await this.userService.findByIdOrFail(id);
-    // Admin cannot view SuperAdmin unless they are SuperAdmin
     if (req.user.role === UserRole.ADMIN && user.role === UserRole.SUPER_ADMIN) {
       throw new ForbiddenException('Cannot view SuperAdmin details');
     }
@@ -139,7 +216,6 @@ export class UserController {
     @Request() req: { user: { role: UserRole } },
   ) {
     const user = await this.userService.findByIdOrFail(id);
-    // Admin cannot update SuperAdmin
     if (req.user.role === UserRole.ADMIN && user.role === UserRole.SUPER_ADMIN) {
       throw new ForbiddenException('Cannot update SuperAdmin');
     }
@@ -154,16 +230,14 @@ export class UserController {
   @ApiResponse({ status: 200, description: 'User deleted successfully' })
   async deleteUser(
     @Param('id', ParseIntPipe) id: number,
-    @Request() req: { user: { role: UserRole; id: number } },
+    @Request() req: { user: { id: number; role: UserRole } },
   ) {
     const user = await this.userService.findByIdOrFail(id);
 
-    // Cannot delete self
     if (user.id === req.user.id) {
       throw new BadRequestException('Cannot delete your own account');
     }
 
-    // Admin cannot delete SuperAdmin
     if (req.user.role === UserRole.ADMIN && user.role === UserRole.SUPER_ADMIN) {
       throw new ForbiddenException('Cannot delete SuperAdmin');
     }

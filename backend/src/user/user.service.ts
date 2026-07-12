@@ -631,25 +631,26 @@ export class UserService {
     return !user;
   }
 
-  getPublicProfile(user: User): Partial<User> {
-    return {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      isVerified: user.isVerified,
-      isVendorApproved: user.isVendorApproved,
-      isVendorRejected: user.isVendorRejected,
-      vendorBusinessName: user.vendorBusinessName,
-      vendorBusinessDescription: user.vendorBusinessDescription,
-      vendorPhoneNumber: user.vendorPhoneNumber,
-      vendorAddress: user.vendorAddress,
-      vendorBusinessRegistration: user.vendorBusinessRegistration,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
-    };
-  }
-
+  // Add avatar to getPublicProfile method
+getPublicProfile(user: User): Partial<User> {
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    isVerified: user.isVerified,
+    isVendorApproved: user.isVendorApproved,
+    isVendorRejected: user.isVendorRejected,
+    avatar: user.avatar, // ✅ Add this line
+    vendorBusinessName: user.vendorBusinessName,
+    vendorBusinessDescription: user.vendorBusinessDescription,
+    vendorPhoneNumber: user.vendorPhoneNumber,
+    vendorAddress: user.vendorAddress,
+    vendorBusinessRegistration: user.vendorBusinessRegistration,
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt,
+  };
+}
   async findByIds(ids: number[]): Promise<User[]> {
     if (!ids || ids.length === 0) return [];
     return this.userRepository.find({

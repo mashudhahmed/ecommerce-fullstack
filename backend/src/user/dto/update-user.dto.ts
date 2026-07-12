@@ -1,5 +1,5 @@
 // src/user/dto/update-user.dto.ts - Enhanced
-import { IsOptional, IsString, MinLength, MaxLength, IsEmail, Matches } from 'class-validator';
+import { IsOptional, IsString, MinLength, MaxLength, IsEmail, Matches, IsUrl } from 'class-validator';
 
 export class UpdateUserDto {
   @IsOptional()
@@ -34,4 +34,9 @@ export class UpdateUserDto {
   @IsString()
   @MaxLength(200)
   address?: string;
+
+  // ✅ NEW: Avatar URL field
+  @IsOptional()
+  @IsUrl({}, { message: 'Invalid avatar URL format' })
+  avatar?: string;
 }

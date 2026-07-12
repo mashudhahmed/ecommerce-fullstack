@@ -7,11 +7,11 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
 import Image from 'next/image';
-import { 
-  Eye, 
-  EyeOff, 
-  Loader2, 
-  AlertCircle, 
+import {
+  Eye,
+  EyeOff,
+  Loader2,
+  AlertCircle,
   Shield,
   Mail,
   Lock,
@@ -41,6 +41,51 @@ import {
 import Link from 'next/link';
 import { useAuthStore } from '@/store/auth-store';
 import { cn } from '@/lib/utils';
+
+// ============================================================
+// GOOGLE OAUTH
+// ============================================================
+// This must be a full browser navigation, not a fetch/XHR call —
+// Google's consent screen actively blocks being loaded inside an
+// AJAX response or iframe. The browser itself has to leave the page.
+//
+// Flow: browser -> {API}/auth/google -> Google consent screen ->
+// {API}/auth/google/callback -> backend sets the same session
+// cookies regular login uses -> backend redirects back here, already
+// authenticated.
+//
+// Requires a backend Google OAuth strategy (e.g. Passport's
+// passport-google-oauth20) exposing GET /auth/google and
+// GET /auth/google/callback, plus a Google Cloud OAuth client with
+// that callback URL registered as an authorized redirect URI.
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1';
+
+function buildGoogleAuthUrl(redirectUrl: string) {
+  const url = new URL(`${API_URL}/auth/google`);
+  url.searchParams.set('redirect', redirectUrl);
+  return url.toString();
+}
+
+const GoogleIcon = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" aria-hidden="true">
+    <path
+      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
+      fill="#4285F4"
+    />
+    <path
+      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+      fill="#34A853"
+    />
+    <path
+      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+      fill="#FBBC05"
+    />
+    <path
+      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+      fill="#EA4335"
+    />
+  </svg>
+);
 
 // ============================================================
 // 2FA INPUT COMPONENT
@@ -108,13 +153,12 @@ const TwoFactorInput = ({
         {Array.from({ length: 6 }).map((_, index) => (
           <div
             key={index}
-            className={cn(
-              "transition-all duration-200",
-              value[index] && "scale-105"
-            )}
+            className={cn('transition-all duration-200', value[index] && 'scale-105')}
           >
             <Input
-              ref={(el) => { inputRefs[index] = el; }}
+              ref={(el) => {
+                inputRefs[index] = el;
+              }}
               type="text"
               maxLength={1}
               value={value[index] || ''}
@@ -124,41 +168,23 @@ const TwoFactorInput = ({
               onBlur={() => setFocusedIndex(-1)}
               disabled={isLoading}
               className={cn(
-                "h-14 w-14 text-center text-2xl font-bold",
-                "border-2 transition-all duration-200",
-                value[index] && "border-primary bg-primary/5",
-                focusedIndex === index && "border-primary ring-2 ring-primary/20",
-                "focus-visible:ring-2 focus-visible:ring-primary/30"
+                'h-14 w-12 rounded-xl text-center text-2xl font-bold transition-all duration-200',
+                'border-2',
+                value[index] && 'border-orange-500 bg-orange-50 dark:bg-orange-950/20',
+                focusedIndex === index && 'border-orange-500 ring-2 ring-orange-500/20',
+                'focus-visible:ring-2 focus-visible:ring-orange-500/30'
               )}
               aria-label={`2FA digit ${index + 1}`}
             />
           </div>
         ))}
       </div>
-      <p className="text-xs text-muted-foreground text-center">
+      <p className="text-center text-xs text-muted-foreground">
         Enter the 6-digit code from your authenticator app or use a backup code
       </p>
     </div>
   );
 };
-
-// ============================================================
-// LOGO COMPONENT
-// ============================================================
-
-const Logo = ({ className }: { className?: string }) => (
-  <div className={cn("flex items-center justify-center", className)}>
-    <div className="relative h-12 w-12">
-      <Image
-        src="/logo.png"
-        alt="SnapCart"
-        fill
-        className="object-contain"
-        priority
-      />
-    </div>
-  </div>
-);
 
 // ============================================================
 // MAIN LOGIN FORM
@@ -212,6 +238,7 @@ export function LoginForm() {
     const sessionExpired = searchParams.get('session');
     const verification = searchParams.get('verification');
     const registered = searchParams.get('registered');
+    const oauthError = searchParams.get('error');
 
     if (sessionExpired === 'expired') {
       toast.warning('Your session has expired. Please login again.');
@@ -221,6 +248,11 @@ export function LoginForm() {
     }
     if (registered) {
       toast.success('Account created successfully! Please login.');
+    }
+    // ✅ Surfaces failures the backend redirects back with, e.g.
+    // {FRONTEND_URL}/login?error=google_auth_failed
+    if (oauthError) {
+      toast.error('Google sign-in failed. Please try again or use your email and password.');
     }
   }, [searchParams]);
 
@@ -247,7 +279,7 @@ export function LoginForm() {
       setLoginSuccess(true);
       const userName = response?.user?.name ?? 'User';
       toast.success(`Welcome back, ${userName}!`);
-      
+
       if (rememberMe) {
         localStorage.setItem('remembered_email', data.email);
       } else {
@@ -304,7 +336,7 @@ export function LoginForm() {
       toast.error('Please enter a valid 6-digit 2FA code.');
       return;
     }
-    
+
     setIsOtpLoading(true);
     try {
       await verifyTwoFactor(twoFactorToken);
@@ -319,6 +351,12 @@ export function LoginForm() {
     toast.success('New verification code sent to your email.');
   }, []);
 
+  // ✅ Full browser redirect, not a fetch — see the comment on
+  // buildGoogleAuthUrl above for why this can't be an AJAX call.
+  const handleGoogleLogin = useCallback(() => {
+    window.location.href = buildGoogleAuthUrl(redirectUrl);
+  }, [redirectUrl]);
+
   // ============================================================
   // LOADING STATE
   // ============================================================
@@ -327,8 +365,8 @@ export function LoginForm() {
     return (
       <div className="flex items-center justify-center py-12">
         <div className="flex flex-col items-center gap-4">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <p className="text-sm text-muted-foreground">Checking authentication...</p>
+          <Loader2 className="h-8 w-8 animate-spin text-orange-600" />
+          <p className="text-sm text-muted-foreground">Checking authentication…</p>
         </div>
       </div>
     );
@@ -340,28 +378,25 @@ export function LoginForm() {
 
   if (twoFactorRequired) {
     return (
-      <div className="w-full max-w-md mx-auto animate-fade-in-up">
-        <Card className="shadow-xl border-primary/10">
+      <div className="mx-auto w-full max-w-md animate-fade-in-up">
+        <Card className="rounded-3xl border-border shadow-xl shadow-zinc-950/5">
           <CardHeader className="space-y-3 text-center">
             <div className="flex justify-center">
-              <div className="relative h-16 w-16">
-                <Image
-                  src="/logo.png"
-                  alt="SnapCart"
-                  fill
-                  className="object-contain"
-                />
+              <div className="relative h-14 w-14">
+                <Image src="/logo.png" alt="SnapCart" fill className="object-contain" />
               </div>
             </div>
             <div className="flex items-center justify-center gap-2">
-              <Shield className="h-5 w-5 text-primary" />
-              <CardTitle className="text-2xl font-bold">Two-Factor Authentication</CardTitle>
+              <Shield className="h-5 w-5 text-orange-600" />
+              <CardTitle className="text-2xl font-black tracking-tight">
+                Two-factor authentication
+              </CardTitle>
             </div>
             <CardDescription>
               Enter the 6-digit code from your authenticator app
               {pendingLoginEmail && (
-                <span className="block text-sm mt-1 text-muted-foreground">
-                  for <strong>{pendingLoginEmail}</strong>
+                <span className="mt-1 block text-sm text-muted-foreground">
+                  for <strong className="text-foreground">{pendingLoginEmail}</strong>
                 </span>
               )}
             </CardDescription>
@@ -373,30 +408,30 @@ export function LoginForm() {
               onComplete={handleVerifyTwoFactor}
               isLoading={verifyTwoFactorLoading || isOtpLoading}
             />
-            
+
             <Button
-              className="w-full gap-2"
+              className="w-full gap-2 rounded-full bg-zinc-950 text-white hover:bg-zinc-800"
               size="lg"
               onClick={handleVerifyTwoFactor}
               disabled={verifyTwoFactorLoading || isOtpLoading || twoFactorToken.length !== 6}
             >
-              {(verifyTwoFactorLoading || isOtpLoading) ? (
+              {verifyTwoFactorLoading || isOtpLoading ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Verifying...
+                  Verifying…
                 </>
               ) : (
                 <>
                   <Fingerprint className="h-4 w-4" />
-                  Verify & Login
+                  Verify &amp; login
                 </>
               )}
             </Button>
 
-            <div className="text-center space-y-3">
+            <div className="space-y-3 text-center">
               <button
                 type="button"
-                className="text-sm text-muted-foreground hover:text-primary transition-colors"
+                className="text-sm text-muted-foreground transition-colors hover:text-orange-600"
                 onClick={handleResendCode}
               >
                 Didn't receive a code? Resend
@@ -404,7 +439,7 @@ export function LoginForm() {
               <div>
                 <button
                   type="button"
-                  className="text-sm text-muted-foreground hover:text-primary transition-colors"
+                  className="text-sm text-muted-foreground transition-colors hover:text-orange-600"
                   onClick={() => {
                     setTwoFactorRequired(false);
                     setTwoFactorToken('');
@@ -429,37 +464,51 @@ export function LoginForm() {
   const isDisabled = loginLoading || loginSuccess;
 
   return (
-    <div className="w-full max-w-md mx-auto animate-fade-in-up">
-      <Card className="shadow-xl border-primary/10">
+    <div className="mx-auto w-full max-w-md animate-fade-in-up">
+      <Card className="rounded-3xl border-border shadow-xl shadow-zinc-950/5">
         <CardHeader className="space-y-1 text-center">
-          <div className="flex justify-center mb-2">
-            <div className="relative h-16 w-16">
-              <Image
-                src="/logo.png"
-                alt="SnapCart"
-                fill
-                className="object-contain"
-                priority
-              />
+          <div className="mb-2 flex justify-center">
+            <div className="relative h-14 w-14">
+              <Image src="/logo.png" alt="SnapCart" fill className="object-contain" priority />
             </div>
           </div>
-          
-          <CardTitle className="text-2xl font-bold">
-            Welcome Back
+
+          <CardTitle className="text-2xl font-black tracking-tight md:text-3xl">
+            Welcome back
           </CardTitle>
           <CardDescription>Sign in to your account to continue</CardDescription>
         </CardHeader>
 
-        <CardContent>
+        <CardContent className="space-y-5">
+          {/* ✅ OAuth first — this is the standard placement in most
+              modern auth UIs (Linear, Vercel, Notion, etc.): the
+              lowest-friction path goes above the fold, the form is
+              the fallback below a divider. */}
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11 w-full gap-2 rounded-full border-border hover:bg-muted"
+            onClick={handleGoogleLogin}
+          >
+            <GoogleIcon className="h-4 w-4" />
+            Continue with Google
+          </Button>
+
+          <div className="flex w-full items-center gap-3">
+            <div className="h-px flex-1 bg-border" />
+            <span className="text-xs text-muted-foreground">or continue with email</span>
+            <div className="h-px flex-1 bg-border" />
+          </div>
+
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
               {errorMessage && (
                 <div
                   role="alert"
-                  className="rounded-lg bg-red-50 dark:bg-red-950/20 p-4 border border-red-200 dark:border-red-800 animate-fade-in"
+                  className="animate-fade-in rounded-2xl border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-950/20"
                 >
                   <div className="flex items-start gap-3">
-                    <AlertCircle className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
+                    <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-500" />
                     <div className="flex-1">
                       <p className="text-sm font-medium text-red-700 dark:text-red-400">
                         {errorMessage}
@@ -477,13 +526,13 @@ export function LoginForm() {
                     <FormLabel className="font-medium">Email address</FormLabel>
                     <FormControl>
                       <div className="relative">
-                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Mail className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                         <Input
                           placeholder="john@example.com"
                           type="email"
                           disabled={isDisabled}
                           autoComplete="email"
-                          className="pl-10"
+                          className="rounded-xl pl-10 focus-visible:border-orange-300"
                           {...field}
                         />
                       </div>
@@ -501,18 +550,18 @@ export function LoginForm() {
                     <FormLabel className="font-medium">Password</FormLabel>
                     <FormControl>
                       <div className="relative">
-                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Lock className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                         <Input
                           type={showPassword ? 'text' : 'password'}
                           placeholder="Enter your password"
                           disabled={isDisabled}
-                          className="pl-10 pr-12"
+                          className="rounded-xl pr-12 pl-10 focus-visible:border-orange-300"
                           autoComplete="current-password"
                           {...field}
                         />
                         <button
                           type="button"
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                          className="absolute top-1/2 right-3 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
                           onClick={() => setShowPassword(!showPassword)}
                           disabled={isDisabled}
                           tabIndex={-1}
@@ -532,20 +581,20 @@ export function LoginForm() {
               />
 
               <div className="flex items-center justify-between">
-                <label className="flex items-center gap-2 text-sm cursor-pointer group">
+                <label className="group flex cursor-pointer items-center gap-2 text-sm">
                   <input
                     type="checkbox"
                     checked={rememberMe}
                     onChange={(e) => setRememberMe(e.target.checked)}
-                    className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary/20 transition-colors"
+                    className="h-4 w-4 rounded border-border accent-orange-600 transition-colors"
                   />
-                  <span className="text-muted-foreground group-hover:text-foreground transition-colors">
+                  <span className="text-muted-foreground transition-colors group-hover:text-foreground">
                     Remember me
                   </span>
                 </label>
                 <Link
                   href="/forgot-password"
-                  className="text-sm text-primary hover:underline font-medium transition-colors"
+                  className="text-sm font-medium text-orange-600 transition-colors hover:text-orange-700"
                 >
                   Forgot password?
                 </Link>
@@ -553,19 +602,19 @@ export function LoginForm() {
 
               <Button
                 type="submit"
-                className="w-full gap-2 group"
+                className="group w-full gap-2 rounded-full bg-zinc-950 text-white hover:bg-zinc-800"
                 disabled={isDisabled}
                 size="lg"
               >
                 {loginLoading ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    {loginSuccess ? 'Redirecting...' : 'Signing in...'}
+                    {loginSuccess ? 'Redirecting…' : 'Signing in…'}
                   </>
                 ) : (
                   <>
                     Sign in
-                    <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                    <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
                   </>
                 )}
               </Button>
@@ -573,50 +622,16 @@ export function LoginForm() {
           </Form>
         </CardContent>
 
-        <CardFooter className="flex flex-col gap-4 border-t pt-6">
+        <CardFooter className="flex flex-col gap-4 border-t border-border pt-6">
           <p className="text-sm text-muted-foreground">
             Don't have an account?{' '}
             <Link
               href="/register"
-              className="text-primary hover:underline font-medium transition-colors"
+              className="font-medium text-orange-600 transition-colors hover:text-orange-700"
             >
               Create one
             </Link>
           </p>
-          <div className="flex items-center gap-3 w-full">
-            <div className="flex-1 h-px bg-border" />
-            <span className="text-xs text-muted-foreground">or</span>
-            <div className="flex-1 h-px bg-border" />
-          </div>
-          <div className="flex gap-3 w-full">
-            <Button variant="outline" className="flex-1 gap-2" type="button">
-              <svg className="h-4 w-4" viewBox="0 0 24 24">
-                <path
-                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
-                  fill="#4285F4"
-                />
-                <path
-                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                  fill="#34A853"
-                />
-                <path
-                  d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                  fill="#FBBC05"
-                />
-                <path
-                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                  fill="#EA4335"
-                />
-              </svg>
-              Google
-            </Button>
-            <Button variant="outline" className="flex-1 gap-2" type="button">
-              <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.15 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.62.24 2.85.12 3.15.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
-              </svg>
-              GitHub
-            </Button>
-          </div>
         </CardFooter>
       </Card>
     </div>

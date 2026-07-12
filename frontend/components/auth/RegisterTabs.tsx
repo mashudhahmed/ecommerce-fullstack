@@ -4,7 +4,7 @@
 import { useState } from 'react';
 import Image from 'next/image';
 import { RegisterForm } from './RegisterForm';
-import { RegisterVendorForm } from './RegisterVendorForm';
+import { VendorRegistrationForm } from './VendorRegistrationForm';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Users, Store } from 'lucide-react';
 
@@ -66,7 +66,7 @@ export function RegisterTabs() {
         </TabsContent>
 
         <TabsContent value="vendor">
-          <RegisterVendorForm />
+          <VendorRegistrationForm />
         </TabsContent>
       </Tabs>
     </div>

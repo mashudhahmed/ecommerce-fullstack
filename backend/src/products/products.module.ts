@@ -8,11 +8,13 @@ import { ProductsService } from './products.service';
 import { ProductsController } from './product.controller';
 import { UserModule } from '../user/user.module';
 import { Category } from '../categories/category.entity';
+import { FilesModule } from '../files/files.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Product, ProductImage, ProductVariant, Category]),
     UserModule,
+    FilesModule,
   ],
   controllers: [ProductsController],
   providers: [ProductsService],

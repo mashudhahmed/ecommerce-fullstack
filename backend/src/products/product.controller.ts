@@ -13,6 +13,9 @@ import {
   Request,
   Patch,
   ValidationPipe,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -20,7 +23,10 @@ import {
   ApiResponse,
   ApiBearerAuth,
   ApiQuery,
+  ApiConsumes,
+  ApiBody,
 } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { ProductsService } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
@@ -28,11 +34,16 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { UserRole } from '../user/user.entity';
+import { FilesService } from '../files/files.service';
+import { MulterFile } from '../common/types/multer-file.type';
 
 @ApiTags('Products')
 @Controller('products')
 export class ProductsController {
-  constructor(private readonly productsService: ProductsService) {}
+  constructor(
+    private readonly productsService: ProductsService,
+    private readonly filesService: FilesService,
+  ) {}
 
   // ============================================================
   // PUBLIC ENDPOINTS
@@ -62,17 +73,14 @@ export class ProductsController {
     const pageNum = page ? parseInt(page, 10) : 1;
     const limitNum = limit ? Math.min(parseInt(limit, 10), 100) : 20;
 
-    // If search is provided, use search endpoint logic
     if (search && search.length > 0) {
       return this.productsService.searchProducts(search, limitNum);
     }
 
-    // If categoryId is provided, filter by category
     if (categoryId) {
       return this.productsService.findByCategory(parseInt(categoryId, 10));
     }
 
-    // Use paginated version for better performance
     return this.productsService.findAllPaginated(pageNum, limitNum);
   }
 
@@ -99,25 +107,20 @@ export class ProductsController {
     );
   }
 
-  // ============================================================
-  // GET SINGLE PRODUCT – WITH CACHE BYPASS SUPPORT
-  // ============================================================
-
   @ApiOperation({ summary: 'Get a single product by ID' })
   @ApiResponse({ status: 200, description: 'Product retrieved successfully' })
   @ApiResponse({ status: 404, description: 'Product not found' })
-  @ApiQuery({ 
-    name: 'fresh', 
-    required: false, 
+  @ApiQuery({
+    name: 'fresh',
+    required: false,
     type: Boolean,
-    description: 'Bypass cache and fetch fresh data from database'
+    description: 'Bypass cache and fetch fresh data from database',
   })
   @Get(':id')
   findOne(
     @Param('id', ParseIntPipe) id: number,
     @Query('fresh') fresh?: string,
   ) {
-    // ✅ If fresh=true, bypass cache and get fresh data
     if (fresh === 'true') {
       return this.productsService.findOneFresh(id);
     }
@@ -161,38 +164,115 @@ export class ProductsController {
   }
 
   // ============================================================
-  // CREATE PRODUCT
+  // CREATE PRODUCT WITH IMAGE UPLOAD
   // ============================================================
 
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create a new product (Vendor/Admin only)' })
   @ApiResponse({ status: 201, description: 'Product created successfully' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', example: 'Smartphone X' },
+        price: { type: 'number', example: 599.99 },
+        description: { type: 'string', example: 'Latest smartphone with amazing features' },
+        stock: { type: 'number', example: 50 },
+        categoryId: { type: 'number', example: 1 },
+        compareAtPrice: { type: 'number', example: 799.99 },
+        sku: { type: 'string', example: 'SKU-12345' },
+        isTrending: { type: 'boolean', example: false },
+        isNew: { type: 'boolean', example: false },
+        image: { type: 'string', format: 'binary', description: 'Product image file' },
+      },
+    },
+  })
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.VENDOR, UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Post()
-  create(
+  @UseInterceptors(FileInterceptor('image'))
+  async create(
+    @UploadedFile() file: MulterFile,
     @Body(new ValidationPipe()) createProductDto: CreateProductDto,
     @Request() req: { user: { id: number } },
   ) {
-    return this.productsService.create(createProductDto, req.user.id);
+    let imageUrl: string | undefined;
+
+    if (file) {
+      try {
+        const upload = await this.filesService.uploadFile(file, { folder: 'products' });
+        imageUrl = upload.url;
+      } catch (error: any) {
+        throw new BadRequestException(`Image upload failed: ${error.message}`);
+      }
+    }
+
+    return this.productsService.create(
+      {
+        ...createProductDto,
+        imageUrl,
+      },
+      req.user.id,
+    );
   }
 
   // ============================================================
-  // UPDATE PRODUCT
+  // UPDATE PRODUCT WITH IMAGE UPLOAD
   // ============================================================
 
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update a product' })
   @ApiResponse({ status: 200, description: 'Product updated successfully' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string' },
+        price: { type: 'number' },
+        description: { type: 'string' },
+        stock: { type: 'number' },
+        categoryId: { type: 'number' },
+        compareAtPrice: { type: 'number' },
+        sku: { type: 'string' },
+        isActive: { type: 'boolean' },
+        isTrending: { type: 'boolean' },
+        isNew: { type: 'boolean' },
+        image: { type: 'string', format: 'binary', description: 'Product image file' },
+      },
+    },
+  })
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.VENDOR, UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Put(':id')
-  update(
+  @UseInterceptors(FileInterceptor('image'))
+  async update(
     @Param('id', ParseIntPipe) id: number,
+    @UploadedFile() file: MulterFile,
     @Body(new ValidationPipe()) updateProductDto: UpdateProductDto,
     @Request() req: { user: { id: number; role: UserRole } },
   ) {
-    return this.productsService.update(id, updateProductDto, req.user.id, req.user.role);
+    let imageUrl: string | undefined = updateProductDto.imageUrl;
+
+    if (file) {
+      try {
+        const upload = await this.filesService.uploadFile(file, { folder: 'products' });
+        imageUrl = upload.url;
+      } catch (error: any) {
+        throw new BadRequestException(`Image upload failed: ${error.message}`);
+      }
+    }
+
+    return this.productsService.update(
+      id,
+      {
+        ...updateProductDto,
+        imageUrl,
+      },
+      req.user.id,
+      req.user.role,
+    );
   }
 
   // ============================================================

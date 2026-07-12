@@ -22,10 +22,11 @@ export default function VendorOrdersPage() {
   const { ordersData, ordersLoading, updateOrderStatus, updateOrderStatusLoading } = useVendor();
   const [statusFilter, setStatusFilter] = useState<string>('');
 
-  const orders = ordersData?.data || [];
+  // ✅ Fix: Properly handle the data structure
+  const orders = (ordersData as any)?.data || (Array.isArray(ordersData) ? ordersData : []);
 
   const filteredOrders = statusFilter
-    ? orders.filter((o) => o.status === statusFilter)
+    ? orders.filter((o: any) => o.status === statusFilter)
     : orders;
 
   const handleStatusChange = async (orderId: number, status: string) => {
@@ -69,7 +70,7 @@ export default function VendorOrdersPage() {
 
       {filteredOrders.length > 0 ? (
         <div className="space-y-4">
-          {filteredOrders.map((order) => (
+          {filteredOrders.map((order: any) => (
             <Card key={order.id}>
               <CardContent className="flex flex-col md:flex-row md:items-center justify-between p-4 gap-4">
                 <div>

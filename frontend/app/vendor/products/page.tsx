@@ -35,8 +35,9 @@ export default function VendorProductsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [bulkUploadOpen, setBulkUploadOpen] = useState(false);
 
-  const products = productsData?.data || [];
-  const filteredProducts = products.filter((p) =>
+  // ✅ Fix: Properly handle the data structure
+  const products = (productsData as any)?.data || (Array.isArray(productsData) ? productsData : []);
+  const filteredProducts = products.filter((p: any) =>
     p.title.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -54,7 +55,7 @@ export default function VendorProductsPage() {
     if (selectedProducts.length === filteredProducts.length) {
       setSelectedProducts([]);
     } else {
-      setSelectedProducts(filteredProducts.map((p) => p.id));
+      setSelectedProducts(filteredProducts.map((p: any) => p.id));
     }
   };
 
@@ -144,7 +145,7 @@ export default function VendorProductsPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredProducts.map((product) => (
+            {filteredProducts.map((product: any) => (
               <TableRow key={product.id}>
                 <TableCell>
                   <input

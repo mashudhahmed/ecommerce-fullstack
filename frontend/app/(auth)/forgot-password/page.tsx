@@ -1,7 +1,9 @@
+// frontend/app/(auth)/forgot-password/page.tsx
 import { ForgotPasswordForm } from '@/components/auth/ForgotPasswordForm';
+import { Metadata } from 'next';
 
-export const metadata = {
-  title: 'Forgot Password | E-Commerce Store',
+export const metadata: Metadata = {
+  title: 'Forgot Password | SnapCart',
   description: 'Reset your password',
 };
 

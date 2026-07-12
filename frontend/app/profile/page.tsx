@@ -1,6 +1,7 @@
 // app/profile/page.tsx
 'use client';
 
+import { useState, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -22,15 +23,20 @@ import {
   MapPin,
   Building,
   Store,
+  Camera,
+  Loader2,
 } from 'lucide-react';
 import { formatDate, getInitials } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { toast } from 'sonner';
+import { apiClient } from '@/lib/api-client';
 
 export default function ProfilePage() {
-  const { user, isAuthenticated, isLoading, logout } = useAuth();
+  const { user, isAuthenticated, isLoading, logout, refetchUser } = useAuth();
   const router = useRouter();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
 
   if (isLoading) {
     return (
@@ -52,6 +58,65 @@ export default function ProfilePage() {
       router.push('/login');
     } catch (error) {
       toast.error('Failed to logout');
+    }
+  };
+
+  const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (!allowedTypes.includes(file.type)) {
+      toast.error('Please upload a JPEG, PNG, WebP, or GIF image');
+      return;
+    }
+
+    // Validate file size (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image must be less than 5MB');
+      return;
+    }
+
+    setAvatarUploading(true);
+    const formData = new FormData();
+    formData.append('avatar', file);
+
+    try {
+      const response = await apiClient.patch('/users/profile/avatar', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      toast.success('Avatar updated successfully!');
+      await refetchUser();
+      
+      // Force a page refresh to update the avatar everywhere
+      window.location.reload();
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || 'Failed to upload avatar');
+    } finally {
+      setAvatarUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleRemoveAvatar = async () => {
+    if (!confirm('Remove your profile avatar?')) return;
+
+    setAvatarUploading(true);
+    try {
+      await apiClient.delete('/users/profile/avatar');
+      toast.success('Avatar removed successfully');
+      await refetchUser();
+      window.location.reload();
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || 'Failed to remove avatar');
+    } finally {
+      setAvatarUploading(false);
     }
   };
 
@@ -83,13 +148,48 @@ export default function ProfilePage() {
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="flex items-center gap-6">
-            <Avatar className="h-24 w-24">
-              <AvatarFallback className="text-2xl bg-orange-100 text-orange-600">
-                {getInitials(user.name)}
-              </AvatarFallback>
-            </Avatar>
-            <div className="space-y-1">
-              <h2 className="text-2xl font-semibold">{user.name}</h2>
+            {/* Avatar with upload */}
+            <div className="relative group">
+              <Avatar className="h-24 w-24 border-2 border-muted hover:border-primary transition-colors">
+                <AvatarImage src={user.avatar || ''} alt={user.name} />
+                <AvatarFallback className="text-2xl bg-orange-100 text-orange-600">
+                  {getInitials(user.name)}
+                </AvatarFallback>
+              </Avatar>
+              
+              {/* Upload overlay */}
+              <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  onChange={handleAvatarUpload}
+                  className="absolute inset-0 opacity-0 cursor-pointer"
+                  disabled={avatarUploading}
+                />
+                {avatarUploading ? (
+                  <Loader2 className="h-6 w-6 text-white animate-spin" />
+                ) : (
+                  <Camera className="h-6 w-6 text-white" />
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-1 flex-1">
+              <div className="flex items-center gap-3 flex-wrap">
+                <h2 className="text-2xl font-semibold">{user.name}</h2>
+                {user.avatar && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleRemoveAvatar}
+                    disabled={avatarUploading}
+                    className="text-xs text-muted-foreground hover:text-red-500"
+                  >
+                    Remove
+                  </Button>
+                )}
+              </div>
               <div className="flex items-center gap-2 flex-wrap">
                 <Badge className={roleColors[user.role]}>
                   {user.role}
@@ -111,13 +211,16 @@ export default function ProfilePage() {
                   </Badge>
                 )}
               </div>
+              <p className="text-sm text-muted-foreground">
+                {avatarUploading ? 'Uploading...' : 'Click the avatar to upload a photo'}
+              </p>
             </div>
           </div>
 
           <Separator />
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* ✅ Email - always shown */}
+            {/* Email - always shown */}
             <div className="flex items-center gap-3">
               <Mail className="h-5 w-5 text-muted-foreground" />
               <div>
@@ -126,7 +229,7 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            {/* ✅ Joined Date - always shown */}
+            {/* Joined Date - always shown */}
             <div className="flex items-center gap-3">
               <Calendar className="h-5 w-5 text-muted-foreground" />
               <div>
@@ -135,7 +238,7 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            {/* ✅ Vendor-specific fields - only shown if user is vendor */}
+            {/* Vendor-specific fields - only shown if user is vendor */}
             {isVendor && (
               <>
                 {user.vendorPhoneNumber && (

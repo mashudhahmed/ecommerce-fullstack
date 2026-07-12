@@ -174,4 +174,4 @@ Full setup instructions, environment variables, and configuration details are do
 
 ## License
 
-This project is licensed under the MIT license. All rights reserved.
+This project is licensed under the MIT license.

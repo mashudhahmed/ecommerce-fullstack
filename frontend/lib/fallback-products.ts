@@ -1,3 +1,4 @@
+// lib/fallback-products.ts
 import { Product } from '@/types';
 
 export const fallbackProducts: Product[] = [
@@ -8,6 +9,7 @@ export const fallbackProducts: Product[] = [
     description: "High-quality wireless headphones with noise cancellation and 30-hour battery life. Perfect for music lovers and professionals.",
     stock: 25,
     imageUrl: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500&h=500&fit=crop",
+    images: false,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   },
@@ -18,6 +20,7 @@ export const fallbackProducts: Product[] = [
     description: "Track your steps, heart rate, sleep quality, and more with this advanced fitness tracker. Waterproof and stylish.",
     stock: 50,
     imageUrl: "https://images.unsplash.com/photo-1576243345690-4e4b79b63288?w=500&h=500&fit=crop",
+    images: false,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   },
@@ -28,6 +31,7 @@ export const fallbackProducts: Product[] = [
     description: "Comfortable and sustainable 100% organic cotton t-shirt. Available in multiple colors. Eco-friendly packaging.",
     stock: 100,
     imageUrl: "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=500&h=500&fit=crop",
+    images: false,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   },
@@ -38,6 +42,7 @@ export const fallbackProducts: Product[] = [
     description: "Premium stainless steel chef knife with ergonomic handle. Perfect for professional and home kitchens.",
     stock: 30,
     imageUrl: "https://images.unsplash.com/photo-1593618998160-e34014e67546?w=500&h=500&fit=crop",
+    images: false,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   },
@@ -48,6 +53,7 @@ export const fallbackProducts: Product[] = [
     description: "Portable Bluetooth speaker with 360° sound and 12-hour battery life. Water-resistant and durable.",
     stock: 45,
     imageUrl: "https://images.unsplash.com/photo-1608043152269-423dbba4e7e1?w=500&h=500&fit=crop",
+    images: false,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   },
@@ -58,6 +64,7 @@ export const fallbackProducts: Product[] = [
     description: "Waterproof nylon backpack with laptop compartment and multiple pockets. Perfect for daily commute.",
     stock: 35,
     imageUrl: "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500&h=500&fit=crop",
+    images: false,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   },
@@ -68,6 +75,7 @@ export const fallbackProducts: Product[] = [
     description: "Adjustable aluminum smartphone stand with anti-slip pads. Compatible with all phones and tablets.",
     stock: 200,
     imageUrl: "https://images.unsplash.com/photo-1586953208448-b95a79798f07?w=500&h=500&fit=crop",
+    images: false,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   },
@@ -78,6 +86,7 @@ export const fallbackProducts: Product[] = [
     description: "Non-slip eco-friendly yoga mat with carrying strap. 6mm thickness for optimal comfort.",
     stock: 60,
     imageUrl: "https://images.unsplash.com/photo-1592432678016-e910b452f9a2?w=500&h=500&fit=crop",
+    images: false,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   },

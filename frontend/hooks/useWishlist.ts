@@ -1,5 +1,5 @@
 // hooks/useWishlist.ts
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { wishlistService } from '@/services/wishlist.service';
 import { useWishlistStore } from '@/store/wishlist-store';
@@ -7,49 +7,95 @@ import { useAuth } from './useAuth';
 import { toast } from 'sonner';
 
 export function useWishlist() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const queryClient = useQueryClient();
-  const { items, addItem, removeItem, clear, isInWishlist, getTotal, syncWithServer } =
-    useWishlistStore();
+  const {
+    items,
+    isSynced,
+    addItem,
+    removeItem,
+    clear,
+    isInWishlist,
+    getTotal,
+    syncWithServer,
+    resetSync,
+  } = useWishlistStore();
+
+  const isMergingRef = useRef(false);
 
   // ============================================================
-  // SERVER FETCH — source of truth for persistence, hydrates the
-  // local store once so subsequent reads are instant/synchronous.
+  // SERVER FETCH — source of truth for persistence for logged-in users.
   // ============================================================
   const { data: serverWishlist, isLoading } = useQuery({
     queryKey: ['wishlist'],
     queryFn: () => wishlistService.getWishlist(),
-    enabled: isAuthenticated,
+    enabled: isAuthenticated && !authLoading,
     staleTime: 60 * 1000,
   });
 
+  // ============================================================
+  // GUEST WISHLIST MERGE ON LOGIN
+  // When a guest logs in with saved wishlist items, merge them to server
+  // ============================================================
   useEffect(() => {
-    if (serverWishlist?.data) {
-      syncWithServer(serverWishlist.data);
-    }
-  }, [serverWishlist, syncWithServer]);
+    if (
+      isAuthenticated &&
+      !authLoading &&
+      !isSynced &&
+      items.length > 0 &&
+      !isMergingRef.current
+    ) {
+      isMergingRef.current = true;
+      const guestProductIds = items.map((item) => item.id);
 
-  // ✅ Clear the local store on logout so a subsequent user on the
-  // same device doesn't see a stale wishlist before the next sync.
-  useEffect(() => {
-    if (!isAuthenticated) {
-      clear();
+      wishlistService
+        .mergeWishlist(guestProductIds)
+        .then(() => {
+          queryClient.invalidateQueries({ queryKey: ['wishlist'] });
+        })
+        .catch((error) => {
+          console.error('Failed to merge guest wishlist on login:', error);
+        })
+        .finally(() => {
+          isMergingRef.current = false;
+        });
     }
-  }, [isAuthenticated, clear]);
+  }, [isAuthenticated, authLoading, isSynced, items, queryClient]);
 
   // ============================================================
-  // ADD — optimistic: updates the store immediately, then persists.
-  // Reverts the optimistic update if the server call fails.
+  // SERVER SYNC
+  // When authenticated, sync server wishlist items into local store
+  // ============================================================
+  useEffect(() => {
+    if (isAuthenticated && !authLoading && serverWishlist?.data) {
+      syncWithServer(serverWishlist.data);
+    }
+  }, [isAuthenticated, authLoading, serverWishlist, syncWithServer]);
+
+  // ============================================================
+  // LOGOUT CLEANUP
+  // Clear local store only on logout from a synced authenticated session
+  // ============================================================
+  useEffect(() => {
+    if (!isAuthenticated && !authLoading && isSynced) {
+      clear();
+      resetSync();
+    }
+  }, [isAuthenticated, authLoading, isSynced, clear, resetSync]);
+
+  // ============================================================
+  // ADD MUTATION (authenticated only)
   // ============================================================
   const addMutation = useMutation({
     mutationFn: wishlistService.addToWishlist,
     onError: (error: any, productId) => {
-      removeItem(productId as unknown as number); // revert optimistic add
-      if (error?.statusCode === 409) {
-        toast.info('Already in wishlist');
-      } else {
-        toast.error(error?.message || 'Failed to add to wishlist');
+      const status = error?.response?.status || error?.statusCode;
+      if (status === 409) {
+        // Already in wishlist on server; keep in local store
+        return;
       }
+      removeItem(productId as unknown as number); // revert optimistic add on real error
+      toast.error(error?.message || 'Failed to add to wishlist');
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['wishlist'] });
@@ -57,19 +103,22 @@ export function useWishlist() {
   });
 
   // ============================================================
-  // REMOVE — optimistic
+  // REMOVE MUTATION (authenticated only)
   // ============================================================
   const removeMutation = useMutation({
     mutationFn: wishlistService.removeFromWishlist,
     onError: (error: any) => {
       toast.error(error?.message || 'Failed to remove from wishlist');
-      queryClient.invalidateQueries({ queryKey: ['wishlist'] }); // resync on failure
+      queryClient.invalidateQueries({ queryKey: ['wishlist'] });
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['wishlist'] });
     },
   });
 
+  // ============================================================
+  // CLEAR MUTATION (authenticated only)
+  // ============================================================
   const clearMutation = useMutation({
     mutationFn: wishlistService.clearWishlist,
     onSuccess: () => {
@@ -81,39 +130,46 @@ export function useWishlist() {
     },
   });
 
-  // ✅ Wraps the server mutation with an instant local update so the
-  // header badge / product cards update in the same tick, instead of
-  // waiting on a round-trip + query invalidation.
+  // ============================================================
+  // PUBLIC ACTIONS (work seamlessly for both guests and auth users)
+  // ============================================================
   const addToWishlist = async (product: Parameters<typeof addItem>[0]) => {
     addItem(product);
-    return addMutation.mutateAsync(product.id);
+    if (isAuthenticated) {
+      return addMutation.mutateAsync(product.id);
+    }
   };
 
   const removeFromWishlist = async (productId: number) => {
     removeItem(productId);
-    return removeMutation.mutateAsync(productId);
+    if (isAuthenticated) {
+      return removeMutation.mutateAsync(productId);
+    }
   };
 
-  // ✅ Synchronous under the hood now (store lookup) but kept async in
-  // signature so existing callers (e.g. ProductCard, ProductDetail)
-  // that do `checkInWishlist(id).then(setState)` keep working as-is.
+  const clearWishlist = async () => {
+    clear();
+    if (isAuthenticated) {
+      return clearMutation.mutateAsync();
+    }
+  };
+
   const checkInWishlist = async (productId: number): Promise<boolean> => {
-    if (!isAuthenticated) return false;
     return isInWishlist(productId);
   };
 
   return {
     wishlist: items,
     total: getTotal(),
-    isLoading,
+    isLoading: isAuthenticated ? isLoading : false,
     count: getTotal(),
     addToWishlist,
     addLoading: addMutation.isPending,
     removeFromWishlist,
     removeLoading: removeMutation.isPending,
-    clearWishlist: clearMutation.mutateAsync,
+    clearWishlist,
     clearLoading: clearMutation.isPending,
     checkInWishlist,
-    isInWishlist, // new: synchronous store check, prefer this in new code
+    isInWishlist,
   };
 }

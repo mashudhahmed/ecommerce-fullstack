@@ -36,8 +36,8 @@ export const wishlistService = {
   },
 
   async isInWishlist(productId: number): Promise<boolean> {
-    const { data } = await apiClient.get<ApiResponse<boolean>>(`/wishlist/check/${productId}`);
-    return data.data;
+    const { data } = await apiClient.get<ApiResponse<any>>(`/wishlist/check/${productId}`);
+    return Boolean((data?.data as any)?.isInWishlist ?? data?.data);
   },
 
   async getWishlistCount(): Promise<number> {
@@ -47,5 +47,21 @@ export const wishlistService = {
 
   async clearWishlist(): Promise<void> {
     await apiClient.delete('/wishlist');
+  },
+
+  async mergeWishlist(productIds: number[]): Promise<{ merged: number; added: number } | null> {
+    if (!productIds || productIds.length === 0) {
+      return { merged: 0, added: 0 };
+    }
+    try {
+      const { data } = await apiClient.post<ApiResponse<{ merged: number; added: number }>>(
+        '/wishlist/merge',
+        { productIds }
+      );
+      return data.data;
+    } catch (error) {
+      console.error('Failed to merge wishlist:', error);
+      return null;
+    }
   },
 };

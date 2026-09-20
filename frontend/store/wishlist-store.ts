@@ -13,6 +13,7 @@ interface WishlistState {
   getTotal: () => number;
   syncWithServer: (serverItems: Product[]) => void;
   setSynced: () => void;
+  resetSync: () => void;
 }
 
 // ✅ Mirrors cart-store.ts: local-first store for instant reads/writes.
@@ -26,10 +27,11 @@ export const useWishlistStore = create<WishlistState>()(
       isSynced: false,
 
       syncWithServer: (serverItems) => {
-        set({ items: serverItems, isSynced: true });
+        set({ items: Array.isArray(serverItems) ? serverItems : [], isSynced: true });
       },
 
       setSynced: () => set({ isSynced: true }),
+      resetSync: () => set({ isSynced: false }),
 
       addItem: (product) => {
         const { items } = get();

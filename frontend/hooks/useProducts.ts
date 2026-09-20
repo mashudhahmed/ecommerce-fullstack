@@ -34,8 +34,8 @@ export function useProducts() {
       }
     },
     throwOnError: false,
-    staleTime: 5 * 60 * 1000,
-    initialData: fallbackProducts, // Show immediately while fetching
+    staleTime: 60 * 1000,
+    placeholderData: fallbackProducts,
   });
 
   // ✅ In-stock products
@@ -51,7 +51,8 @@ export function useProducts() {
       }
     },
     throwOnError: false,
-    initialData: fallbackProducts,
+    staleTime: 60 * 1000,
+    placeholderData: fallbackProducts,
   });
 
   // ✅ Low-stock products

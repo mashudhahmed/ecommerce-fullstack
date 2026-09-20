@@ -53,7 +53,10 @@ export class WishlistService {
     });
 
     if (result.affected === 0) {
-      throw new NotFoundException('Item not found in wishlist');
+      this.logger.debug(
+        `Product ${productId} was not in wishlist for user ${userId} (already removed)`,
+      );
+      return;
     }
 
     this.logger.log(
@@ -106,5 +109,46 @@ export class WishlistService {
       user: { id: userId },
     });
     this.logger.log(`Wishlist cleared for user ${userId}`);
+  }
+
+  async mergeWishlist(
+    userId: number,
+    productIds: number[],
+  ): Promise<{ merged: number; added: number }> {
+    if (!productIds || !Array.isArray(productIds) || productIds.length === 0) {
+      return { merged: 0, added: 0 };
+    }
+
+    let added = 0;
+    for (const productId of productIds) {
+      if (!productId || typeof productId !== 'number') continue;
+
+      const existing = await this.wishlistRepository.findOne({
+        where: {
+          user: { id: userId },
+          product: { id: productId },
+        },
+      });
+
+      if (!existing) {
+        try {
+          const item = this.wishlistRepository.create({
+            user: { id: userId },
+            product: { id: productId },
+          });
+          await this.wishlistRepository.save(item);
+          added++;
+        } catch (err: any) {
+          this.logger.warn(
+            `Failed to save merged wishlist item ${productId} for user ${userId}: ${err.message}`,
+          );
+        }
+      }
+    }
+
+    this.logger.log(
+      `Merged wishlist for user ${userId}: ${added} added out of ${productIds.length} guest items`,
+    );
+    return { merged: productIds.length, added };
   }
 }

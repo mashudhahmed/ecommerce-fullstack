@@ -36,9 +36,8 @@ export function CartItem({ item }: CartItemProps) {
   const handleRemove = async () => {
     try {
       await removeItem(item.product.id);
-      toast.success('Item removed from cart');
-    } catch (error: any) {
-      toast.error(error?.message || 'Failed to remove item');
+    } catch {
+      // toast is handled in useCart
     }
   };
 

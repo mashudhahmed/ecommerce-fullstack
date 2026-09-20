@@ -116,7 +116,7 @@ export function Header() {
     connectionError,
     reconnectAttempts,
   } = useWebSocket({
-    autoConnect: true,
+    autoConnect: Boolean(isAuthenticated),
     onConnect: () => {
       console.log('🔌 WebSocket: Connected to notification service');
       fetchNotifications();
@@ -153,8 +153,11 @@ export function Header() {
         setNotifications(result.data);
         setUnreadCount(result.unread);
       }
-    } catch (error) {
-      console.error('Failed to fetch notifications:', error);
+    } catch (error: any) {
+      const status = error?.statusCode || error?.response?.status;
+      if (status !== 401 && status !== 403) {
+        console.error('Failed to fetch notifications:', error?.message || error);
+      }
       if (mountedRef.current) {
         setNotificationError('Failed to load notifications');
       }
@@ -304,7 +307,6 @@ export function Header() {
     const items = [
       { href: '/products', label: 'Products', icon: ShoppingBag },
       { href: '/orders', label: 'Orders', icon: ShoppingCart },
-      { href: '/wishlist', label: 'Wishlist', icon: Heart },
     ];
 
     if (user?.role === 'vendor') {
@@ -406,17 +408,25 @@ export function Header() {
               <Search className="h-5 w-5" />
             </Button>
 
-            {/* Wishlist */}
-            <Link href="/wishlist" className="relative" aria-label="Wishlist">
-              <Button variant="ghost" size="icon" className="relative rounded-full" aria-label="View wishlist">
+            {/* Wishlist (Love Icon) */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="relative rounded-full"
+              asChild
+            >
+              <Link
+                href="/wishlist"
+                aria-label={`Wishlist${wishlistCount > 0 ? ` (${wishlistCount} items)` : ''}`}
+              >
                 <Heart className="h-5 w-5" />
-                {wishlistCount > 0 && isAuthenticated && (
+                {wishlistCount > 0 && (
                   <span className="absolute -top-1 -right-1 flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-orange-600 px-1 text-[10px] font-semibold tabular-nums text-white">
                     {wishlistCount}
                   </span>
                 )}
-              </Button>
-            </Link>
+              </Link>
+            </Button>
 
             {/* Cart — mini-cart preview popover */}
             <Popover open={isCartOpen} onOpenChange={setIsCartOpen}>

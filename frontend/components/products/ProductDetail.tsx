@@ -27,10 +27,9 @@ export function ProductDetail({ product }: ProductDetailProps) {
 
   const handleAddToCart = async () => {
     try {
-      await addToCart({ productId: product.id, quantity });
-      toast.success(`${product.title} added to cart`);
-    } catch (error: any) {
-      toast.error(error?.message || 'Failed to add to cart');
+      await addToCart({ productId: product.id, quantity, product });
+    } catch {
+      // toast is handled centrally in useCart
     }
   };
 

@@ -1,6 +1,14 @@
 // frontend/services/product.service.ts
 import { apiClient, unwrapData } from '@/lib/api-client';
 import { Product, PaginatedResponse } from '@/types';
+import { fallbackProducts } from '@/lib/fallback-products';
+
+function extractProductList(data: any): Product[] {
+  if (Array.isArray(data)) return data;
+  if (data && Array.isArray(data.data)) return data.data;
+  if (data && Array.isArray(data.items)) return data.items;
+  return [];
+}
 
 export interface CreateProductData {
   title: string;
@@ -45,8 +53,8 @@ export const productService = {
 
       const url = `/products${params.toString() ? `?${params.toString()}` : ''}`;
       const response = await apiClient.get(url);
-      const paginated = unwrapData<PaginatedResponse<Product>>(response.data);
-      return paginated?.items || [];
+      const data = unwrapData(response.data);
+      return extractProductList(data);
     } catch (error: any) {
       console.error('Failed to fetch products:', error?.message || error);
       return [];
@@ -59,10 +67,18 @@ export const productService = {
   async getProduct(id: number): Promise<Product | null> {
     try {
       const response = await apiClient.get(`/products/${id}?fresh=true&_t=${Date.now()}`);
-      return unwrapData<Product>(response.data) || null;
+      const product = unwrapData<Product>(response.data);
+      if (product) return product;
+      const fallback = fallbackProducts.find((p) => p.id === id);
+      return fallback || null;
     } catch (error: any) {
-      if (error?.response?.status === 404) return null;
+      if (error?.response?.status === 404) {
+        const fallback = fallbackProducts.find((p) => p.id === id);
+        return fallback || null;
+      }
       console.error(`Failed to fetch product ${id}:`, error?.message || error);
+      const fallback = fallbackProducts.find((p) => p.id === id);
+      if (fallback) return fallback;
       throw error;
     }
   },
@@ -73,10 +89,18 @@ export const productService = {
   async getProductFresh(id: number): Promise<Product | null> {
     try {
       const response = await apiClient.get(`/products/${id}?fresh=true&_t=${Date.now()}`);
-      return unwrapData<Product>(response.data) || null;
+      const product = unwrapData<Product>(response.data);
+      if (product) return product;
+      const fallback = fallbackProducts.find((p) => p.id === id);
+      return fallback || null;
     } catch (error: any) {
-      if (error?.response?.status === 404) return null;
+      if (error?.response?.status === 404) {
+        const fallback = fallbackProducts.find((p) => p.id === id);
+        return fallback || null;
+      }
       console.error(`Failed to fetch product ${id}:`, error?.message || error);
+      const fallback = fallbackProducts.find((p) => p.id === id);
+      if (fallback) return fallback;
       throw error;
     }
   },
@@ -87,7 +111,8 @@ export const productService = {
   async getInStockProducts(): Promise<Product[]> {
     try {
       const response = await apiClient.get('/products/in-stock');
-      return unwrapData<Product[]>(response.data) || [];
+      const data = unwrapData(response.data);
+      return extractProductList(data);
     } catch (error: any) {
       console.error('Failed to fetch in-stock products:', error?.message || error);
       return [];
@@ -100,7 +125,8 @@ export const productService = {
   async getOutOfStockProducts(): Promise<Product[]> {
     try {
       const response = await apiClient.get('/products/out-of-stock');
-      return unwrapData<Product[]>(response.data) || [];
+      const data = unwrapData(response.data);
+      return extractProductList(data);
     } catch (error: any) {
       console.error('Failed to fetch out-of-stock products:', error?.message || error);
       return [];
@@ -113,7 +139,8 @@ export const productService = {
   async getLowStockProducts(threshold: number = 10): Promise<Product[]> {
     try {
       const response = await apiClient.get(`/products/low-stock?threshold=${threshold}`);
-      return unwrapData<Product[]>(response.data) || [];
+      const data = unwrapData(response.data);
+      return extractProductList(data);
     } catch (error: any) {
       console.error('Failed to fetch low-stock products:', error?.message || error);
       return [];
@@ -128,8 +155,8 @@ export const productService = {
       const response = await apiClient.get(
         `/products?search=${encodeURIComponent(query)}&limit=${limit}`
       );
-      const paginated = unwrapData<PaginatedResponse<Product>>(response.data);
-      return paginated?.items || [];
+      const data = unwrapData(response.data);
+      return extractProductList(data);
     } catch (error: any) {
       console.error('Failed to search products:', error?.message || error);
       return [];
@@ -179,7 +206,8 @@ export const productService = {
   async getVendorProducts(): Promise<Product[]> {
     try {
       const response = await apiClient.get('/products/vendor/my');
-      return unwrapData<Product[]>(response.data) || [];
+      const data = unwrapData(response.data);
+      return extractProductList(data);
     } catch (error: any) {
       console.error('Failed to fetch vendor products:', error?.message || error);
       return [];
@@ -231,7 +259,29 @@ export const productService = {
 
       const url = `/products${params.toString() ? `?${params.toString()}` : ''}`;
       const response = await apiClient.get(url);
-      return unwrapData<PaginatedResponse<Product>>(response.data) || {
+      const data: any = unwrapData(response.data);
+      if (data && Array.isArray(data.data)) {
+        return {
+          items: data.data,
+          total: data.total ?? data.data.length,
+          page: data.page ?? 1,
+          limit: data.limit ?? 20,
+          totalPages: data.totalPages ?? Math.ceil((data.total ?? data.data.length) / (data.limit ?? 20)),
+        };
+      }
+      if (data && Array.isArray(data.items)) {
+        return data as PaginatedResponse<Product>;
+      }
+      if (Array.isArray(data)) {
+        return {
+          items: data,
+          total: data.length,
+          page: 1,
+          limit: data.length,
+          totalPages: 1,
+        };
+      }
+      return {
         items: [],
         total: 0,
         page: 1,
@@ -256,8 +306,8 @@ export const productService = {
   async getProductsByCategory(categoryId: number): Promise<Product[]> {
     try {
       const response = await apiClient.get(`/products?categoryId=${categoryId}`);
-      const paginated = unwrapData<PaginatedResponse<Product>>(response.data);
-      return paginated?.items || [];
+      const data = unwrapData(response.data);
+      return extractProductList(data);
     } catch (error: any) {
       console.error('Failed to fetch products by category:', error?.message || error);
       return [];

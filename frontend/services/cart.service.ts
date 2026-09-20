@@ -16,8 +16,9 @@ export const cartService = {
     try {
       console.log('📡 Fetching cart...');
       const { data } = await apiClient.get<ApiResponse<CartItem[]>>('/cart');
-      console.log('✅ Cart fetched:', data.data);
-      return data.data || [];
+      const items = unwrapData<CartItem[]>(data);
+      console.log('✅ Cart fetched:', items);
+      return Array.isArray(items) ? items : [];
     } catch (error: any) {
       const status = error?.response?.status || error?.statusCode || 'unknown';
       const message = error?.response?.data?.message || error?.message || 'Unknown error';
@@ -41,7 +42,8 @@ export const cartService = {
   }> {
     try {
       const { data } = await apiClient.get<ApiResponse<any>>('/cart/summary');
-      return data.data || { items: [], total: 0, itemCount: 0 };
+      const summary = unwrapData<any>(data);
+      return summary || { items: [], total: 0, itemCount: 0 };
     } catch (error: any) {
       const status = error?.response?.status || error?.statusCode || 'unknown';
       const message = error?.response?.data?.message || error?.message || 'Unknown error';
@@ -61,7 +63,8 @@ export const cartService = {
   async getCartTotal(): Promise<CartTotal> {
     try {
       const { data } = await apiClient.get<ApiResponse<CartTotal>>('/cart/total');
-      return data.data || { total: 0, itemCount: 0, items: [] };
+      const total = unwrapData<CartTotal>(data);
+      return total || { total: 0, itemCount: 0, items: [] };
     } catch (error: any) {
       const status = error?.response?.status || error?.statusCode || 'unknown';
       const message = error?.response?.data?.message || error?.message || 'Unknown error';
@@ -80,7 +83,8 @@ export const cartService = {
   async getCartItemCount(): Promise<{ count: number }> {
     try {
       const { data } = await apiClient.get<ApiResponse<{ count: number }>>('/cart/count');
-      return data.data || { count: 0 };
+      const count = unwrapData<{ count: number }>(data);
+      return count || { count: 0 };
     } catch (error: any) {
       const status = error?.response?.status || error?.statusCode || 'unknown';
       const message = error?.response?.data?.message || error?.message || 'Unknown error';
@@ -168,7 +172,7 @@ export const cartService = {
   },
 
   // ============================================================
-  // REMOVE ITEM – ✅ Handle 401 gracefully
+  // REMOVE ITEM – ✅ Handle 401 & 404 gracefully
   // ============================================================
   async removeItem(productId: number): Promise<void> {
     try {
@@ -182,6 +186,12 @@ export const cartService = {
         console.log('ℹ️ User not authenticated, skipping remove');
         return;
       }
+
+      // 404 means the item was already not in the database cart (e.g. guest or already deleted)
+      if (status === 404) {
+        console.log(`ℹ️ Item ${productId} already not in server cart`);
+        return;
+      }
       
       console.error(`❌ Failed to remove item (${status}):`, message);
       
@@ -192,7 +202,7 @@ export const cartService = {
   },
 
   // ============================================================
-  // CLEAR CART – ✅ Handle 401 gracefully
+  // CLEAR CART – ✅ Handle 401 & 404 gracefully
   // ============================================================
   async clearCart(): Promise<void> {
     try {
@@ -206,12 +216,43 @@ export const cartService = {
         console.log('ℹ️ User not authenticated, skipping clear');
         return;
       }
+
+      if (status === 404) {
+        console.log('ℹ️ Cart already empty on server');
+        return;
+      }
       
       console.error(`❌ Failed to clear cart (${status}):`, message);
       
       const apiError: any = new Error(message);
       apiError.statusCode = status;
       throw apiError;
+    }
+  },
+
+  // ============================================================
+  // MERGE CART (For guest to logged-in user)
+  // ============================================================
+  async mergeCart(
+    guestCartItems: { productId: number; quantity: number }[]
+  ): Promise<{ merged: number; added: number; failed: number } | null> {
+    if (!guestCartItems || guestCartItems.length === 0) {
+      return { merged: 0, added: 0, failed: 0 };
+    }
+    try {
+      console.log('📤 Merging guest cart:', guestCartItems);
+      const response = await apiClient.post('/cart/merge', { guestCartItems });
+      const result = unwrapData<{ merged: number; added: number; failed: number }>(
+        response.data
+      );
+      console.log('✅ Cart merged:', result);
+      return result;
+    } catch (error: any) {
+      const status = error?.response?.status || error?.statusCode || 500;
+      const message =
+        error?.response?.data?.message || error?.message || 'Failed to merge cart';
+      console.error(`❌ Failed to merge cart (${status}):`, message);
+      return null;
     }
   },
 };

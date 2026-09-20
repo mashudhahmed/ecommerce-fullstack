@@ -63,6 +63,19 @@ export class WishlistController {
   }
 
   // ============================================================
+  // MERGE WISHLIST (For guest to logged-in user)
+  // ============================================================
+  @Post('merge')
+  @ApiOperation({ summary: 'Merge guest wishlist with user wishlist' })
+  @ApiResponse({ status: 200, description: 'Wishlist merged successfully' })
+  async mergeWishlist(
+    @Request() req: { user: { id: number } },
+    @Body('productIds') productIds: number[],
+  ) {
+    return this.wishlistService.mergeWishlist(req.user.id, productIds);
+  }
+
+  // ============================================================
   // REMOVE FROM WISHLIST
   // ============================================================
   @Delete(':productId')

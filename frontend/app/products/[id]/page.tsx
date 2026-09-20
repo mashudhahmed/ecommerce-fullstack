@@ -9,6 +9,7 @@ import { useQuery } from '@tanstack/react-query';
 import { productService } from '@/services/product.service';
 import { useCart } from '@/hooks/useCart';
 import { useWishlist } from '@/hooks/useWishlist';
+import { useWishlistStore } from '@/store/wishlist-store';
 import { useReviews } from '@/hooks/useReviews';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -91,23 +92,52 @@ const Rating = ({ rating, count }: { rating: number; count: number }) => {
 
 export default function ProductDetailPage() {
   const params = useParams();
-  const id = params.id as string;
-  return <ProductDetailPageContent key={id} />;
+  const rawId = params?.id;
+  const idStr = Array.isArray(rawId) ? rawId[0] : rawId;
+
+  if (!idStr) {
+    return <ProductDetailSkeleton />;
+  }
+
+  const numericId = parseInt(idStr, 10);
+  if (isNaN(numericId) || numericId <= 0) {
+    return (
+      <div className="container mx-auto px-4 py-20 text-center">
+        <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+          <AlertCircle className="h-7 w-7 text-muted-foreground" />
+        </div>
+        <h2 className="text-2xl font-black tracking-tight">Product not found</h2>
+        <p className="mx-auto mt-2 mb-8 max-w-sm text-muted-foreground">
+          The product you are looking for does not exist or has been removed.
+        </p>
+        <div className="flex flex-wrap justify-center gap-3">
+          <Link href="/products">
+            <Button className="h-11 gap-2 rounded-full bg-zinc-950 px-6 text-white hover:bg-zinc-800">
+              <ArrowLeft className="h-4 w-4" />
+              Browse products
+            </Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  return <ProductDetailPageContent key={numericId} id={numericId} />;
 }
 
-function ProductDetailPageContent() {
-  const params = useParams();
+function ProductDetailPageContent({ id }: { id: number }) {
   const router = useRouter();
-  const id = Number(params.id);
 
   const { isAuthenticated } = useAuth();
   const { addToCart, addToCartLoading } = useCart();
-  const { addToWishlist, removeFromWishlist, checkInWishlist } = useWishlist();
+  const { addToWishlist, removeFromWishlist } = useWishlist();
   const { reviews, stats, statsLoading } = useReviews(id);
 
   const [quantity, setQuantity] = useState(1);
   const [selectedImage, setSelectedImage] = useState(0);
-  const [isInWishlist, setIsInWishlist] = useState(false);
+  const isInWishlist = useWishlistStore((state) =>
+    state.items.some((item) => item.id === id)
+  );
   const [isWishlistLoading, setIsWishlistLoading] = useState(false);
   const [imageError, setImageError] = useState(false);
 
@@ -128,21 +158,13 @@ function ProductDetailPageContent() {
     },
     enabled: !isNaN(id) && id > 0,
     retry: 1,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 60 * 1000,
     gcTime: 10 * 60 * 1000,
     refetchOnMount: 'always',
     refetchOnWindowFocus: false,
   });
 
-  // ============================================================
-  // CHECK WISHLIST STATUS
-  // ============================================================
 
-  useEffect(() => {
-    if (isAuthenticated && product) {
-      checkInWishlist(product.id).then(setIsInWishlist);
-    }
-  }, [isAuthenticated, product, checkInWishlist]);
 
   // ============================================================
   // MEMOIZED COMPUTED VALUES
@@ -177,13 +199,16 @@ function ProductDetailPageContent() {
     [product?.averageRating]
   );
 
-  // Provide fallback image
+  // Provide fallback image & support thumbnail selection
   const mainImageSrc = useMemo(() => {
-    if (!product?.imageUrl || imageError) {
-      return '/placeholder-image.png';
+    if (imageError) return '/placeholder-image.png';
+    if (images.length > 0 && selectedImage < images.length) {
+      const img = images[selectedImage];
+      if (typeof img === 'string') return img;
+      if (img && typeof img === 'object' && 'url' in img) return (img as any).url;
     }
-    return product.imageUrl;
-  }, [product?.imageUrl, imageError]);
+    return product?.imageUrl || '/placeholder-image.png';
+  }, [images, selectedImage, product?.imageUrl, imageError]);
 
   // ============================================================
   // MEMOIZED HANDLERS
@@ -204,36 +229,23 @@ function ProductDetailPageContent() {
   const handleAddToCart = useCallback(async () => {
     if (!product) return;
     try {
-      await addToCart({ productId: product.id, quantity });
-      toast.success(`${product.title} added to cart!`);
-    } catch (error: any) {
-      if (error?.requiresAuth || error?.statusCode === 401) {
-        toast.error('Please login to add items to cart');
-        router.push('/login');
-        return;
-      }
-      toast.error(error?.message || 'Failed to add to cart');
+      await addToCart({ productId: product.id, quantity, product });
+    } catch {
+      // toast is handled centrally in useCart
     }
-  }, [addToCart, product, quantity, router]);
+  }, [addToCart, product, quantity]);
 
   const handleWishlistToggle = useCallback(async () => {
-    if (!product || !isAuthenticated) {
-      toast.info('Please login to add to wishlist');
-      router.push('/login');
-      return;
-    }
-
+    if (!product) return;
     if (isWishlistLoading) return;
 
     setIsWishlistLoading(true);
     try {
       if (isInWishlist) {
         await removeFromWishlist(product.id);
-        setIsInWishlist(false);
         toast.success('Removed from wishlist');
       } else {
         await addToWishlist(product);
-        setIsInWishlist(true);
         toast.success('Added to wishlist');
       }
     } catch (error: any) {
@@ -241,7 +253,7 @@ function ProductDetailPageContent() {
     } finally {
       setIsWishlistLoading(false);
     }
-  }, [isAuthenticated, isInWishlist, isWishlistLoading, addToWishlist, removeFromWishlist, product, router]);
+  }, [isInWishlist, isWishlistLoading, addToWishlist, removeFromWishlist, product]);
 
   const handleShare = useCallback(async () => {
     if (!product) return;
@@ -270,7 +282,7 @@ function ProductDetailPageContent() {
   // LOADING STATE
   // ============================================================
 
-  if (isLoading || isFetching) {
+  if (isLoading || (isFetching && !product)) {
     return <ProductDetailSkeleton />;
   }
 

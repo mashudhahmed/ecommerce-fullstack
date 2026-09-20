@@ -1,12 +1,11 @@
 // components/wishlist/WishlistButton.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useWishlist } from '@/hooks/useWishlist';
+import { useWishlistStore } from '@/store/wishlist-store';
 import { Button } from '@/components/ui/button';
 import { Heart, Loader2 } from 'lucide-react';
-import { useAuth } from '@/hooks/useAuth';
-import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 
 interface WishlistButtonProps {
@@ -15,53 +14,33 @@ interface WishlistButtonProps {
 }
 
 export function WishlistButton({ productId, className }: WishlistButtonProps) {
-  const { isAuthenticated } = useAuth();
-  const router = useRouter();
-  const { 
-    addToWishlist, 
-    removeFromWishlist, 
-    addLoading, 
-    removeLoading, 
-    checkInWishlist,
-    wishlist 
-  } = useWishlist();
-  const [isInWishlist, setIsInWishlist] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const { addToWishlist, removeFromWishlist } = useWishlist();
+  const isInWishlist = useWishlistStore((state) =>
+    state.items.some((item) => item.id === productId)
+  );
+  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    if (isAuthenticated) {
-      checkInWishlist(productId)
-        .then((result) => setIsInWishlist(result))
-        .finally(() => setLoading(false));
-    } else {
-      setLoading(false);
-    }
-  }, [productId, isAuthenticated, checkInWishlist]);
+  const handleClick = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
 
-  const handleClick = async () => {
-    if (!isAuthenticated) {
-      toast.info('Please login to add to wishlist');
-      router.push('/login?redirect=/products');
-      return;
-    }
+    if (loading) return;
+    setLoading(true);
 
     try {
       if (isInWishlist) {
         await removeFromWishlist(productId);
-        setIsInWishlist(false);
+        toast.success('Removed from wishlist');
       } else {
-        // ✅ Fix: Find the product from wishlist or use productId
-        // The addToWishlist expects a Product object, but we only have productId
-        // So we'll create a minimal product object
         await addToWishlist({ id: productId } as any);
-        setIsInWishlist(true);
+        toast.success('Added to wishlist');
       }
-    } catch (error) {
-      // Errors handled in hook
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to update wishlist');
+    } finally {
+      setLoading(false);
     }
   };
-
-  const isLoading = loading || addLoading || removeLoading;
 
   return (
     <Button
@@ -69,9 +48,10 @@ export function WishlistButton({ productId, className }: WishlistButtonProps) {
       size="icon"
       className={className}
       onClick={handleClick}
-      disabled={isLoading}
+      disabled={loading}
+      aria-label={isInWishlist ? 'Remove from wishlist' : 'Add to wishlist'}
     >
-      {isLoading ? (
+      {loading ? (
         <Loader2 className="h-4 w-4 animate-spin" />
       ) : (
         <Heart className={`h-4 w-4 ${isInWishlist ? 'fill-current text-white' : ''}`} />

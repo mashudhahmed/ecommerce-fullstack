@@ -162,17 +162,13 @@ export class CartService {
   }
 
   // ============================================================
-  // REMOVE ITEM
+  // REMOVE ITEM (idempotent)
   // ============================================================
   async removeItem(userId: number, productId: number): Promise<void> {
-    const result = await this.cartRepository.delete({
+    await this.cartRepository.delete({
       user: { id: userId },
       product: { id: productId },
     });
-
-    if (result.affected === 0) {
-      throw new NotFoundException('Cart item not found');
-    }
 
     this.logger.log(
       `Cart item removed for user ${userId}, product ${productId}`,

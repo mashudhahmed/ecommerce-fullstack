@@ -13,6 +13,7 @@ interface CartState {
   getTotalPrice: () => number;
   syncWithServer: (serverItems: CartItem[]) => void;
   setSynced: () => void;
+  resetSync: () => void;
 }
 
 export const useCartStore = create<CartState>()(
@@ -21,44 +22,33 @@ export const useCartStore = create<CartState>()(
       items: [],
       isSynced: false,
 
-      // ✅ Sync with server
+      // ✅ Authoritative server sync for authenticated sessions
       syncWithServer: (serverItems: CartItem[]) => {
-        const localItems = get().items;
-        const mergedItems = [...serverItems];
-
-        // Add local items that aren't on server
-        localItems.forEach((localItem) => {
-          const exists = serverItems.some(
-            (item) => item.product.id === localItem.product.id
-          );
-          if (!exists) {
-            mergedItems.push(localItem);
-          }
-        });
-
-        set({ items: mergedItems, isSynced: true });
+        set({ items: Array.isArray(serverItems) ? serverItems : [], isSynced: true });
       },
 
       setSynced: () => set({ isSynced: true }),
+      resetSync: () => set({ isSynced: false }),
 
       addItem: (product, quantity = 1) => {
         const { items } = get();
         const existingItem = items.find((item) => item.product.id === product.id);
+        const price = Number(product.price) || 0;
 
         if (existingItem) {
           const newQuantity = existingItem.quantity + quantity;
-          if (newQuantity > product.stock) {
+          if (product.stock !== undefined && newQuantity > product.stock) {
             throw new Error('Not enough stock available');
           }
           set({
             items: items.map((item) =>
               item.product.id === product.id
-                ? { ...item, quantity: newQuantity, subtotal: product.price * newQuantity }
+                ? { ...item, quantity: newQuantity, subtotal: price * newQuantity }
                 : item
             ),
           });
         } else {
-          if (quantity > product.stock) {
+          if (product.stock !== undefined && quantity > product.stock) {
             throw new Error('Not enough stock available');
           }
           set({
@@ -68,7 +58,7 @@ export const useCartStore = create<CartState>()(
                 id: Date.now(),
                 product,
                 quantity,
-                subtotal: product.price * quantity,
+                subtotal: price * quantity,
               },
             ],
           });
@@ -90,14 +80,16 @@ export const useCartStore = create<CartState>()(
         const item = get().items.find((i) => i.product.id === productId);
         if (!item) return;
 
-        if (quantity > item.product.stock) {
+        if (item.product?.stock !== undefined && quantity > item.product.stock) {
           throw new Error('Not enough stock available');
         }
+
+        const price = Number(item.product?.price) || 0;
 
         set({
           items: get().items.map((item) =>
             item.product.id === productId
-              ? { ...item, quantity, subtotal: item.product.price * quantity }
+              ? { ...item, quantity, subtotal: price * quantity }
               : item
           ),
         });
@@ -110,7 +102,15 @@ export const useCartStore = create<CartState>()(
       },
 
       getTotalPrice: () => {
-        return get().items.reduce((total, item) => total + item.subtotal, 0);
+        return (
+          Math.round(
+            get().items.reduce((total, item) => {
+              const itemPrice = Number(item.product?.price) || 0;
+              const subtotal = item.subtotal !== undefined ? item.subtotal : itemPrice * item.quantity;
+              return total + subtotal;
+            }, 0) * 100
+          ) / 100
+        );
       },
     }),
     {

@@ -15,25 +15,7 @@ export default function CartPage() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const { items, totalPrice, totalItems, isLoading } = useCart();
 
-  useEffect(() => {
-    if (!authLoading && !isAuthenticated) {
-      router.push('/login?redirect=/cart');
-    }
-  }, [authLoading, isAuthenticated, router]);
-
-  if (authLoading) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-
-  if (!isAuthenticated) {
-    return null;
-  }
-
-  if (isLoading) {
+  if (authLoading || isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />

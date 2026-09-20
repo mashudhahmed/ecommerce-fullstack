@@ -24,7 +24,9 @@ export class RegisterUserDto {
   name!: string;
 
   @ApiProperty({ example: 'john@example.com' })
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim().toLowerCase() : value))
+  @Transform(({ value }) =>
+    typeof value === 'string' ? value.trim().toLowerCase() : value,
+  )
   @IsEmail({}, { message: 'Invalid email format' })
   @MaxLength(254, { message: 'Email must not exceed 254 characters' })
   email!: string;
@@ -34,7 +36,8 @@ export class RegisterUserDto {
   @MinLength(8, { message: 'Password must be at least 8 characters' })
   @MaxLength(72, { message: 'Password must not exceed 72 characters' })
   @Matches(PASSWORD_REGEX, {
-    message: 'Password must contain uppercase, lowercase, number, and special character',
+    message:
+      'Password must contain uppercase, lowercase, number, and special character',
   })
   password!: string;
 

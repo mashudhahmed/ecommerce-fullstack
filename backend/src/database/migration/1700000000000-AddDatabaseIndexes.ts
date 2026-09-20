@@ -99,7 +99,9 @@ export class AddDatabaseIndexes1700000000000 implements MigrationInterface {
     await queryRunner.query(`DROP INDEX IF EXISTS "idx_users_email"`);
     await queryRunner.query(`DROP INDEX IF EXISTS "idx_users_role"`);
     await queryRunner.query(`DROP INDEX IF EXISTS "idx_users_is_verified"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "idx_users_is_vendor_approved"`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "idx_users_is_vendor_approved"`,
+    );
     await queryRunner.query(`DROP INDEX IF EXISTS "idx_users_created_at"`);
     await queryRunner.query(`DROP INDEX IF EXISTS "idx_users_deleted_at"`);
 
@@ -116,18 +118,32 @@ export class AddDatabaseIndexes1700000000000 implements MigrationInterface {
     await queryRunner.query(`DROP INDEX IF EXISTS "idx_orders_total"`);
 
     await queryRunner.query(`DROP INDEX IF EXISTS "idx_order_items_order_id"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "idx_order_items_product_id"`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "idx_order_items_product_id"`,
+    );
 
     await queryRunner.query(`DROP INDEX IF EXISTS "idx_cart_items_user_id"`);
     await queryRunner.query(`DROP INDEX IF EXISTS "idx_cart_items_product_id"`);
 
-    await queryRunner.query(`DROP INDEX IF EXISTS "idx_refresh_tokens_user_id"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "idx_refresh_tokens_token_hash"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "idx_refresh_tokens_expires_at"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "idx_refresh_tokens_revoked"`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "idx_refresh_tokens_user_id"`,
+    );
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "idx_refresh_tokens_token_hash"`,
+    );
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "idx_refresh_tokens_expires_at"`,
+    );
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "idx_refresh_tokens_revoked"`,
+    );
 
     await queryRunner.query(`DROP INDEX IF EXISTS "idx_token_blacklist_token"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "idx_token_blacklist_expires_at"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "idx_token_blacklist_user_id"`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "idx_token_blacklist_expires_at"`,
+    );
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "idx_token_blacklist_user_id"`,
+    );
   }
 }

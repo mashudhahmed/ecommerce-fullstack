@@ -1,5 +1,13 @@
 // src/vendor/dto/vendor-bulk-action.dto.ts
-import { IsArray, IsNotEmpty, IsString, IsOptional, IsIn, IsInt, Min } from 'class-validator';
+import {
+  IsArray,
+  IsNotEmpty,
+  IsString,
+  IsOptional,
+  IsIn,
+  IsInt,
+  Min,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class VendorBulkActionDto {

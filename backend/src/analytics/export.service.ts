@@ -139,7 +139,9 @@ export class ExportService {
         doc
           .fontSize(10)
           .font('Helvetica')
-          .text(`Generated: ${new Date().toLocaleString()}`, { align: 'right' });
+          .text(`Generated: ${new Date().toLocaleString()}`, {
+            align: 'right',
+          });
         doc.moveDown();
 
         if (data.length === 0) {
@@ -150,7 +152,8 @@ export class ExportService {
 
         // Determine columns
         const columns =
-          options.columns || Object.keys(data[0]).map((key) => ({
+          options.columns ||
+          Object.keys(data[0]).map((key) => ({
             header: key,
             key,
           }));
@@ -175,7 +178,8 @@ export class ExportService {
         data.forEach((row) => {
           columns.forEach((col, index) => {
             const x = startX + index * colWidth;
-            const value = row[col.key] !== undefined ? String(row[col.key]) : '';
+            const value =
+              row[col.key] !== undefined ? String(row[col.key]) : '';
             doc.text(value, x, y, { width: colWidth - 5, align: 'left' });
           });
           y += 20;
@@ -189,7 +193,8 @@ export class ExportService {
 
         doc.end();
       } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : 'Unknown error';
+        const message =
+          error instanceof Error ? error.message : 'Unknown error';
         this.logger.error('Failed to export to PDF:', message);
         reject(new BadRequestException('Failed to export data to PDF'));
       }
@@ -213,7 +218,8 @@ export class ExportService {
       }
 
       const columns =
-        options.columns || Object.keys(data[0]).map((key) => ({
+        options.columns ||
+        Object.keys(data[0]).map((key) => ({
           header: key,
           key,
         }));
@@ -222,7 +228,8 @@ export class ExportService {
       const rows = data.map((row) =>
         columns
           .map((col) => {
-            const value = row[col.key] !== undefined ? String(row[col.key]) : '';
+            const value =
+              row[col.key] !== undefined ? String(row[col.key]) : '';
             return `"${value.replace(/"/g, '""')}"`;
           })
           .join(','),

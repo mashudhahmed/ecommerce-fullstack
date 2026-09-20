@@ -10,6 +10,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { Order, OrderStatus } from './order.entity';
 import { OrderItem } from './order-item.entity';
+import { OrderTimeline } from './order-timeline.entity';
 import { Product } from '../products/products.entity';
 import { User, UserRole } from '../user/user.entity';
 import { CreateOrderDto } from './dto/create-order.dto';
@@ -27,6 +28,8 @@ export class OrdersService {
     private readonly orderRepository: Repository<Order>,
     @InjectRepository(OrderItem)
     private readonly orderItemRepository: Repository<OrderItem>,
+    @InjectRepository(OrderTimeline)
+    private readonly timelineRepository: Repository<OrderTimeline>,
     @InjectRepository(Product)
     private readonly productRepository: Repository<Product>,
     private readonly dataSource: DataSource,
@@ -50,7 +53,9 @@ export class OrdersService {
       }
 
       if (!user.isVerified) {
-        throw new BadRequestException('Please verify your email before placing orders');
+        throw new BadRequestException(
+          'Please verify your email before placing orders',
+        );
       }
 
       let total = 0;
@@ -91,6 +96,9 @@ export class OrdersService {
       order.user = user;
       order.total = total;
       order.status = OrderStatus.PENDING;
+      if (createOrderDto.shippingAddress) {
+        order.shippingAddress = createOrderDto.shippingAddress;
+      }
 
       const savedOrder = await queryRunner.manager.save(order);
 
@@ -98,6 +106,18 @@ export class OrdersService {
         item.order = savedOrder;
         await queryRunner.manager.save(item);
       }
+
+      const timeline = new OrderTimeline();
+      timeline.order = savedOrder;
+      timeline.orderId = savedOrder.id;
+      timeline.user = user;
+      timeline.action = 'Order Placed';
+      timeline.metadata = {
+        total: savedOrder.total,
+        itemCount: orderItems.length,
+        shippingAddress: savedOrder.shippingAddress,
+      };
+      await queryRunner.manager.save(timeline);
 
       await queryRunner.commitTransaction();
 
@@ -108,11 +128,10 @@ export class OrdersService {
         `order confirmation to ${user.email}`,
       );
 
-      this.eventsGateway.notifyUser(
-        userId.toString(),
-        'order_created',
-        { orderId: completeOrder.id, total: completeOrder.total },
-      );
+      this.eventsGateway.notifyUser(userId.toString(), 'order_created', {
+        orderId: completeOrder.id,
+        total: completeOrder.total,
+      });
 
       this.logger.log(`Order created: ${savedOrder.id} by user ${userId}`);
       return completeOrder;
@@ -129,16 +148,15 @@ export class OrdersService {
     createOrderDto: CreateOrderDto,
     idempotencyKey: string,
   ): Promise<Order> {
-    return this.idempotencyService.process(
-      idempotencyKey,
-      userId,
-      async () => {
-        return this.create(userId, createOrderDto);
-      },
-    );
+    return this.idempotencyService.process(idempotencyKey, userId, async () => {
+      return this.create(userId, createOrderDto);
+    });
   }
 
-  async findAllPaginated(page: number = 1, limit: number = 20): Promise<{
+  async findAllPaginated(
+    page: number = 1,
+    limit: number = 20,
+  ): Promise<{
     data: Order[];
     total: number;
     page: number;
@@ -208,7 +226,11 @@ export class OrdersService {
     }));
   }
 
-  async updateStatus(id: number, status: OrderStatus, userId: number): Promise<Order> {
+  async updateStatus(
+    id: number,
+    status: OrderStatus,
+    userId: number,
+  ): Promise<Order> {
     const order = await this.findOne(id);
 
     if (!Object.values(OrderStatus).includes(status)) {
@@ -218,7 +240,18 @@ export class OrdersService {
     order.status = status;
     const updatedOrder = await this.orderRepository.save(order);
 
-    this.logger.log(`Order ${id} status updated to ${status} by user ${userId}`);
+    const timeline = this.timelineRepository.create({
+      order: updatedOrder,
+      orderId: updatedOrder.id,
+      user: { id: userId } as User,
+      action: `Status updated to ${status}`,
+      metadata: { status },
+    });
+    await this.timelineRepository.save(timeline);
+
+    this.logger.log(
+      `Order ${id} status updated to ${status} by user ${userId}`,
+    );
 
     this.fireAndForget(
       this.mailerService.sendOrderStatusUpdate(order.user.email, order, status),
@@ -234,7 +267,11 @@ export class OrdersService {
     return updatedOrder;
   }
 
-  async cancelOrder(id: number, userId: number, userRole: UserRole): Promise<Order> {
+  async cancelOrder(
+    id: number,
+    userId: number,
+    userRole: UserRole,
+  ): Promise<Order> {
     const order = await this.findOne(id);
 
     const isAdmin = [UserRole.ADMIN, UserRole.SUPER_ADMIN].includes(userRole);
@@ -269,7 +306,17 @@ export class OrdersService {
       }
 
       order.status = OrderStatus.CANCELLED;
+      order.cancelledAt = new Date();
+      order.cancelledBy = { id: userId } as User;
       const cancelledOrder = await queryRunner.manager.save(order);
+
+      const timeline = new OrderTimeline();
+      timeline.order = cancelledOrder;
+      timeline.orderId = cancelledOrder.id;
+      timeline.user = { id: userId } as User;
+      timeline.action = 'Order Cancelled';
+      timeline.metadata = { cancelledByUserId: userId, userRole };
+      await queryRunner.manager.save(timeline);
 
       await queryRunner.commitTransaction();
 
@@ -288,6 +335,35 @@ export class OrdersService {
     } finally {
       await queryRunner.release();
     }
+  }
+
+  async getOrderTimeline(
+    orderId: number,
+    userId: number,
+    userRole: UserRole,
+  ): Promise<OrderTimeline[]> {
+    const order = await this.findOne(orderId);
+
+    const isAdmin = [UserRole.ADMIN, UserRole.SUPER_ADMIN].includes(userRole);
+    const isOwner = order.user?.id === userId;
+    let isVendorWithProducts = false;
+    if (userRole === UserRole.VENDOR) {
+      isVendorWithProducts = order.items.some(
+        (item) => item.product.owner?.id === userId,
+      );
+    }
+
+    if (!isAdmin && !isOwner && !isVendorWithProducts) {
+      throw new ForbiddenException(
+        'You do not have permission to view this order timeline',
+      );
+    }
+
+    return this.timelineRepository.find({
+      where: { orderId },
+      relations: ['user'],
+      order: { createdAt: 'ASC' },
+    });
   }
 
   async getOrderSummary(userId: number): Promise<{
@@ -331,11 +407,21 @@ export class OrdersService {
       .filter((o) => o.status !== OrderStatus.CANCELLED)
       .reduce((sum, o) => sum + Number(o.total), 0);
 
-    const pendingOrders = orders.filter((o) => o.status === OrderStatus.PENDING).length;
-    const processingOrders = orders.filter((o) => o.status === OrderStatus.PROCESSING).length;
-    const shippedOrders = orders.filter((o) => o.status === OrderStatus.SHIPPED).length;
-    const deliveredOrders = orders.filter((o) => o.status === OrderStatus.DELIVERED).length;
-    const cancelledOrders = orders.filter((o) => o.status === OrderStatus.CANCELLED).length;
+    const pendingOrders = orders.filter(
+      (o) => o.status === OrderStatus.PENDING,
+    ).length;
+    const processingOrders = orders.filter(
+      (o) => o.status === OrderStatus.PROCESSING,
+    ).length;
+    const shippedOrders = orders.filter(
+      (o) => o.status === OrderStatus.SHIPPED,
+    ).length;
+    const deliveredOrders = orders.filter(
+      (o) => o.status === OrderStatus.DELIVERED,
+    ).length;
+    const cancelledOrders = orders.filter(
+      (o) => o.status === OrderStatus.CANCELLED,
+    ).length;
 
     return {
       totalOrders,
@@ -364,11 +450,21 @@ export class OrdersService {
       .filter((o) => o.status !== OrderStatus.CANCELLED)
       .reduce((sum, o) => sum + Number(o.total), 0);
 
-    const pendingOrders = orders.filter((o) => o.status === OrderStatus.PENDING).length;
-    const processingOrders = orders.filter((o) => o.status === OrderStatus.PROCESSING).length;
-    const shippedOrders = orders.filter((o) => o.status === OrderStatus.SHIPPED).length;
-    const deliveredOrders = orders.filter((o) => o.status === OrderStatus.DELIVERED).length;
-    const cancelledOrders = orders.filter((o) => o.status === OrderStatus.CANCELLED).length;
+    const pendingOrders = orders.filter(
+      (o) => o.status === OrderStatus.PENDING,
+    ).length;
+    const processingOrders = orders.filter(
+      (o) => o.status === OrderStatus.PROCESSING,
+    ).length;
+    const shippedOrders = orders.filter(
+      (o) => o.status === OrderStatus.SHIPPED,
+    ).length;
+    const deliveredOrders = orders.filter(
+      (o) => o.status === OrderStatus.DELIVERED,
+    ).length;
+    const cancelledOrders = orders.filter(
+      (o) => o.status === OrderStatus.CANCELLED,
+    ).length;
 
     return {
       totalOrders,

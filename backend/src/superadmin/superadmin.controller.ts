@@ -90,9 +90,10 @@ export class SuperadminController {
 
     // Apply sorting with whitelist
     const allowedSortFields = ['name', 'email', 'createdAt', 'updatedAt', 'id'];
-    const sortField = sortBy && allowedSortFields.includes(sortBy) ? sortBy : 'createdAt';
+    const sortField =
+      sortBy && allowedSortFields.includes(sortBy) ? sortBy : 'createdAt';
     const sortOrderValue = sortOrder === 'asc' ? 'ASC' : 'DESC';
-    query.orderBy(`user.${sortField}`, sortOrderValue as 'ASC' | 'DESC');
+    query.orderBy(`user.${sortField}`, sortOrderValue);
 
     const [data, total] = await query
       .skip((page - 1) * limit)
@@ -200,8 +201,16 @@ export class SuperadminController {
 
     // Apply in-memory sorting and pagination (acceptable for this endpoint)
     // For production-scale, we would move this to the database.
-    const allowedSortFields = ['name', 'email', 'role', 'createdAt', 'updatedAt', 'id'];
-    const sortField = sortBy && allowedSortFields.includes(sortBy) ? sortBy : 'createdAt';
+    const allowedSortFields = [
+      'name',
+      'email',
+      'role',
+      'createdAt',
+      'updatedAt',
+      'id',
+    ];
+    const sortField =
+      sortBy && allowedSortFields.includes(sortBy) ? sortBy : 'createdAt';
     const sortOrderValue = sortOrder === 'asc' ? 1 : -1;
 
     const sortedUsers = [...users].sort((a, b) => {
@@ -325,7 +334,8 @@ export class SuperadminController {
         await this.userService.delete(id);
         results.success.push(id);
       } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : 'Unknown error';
+        const message =
+          error instanceof Error ? error.message : 'Unknown error';
         results.failed.push({ id, error: message });
       }
     }
@@ -342,7 +352,10 @@ export class SuperadminController {
 
   @Get('statistics')
   @ApiOperation({ summary: 'Get comprehensive user statistics' })
-  @ApiResponse({ status: 200, description: 'Statistics retrieved successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Statistics retrieved successfully',
+  })
   async getStatistics() {
     const [
       totalUsers,
@@ -360,9 +373,13 @@ export class SuperadminController {
       this.userService.countByRole(UserRole.SUPER_ADMIN),
       this.userService.countVerifiedUsers(),
       this.userService.countPendingVendors(),
-      this.userService.countByRole(UserRole.VENDOR).then((count) =>
-        this.userService.findApprovedVendors().then((vendors) => vendors.length),
-      ),
+      this.userService
+        .countByRole(UserRole.VENDOR)
+        .then((count) =>
+          this.userService
+            .findApprovedVendors()
+            .then((vendors) => vendors.length),
+        ),
       this.userService.getRecentUsers(10),
     ]);
 
@@ -386,7 +403,10 @@ export class SuperadminController {
 
   @Get('system/status')
   @ApiOperation({ summary: 'Get system status' })
-  @ApiResponse({ status: 200, description: 'System status retrieved successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'System status retrieved successfully',
+  })
   async getSystemStatus() {
     const [totalUsers, verifiedUsers] = await Promise.all([
       this.userService.countUsers(),
@@ -415,8 +435,15 @@ export class SuperadminController {
 
   @Get('vendors/performance')
   @ApiOperation({ summary: 'Get vendor performance overview' })
-  @ApiResponse({ status: 200, description: 'Vendor performance retrieved successfully' })
-  @ApiQuery({ name: 'period', enum: ['day', 'week', 'month', 'year'], required: false })
+  @ApiResponse({
+    status: 200,
+    description: 'Vendor performance retrieved successfully',
+  })
+  @ApiQuery({
+    name: 'period',
+    enum: ['day', 'week', 'month', 'year'],
+    required: false,
+  })
   @ApiQuery({ name: 'limit', required: false, type: Number })
   async getVendorPerformance(
     @Query('period') period: 'day' | 'week' | 'month' | 'year' = 'month',
@@ -433,7 +460,10 @@ export class SuperadminController {
 
   @Get('vendors/:id/orders')
   @ApiOperation({ summary: 'Get vendor orders (SuperAdmin)' })
-  @ApiResponse({ status: 200, description: 'Vendor orders retrieved successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Vendor orders retrieved successfully',
+  })
   @ApiQuery({ name: 'status', required: false, type: String })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
@@ -456,7 +486,10 @@ export class SuperadminController {
 
   @Get('vendors/:id/products')
   @ApiOperation({ summary: 'Get vendor products (SuperAdmin)' })
-  @ApiResponse({ status: 200, description: 'Vendor products retrieved successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Vendor products retrieved successfully',
+  })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiQuery({ name: 'inStock', required: false, type: Boolean })
@@ -475,13 +508,25 @@ export class SuperadminController {
     const limitNum = limit ? Math.min(parseInt(limit, 10), 100) : 20;
     const inStockBool = inStock !== undefined ? inStock === 'true' : undefined;
 
-    return this.vendorService.getVendorProducts(id, pageNum, limitNum, inStockBool);
+    return this.vendorService.getVendorProducts(
+      id,
+      pageNum,
+      limitNum,
+      inStockBool,
+    );
   }
 
   @Get('vendors/ranking')
   @ApiOperation({ summary: 'Get vendor ranking (SuperAdmin)' })
-  @ApiResponse({ status: 200, description: 'Vendor ranking retrieved successfully' })
-  @ApiQuery({ name: 'metric', enum: ['revenue', 'orders', 'rating', 'growth'], required: false })
+  @ApiResponse({
+    status: 200,
+    description: 'Vendor ranking retrieved successfully',
+  })
+  @ApiQuery({
+    name: 'metric',
+    enum: ['revenue', 'orders', 'rating', 'growth'],
+    required: false,
+  })
   @ApiQuery({ name: 'limit', required: false, type: Number })
   async getVendorRanking(
     @Query('metric') metric: string = 'revenue',
@@ -506,8 +551,15 @@ export class SuperadminController {
 
   @Get('vendors/growth')
   @ApiOperation({ summary: 'Get vendor growth report (SuperAdmin)' })
-  @ApiResponse({ status: 200, description: 'Growth report retrieved successfully' })
-  @ApiQuery({ name: 'period', enum: ['day', 'week', 'month', 'year'], required: false })
+  @ApiResponse({
+    status: 200,
+    description: 'Growth report retrieved successfully',
+  })
+  @ApiQuery({
+    name: 'period',
+    enum: ['day', 'week', 'month', 'year'],
+    required: false,
+  })
   async getVendorGrowthReport(
     @Query('period') period: 'day' | 'week' | 'month' | 'year' = 'month',
   ) {
@@ -529,7 +581,7 @@ export class SuperadminController {
   @ApiResponse({ status: 200, description: 'Report exported successfully' })
   @ApiQuery({ name: 'format', enum: ['csv', 'excel', 'pdf'], required: false })
   async exportVendorReport(
-    @Res({ passthrough: true }) res: Response,   // ✅ Fixed: passthrough
+    @Res({ passthrough: true }) res: Response, // ✅ Fixed: passthrough
     @Query('format') format: 'csv' | 'excel' | 'pdf' = 'csv',
   ) {
     const stats = await this.vendorService.getAdminVendorStats();

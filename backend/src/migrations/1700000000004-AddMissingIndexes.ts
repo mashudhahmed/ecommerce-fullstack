@@ -146,29 +146,59 @@ export class AddMissingIndexes1700000000004 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP INDEX IF EXISTS "idx_products_owner_id_is_active"`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "idx_products_owner_id_is_active"`,
+    );
     await queryRunner.query(`DROP INDEX IF EXISTS "idx_products_category_id"`);
     await queryRunner.query(`DROP INDEX IF EXISTS "idx_products_price_stock"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "idx_orders_created_at_status"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "idx_reviews_product_id_rating"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "idx_reviews_user_id_product_id"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "idx_wishlist_user_id_product_id"`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "idx_orders_created_at_status"`,
+    );
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "idx_reviews_product_id_rating"`,
+    );
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "idx_reviews_user_id_product_id"`,
+    );
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "idx_wishlist_user_id_product_id"`,
+    );
     await queryRunner.query(`DROP INDEX IF EXISTS "idx_users_name_email"`);
     await queryRunner.query(`DROP INDEX IF EXISTS "idx_categories_slug"`);
     await queryRunner.query(`DROP INDEX IF EXISTS "idx_categories_parent_id"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "idx_refresh_tokens_user_id_revoked"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "idx_login_attempts_email_ip_created"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "idx_products_category_id_fk"`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "idx_refresh_tokens_user_id_revoked"`,
+    );
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "idx_login_attempts_email_ip_created"`,
+    );
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "idx_products_category_id_fk"`,
+    );
     await queryRunner.query(`DROP INDEX IF EXISTS "idx_orders_user_id_fk"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "idx_order_items_order_id_fk"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "idx_order_items_product_id_fk"`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "idx_order_items_order_id_fk"`,
+    );
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "idx_order_items_product_id_fk"`,
+    );
     await queryRunner.query(`DROP INDEX IF EXISTS "idx_cart_items_user_id_fk"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "idx_cart_items_product_id_fk"`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "idx_cart_items_product_id_fk"`,
+    );
     await queryRunner.query(`DROP INDEX IF EXISTS "idx_reviews_user_id_fk"`);
     await queryRunner.query(`DROP INDEX IF EXISTS "idx_reviews_product_id_fk"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "idx_notifications_user_id_fk"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "idx_refresh_tokens_user_id_fk"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "idx_products_active_in_stock"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "idx_users_verified_vendors"`);
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "idx_notifications_user_id_fk"`,
+    );
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "idx_refresh_tokens_user_id_fk"`,
+    );
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "idx_products_active_in_stock"`,
+    );
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "idx_users_verified_vendors"`,
+    );
   }
 }

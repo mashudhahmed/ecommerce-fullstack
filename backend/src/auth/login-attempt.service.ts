@@ -53,7 +53,10 @@ export class LoginAttemptService {
     return recentFailures >= this.MAX_ATTEMPTS;
   }
 
-  async getLockoutRemainingMinutes(email: string, ipAddress: string): Promise<number> {
+  async getLockoutRemainingMinutes(
+    email: string,
+    ipAddress: string,
+  ): Promise<number> {
     const cutoffTime = new Date(Date.now() - this.LOCKOUT_MINUTES * 60 * 1000);
     const emailNormalized = email.toLowerCase().trim();
 
@@ -75,16 +78,14 @@ export class LoginAttemptService {
 
     if (!latestAttempt) return 0;
 
-    const elapsed = (Date.now() - latestAttempt.createdAt.getTime()) / 1000 / 60;
+    const elapsed =
+      (Date.now() - latestAttempt.createdAt.getTime()) / 1000 / 60;
     return Math.max(0, Math.ceil(this.LOCKOUT_MINUTES - elapsed));
   }
 
   async clearAttempts(email: string, ipAddress: string): Promise<void> {
     const emailNormalized = email.toLowerCase().trim();
-    await this.attemptRepo.delete([
-      { email: emailNormalized },
-      { ipAddress },
-    ]);
+    await this.attemptRepo.delete([{ email: emailNormalized }, { ipAddress }]);
   }
 
   async cleanupOldAttempts(): Promise<void> {

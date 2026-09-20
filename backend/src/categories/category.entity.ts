@@ -1,5 +1,13 @@
 // src/categories/category.entity.ts
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  OneToMany,
+  CreateDateColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 import { Expose } from 'class-transformer';
 import { Product } from '../products/products.entity';
 
@@ -25,7 +33,9 @@ export class Category {
   @Expose()
   imageUrl?: string;
 
-  @ManyToOne(() => Category, (category) => category.children, { nullable: true })
+  @ManyToOne(() => Category, (category) => category.children, {
+    nullable: true,
+  })
   @Expose()
   parent?: Category | null;
 

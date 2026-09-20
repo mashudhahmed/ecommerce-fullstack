@@ -1,6 +1,21 @@
 // src/categories/categories.controller.ts
-import { Controller, Get, Post, Put, Delete, Body, Param, ParseIntPipe, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Delete,
+  Body,
+  Param,
+  ParseIntPipe,
+  UseGuards,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { CategoriesService } from './categories.service';
 import { Category } from './category.entity';
 import { CreateCategoryDto } from './dto/create-category.dto';
@@ -18,24 +33,33 @@ export class CategoriesController {
   // ============================================================
   // PUBLIC ROUTES
   // ============================================================
-  
+
   @Get()
   @ApiOperation({ summary: 'Get all categories' })
-  @ApiResponse({ status: 200, description: 'Categories retrieved successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Categories retrieved successfully',
+  })
   findAll(): Promise<Category[]> {
     return this.categoriesService.findAll();
   }
 
   @Get('tree')
   @ApiOperation({ summary: 'Get category tree (hierarchical)' })
-  @ApiResponse({ status: 200, description: 'Category tree retrieved successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Category tree retrieved successfully',
+  })
   async getTree(): Promise<Category[]> {
     return this.categoriesService.findTree();
   }
 
   @Get('stats')
   @ApiOperation({ summary: 'Get category statistics' })
-  @ApiResponse({ status: 200, description: 'Category stats retrieved successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Category stats retrieved successfully',
+  })
   async getStats() {
     return this.categoriesService.getCategoryStats();
   }

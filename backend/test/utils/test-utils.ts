@@ -29,7 +29,9 @@ export const createTestVendor = (overrides?: Partial<User>): Partial<User> => {
   };
 };
 
-export const createTestProduct = (overrides?: Partial<Product>): Partial<Product> => {
+export const createTestProduct = (
+  overrides?: Partial<Product>,
+): Partial<Product> => {
   return {
     title: faker.commerce.productName(),
     price: parseFloat(faker.commerce.price()),
@@ -48,7 +50,10 @@ export const createTestOrder = (overrides?: Partial<Order>): Partial<Order> => {
   };
 };
 
-export const generateTestToken = (userId: number = 1, role: UserRole = UserRole.USER): string => {
+export const generateTestToken = (
+  userId: number = 1,
+  role: UserRole = UserRole.USER,
+): string => {
   return `test-token-${userId}-${role}`;
 };
 
@@ -132,19 +137,17 @@ export const createMockRepository = (): MockRepository => ({
   softRemove: jest.fn() as jest.Mock<any>,
   recover: jest.fn() as jest.Mock<any>,
   count: jest.fn() as jest.Mock<any>,
-  createQueryBuilder: jest.fn(
-    (): MockQueryBuilder => ({
-      addSelect: jest.fn().mockReturnThis() as jest.Mock<any>,
-      where: jest.fn().mockReturnThis() as jest.Mock<any>,
-      andWhere: jest.fn().mockReturnThis() as jest.Mock<any>,
-      orWhere: jest.fn().mockReturnThis() as jest.Mock<any>,
-      orderBy: jest.fn().mockReturnThis() as jest.Mock<any>,
-      getMany: jest.fn() as jest.Mock<any>,
-      getOne: jest.fn() as jest.Mock<any>,
-      getManyAndCount: jest.fn() as jest.Mock<any>,
-      select: jest.fn().mockReturnThis() as jest.Mock<any>,
-      leftJoinAndSelect: jest.fn().mockReturnThis() as jest.Mock<any>,
-      innerJoinAndSelect: jest.fn().mockReturnThis() as jest.Mock<any>,
-    }),
-  ) as jest.Mock<any>,
+  createQueryBuilder: jest.fn((): MockQueryBuilder => ({
+    addSelect: jest.fn().mockReturnThis() as jest.Mock<any>,
+    where: jest.fn().mockReturnThis() as jest.Mock<any>,
+    andWhere: jest.fn().mockReturnThis() as jest.Mock<any>,
+    orWhere: jest.fn().mockReturnThis() as jest.Mock<any>,
+    orderBy: jest.fn().mockReturnThis() as jest.Mock<any>,
+    getMany: jest.fn() as jest.Mock<any>,
+    getOne: jest.fn() as jest.Mock<any>,
+    getManyAndCount: jest.fn() as jest.Mock<any>,
+    select: jest.fn().mockReturnThis() as jest.Mock<any>,
+    leftJoinAndSelect: jest.fn().mockReturnThis() as jest.Mock<any>,
+    innerJoinAndSelect: jest.fn().mockReturnThis() as jest.Mock<any>,
+  })) as jest.Mock<any>,
 });

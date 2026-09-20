@@ -2,4 +2,5 @@
 import { SetMetadata } from '@nestjs/common';
 
 export const QUERY_TIMEOUT = 'query_timeout';
-export const QueryTimeout = (ms: number = 30000) => SetMetadata(QUERY_TIMEOUT, ms);
+export const QueryTimeout = (ms: number = 30000) =>
+  SetMetadata(QUERY_TIMEOUT, ms);

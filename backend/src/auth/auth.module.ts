@@ -9,6 +9,7 @@ import { User } from '../user/user.entity';
 import { UserModule } from '../user/user.module';
 import { MailerModule } from '../mailer/mailer.module';
 import { JwtStrategy } from './jwt.strategy';
+import { GoogleStrategy } from './google.strategy';
 import { RefreshToken } from './refresh-token.entity';
 import { TokenBlacklist } from './token-blacklist.entity';
 import { TokenBlacklistService } from './token-blacklist.service';
@@ -16,14 +17,14 @@ import { LoginAttempt } from './login-attempt.entity';
 import { LoginAttemptService } from './login-attempt.service';
 import { TwoFactor } from './two-factor.entity';
 import { TwoFactorService } from './two-factor.service';
-import { EventsModule } from '../events/events.module';   // ✅ Import EventsModule
+import { EventsModule } from '../events/events.module'; // ✅ Import EventsModule
 import { MonitoringModule } from '../monitoring/monitoring.module';
 
 @Module({
   imports: [
     UserModule,
     MailerModule,
-    EventsModule, 
+    EventsModule,
     MonitoringModule,
     TypeOrmModule.forFeature([
       User,
@@ -53,9 +54,10 @@ import { MonitoringModule } from '../monitoring/monitoring.module';
   providers: [
     AuthService,
     JwtStrategy,
+    GoogleStrategy,
     TokenBlacklistService,
     LoginAttemptService,
-    TwoFactorService,   // ✅ Added TwoFactorService
+    TwoFactorService, // ✅ Added TwoFactorService
   ],
   exports: [
     AuthService,

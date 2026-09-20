@@ -46,7 +46,9 @@ export class CategoriesService {
     });
 
     if (slugExists) {
-      throw new ConflictException(`Category with slug "${slug}" already exists`);
+      throw new ConflictException(
+        `Category with slug "${slug}" already exists`,
+      );
     }
 
     const category = this.categoryRepository.create({
@@ -64,7 +66,9 @@ export class CategoriesService {
         where: { id: dto.parentId },
       });
       if (!parent) {
-        throw new NotFoundException(`Parent category with ID ${dto.parentId} not found`);
+        throw new NotFoundException(
+          `Parent category with ID ${dto.parentId} not found`,
+        );
       }
       if (!parent.isActive) {
         throw new BadRequestException('Parent category is inactive');
@@ -229,7 +233,9 @@ export class CategoriesService {
       } else {
         // Prevent circular reference
         if (dto.parentId === id) {
-          throw new ConflictException('Cannot set a category as its own parent');
+          throw new ConflictException(
+            'Cannot set a category as its own parent',
+          );
         }
 
         // Check if parent is a descendant
@@ -308,15 +314,16 @@ export class CategoriesService {
     maxDepth: number;
     categoriesWithProducts: number;
   }> {
-    const [total, active, rootCategories, categoriesWithProducts] = await Promise.all([
-      this.categoryRepository.count(),
-      this.categoryRepository.count({ where: { isActive: true } }),
-      this.categoryRepository.count({ where: { parent: IsNull() } }),
-      this.categoryRepository
-        .createQueryBuilder('category')
-        .where('category.products IS NOT NULL')
-        .getCount(),
-    ]);
+    const [total, active, rootCategories, categoriesWithProducts] =
+      await Promise.all([
+        this.categoryRepository.count(),
+        this.categoryRepository.count({ where: { isActive: true } }),
+        this.categoryRepository.count({ where: { parent: IsNull() } }),
+        this.categoryRepository
+          .createQueryBuilder('category')
+          .where('category.products IS NOT NULL')
+          .getCount(),
+      ]);
 
     // Calculate max depth
     const allCategories = await this.categoryRepository.find({

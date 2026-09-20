@@ -1,5 +1,11 @@
 // src/app.module.ts
-import { Module, NestModule, MiddlewareConsumer, RequestMethod, OnApplicationBootstrap } from '@nestjs/common';
+import {
+  Module,
+  NestModule,
+  MiddlewareConsumer,
+  RequestMethod,
+  OnApplicationBootstrap,
+} from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ThrottlerModule } from '@nestjs/throttler';
@@ -22,6 +28,7 @@ import { VendorModule } from './vendor/vendor.module';
 import { ExportModule } from './analytics/export.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { FilesModule } from './files/files.module';
+import { SearchModule } from './search/search.module';
 import { LoggingMiddleware } from './common/middleware/logging.middleware';
 import { DatabaseSeederService } from './database/database-seeder.service';
 import { CleanupCron } from './common/crons/cleanup.cron';
@@ -84,7 +91,10 @@ import { EventsModule } from './events/events.module';
         extra: {
           max: configService.get('database.maxConnections', 20),
           idleTimeoutMillis: configService.get('database.idleTimeout', 30000),
-          connectionTimeoutMillis: configService.get('database.connectionTimeout', 2000),
+          connectionTimeoutMillis: configService.get(
+            'database.connectionTimeout',
+            2000,
+          ),
         },
         retryAttempts: 5,
         retryDelay: 3000,
@@ -92,12 +102,12 @@ import { EventsModule } from './events/events.module';
       inject: [ConfigService],
     }),
     TypeOrmModule.forFeature([User, Category, Product]),
-    
+
     // Global Modules (only need to import once)
     CacheModule,
     MonitoringModule,
     EventsModule,
-    
+
     // Feature Modules
     AuthModule,
     UserModule,
@@ -116,14 +126,10 @@ import { EventsModule } from './events/events.module';
     FilesModule,
     WishlistModule,
     NotificationsModule,
+    SearchModule,
   ],
   controllers: [AppController],
-  providers: [
-    AppService,
-    DatabaseSeederService,
-    CleanupCron,
-    SampleDataSeeder,
-  ],
+  providers: [AppService, DatabaseSeederService, CleanupCron, SampleDataSeeder],
 })
 export class AppModule implements NestModule, OnApplicationBootstrap {
   constructor(private readonly databaseSeeder: DatabaseSeederService) {}

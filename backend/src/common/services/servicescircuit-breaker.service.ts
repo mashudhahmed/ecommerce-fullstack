@@ -30,13 +30,16 @@ export class CircuitBreakerService {
         'circuitBreaker.errorThreshold',
         50,
       ),
-      resetTimeout: this.configService.get('circuitBreaker.resetTimeout', 30000),
+      resetTimeout: this.configService.get(
+        'circuitBreaker.resetTimeout',
+        30000,
+      ),
       rollingCountTimeout: 10000,
       rollingCountBuckets: 10,
     };
 
     const breakerOptions = { ...defaultOptions, ...options };
-    const breaker = new CircuitBreaker(fn, breakerOptions as any);
+    const breaker = new CircuitBreaker(fn, breakerOptions);
 
     breaker.on('open', () => {
       this.logger.warn(`Circuit breaker '${name}' opened`);

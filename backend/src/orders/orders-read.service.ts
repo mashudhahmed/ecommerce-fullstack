@@ -16,7 +16,10 @@ export class OrdersReadService {
     private readonly cacheService: CacheService,
   ) {}
 
-  async getOrderSummary(userId: number, period: string = 'month'): Promise<any> {
+  async getOrderSummary(
+    userId: number,
+    period: string = 'month',
+  ): Promise<any> {
     const cacheKey = `order:summary:${userId}:${period}`;
     const cached = await this.cacheService.get(cacheKey);
     if (cached) {

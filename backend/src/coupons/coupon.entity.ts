@@ -1,5 +1,14 @@
 // src/coupons/coupon.entity.ts
-import { Entity, PrimaryGeneratedColumn, Column, ManyToMany, JoinTable, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToMany,
+  JoinTable,
+  CreateDateColumn,
+  UpdateDateColumn,
+  Index,
+} from 'typeorm';
 import { Expose } from 'class-transformer';
 import { User } from '../user/user.entity';
 import { Product } from '../products/products.entity';

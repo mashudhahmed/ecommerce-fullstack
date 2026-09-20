@@ -106,7 +106,9 @@ export class AnalyticsUtils {
     }));
   }
 
-  static getStatusRevenueDistribution(orders: Order[]): StatusRevenueDistribution[] {
+  static getStatusRevenueDistribution(
+    orders: Order[],
+  ): StatusRevenueDistribution[] {
     const distribution: Record<string, { count: number; revenue: number }> = {};
 
     for (const order of orders) {
@@ -129,7 +131,15 @@ export class AnalyticsUtils {
     d.setHours(0, 0, 0, 0);
     d.setDate(d.getDate() + 3 - ((d.getDay() + 6) % 7));
     const week1 = new Date(d.getFullYear(), 0, 4);
-    return 1 + Math.round(((d.getTime() - week1.getTime()) / 86400000 - 3 + ((week1.getDay() + 6) % 7)) / 7);
+    return (
+      1 +
+      Math.round(
+        ((d.getTime() - week1.getTime()) / 86400000 -
+          3 +
+          ((week1.getDay() + 6) % 7)) /
+          7,
+      )
+    );
   }
 
   static calculateAverageProcessingTime(orders: Order[]): number {
@@ -140,7 +150,9 @@ export class AnalyticsUtils {
 
     let totalHours = 0;
     for (const order of processedOrders) {
-      const hours = (new Date().getTime() - new Date(order.createdAt).getTime()) / (1000 * 60 * 60);
+      const hours =
+        (new Date().getTime() - new Date(order.createdAt).getTime()) /
+        (1000 * 60 * 60);
       totalHours += Math.min(hours, 168);
     }
     return totalHours / processedOrders.length;
@@ -152,7 +164,9 @@ export class AnalyticsUtils {
 
     let totalDays = 0;
     for (const order of deliveredOrders) {
-      const days = (new Date().getTime() - new Date(order.createdAt).getTime()) / (1000 * 60 * 60 * 24);
+      const days =
+        (new Date().getTime() - new Date(order.createdAt).getTime()) /
+        (1000 * 60 * 60 * 24);
       totalDays += Math.min(days, 30);
     }
     return totalDays / deliveredOrders.length;
@@ -170,7 +184,16 @@ export class AnalyticsUtils {
   }
 
   static getTopCustomers(orders: Order[], limit: number = 10): any[] {
-    const customers: Record<number, { id: number; name: string; email: string; orders: number; totalSpent: number }> = {};
+    const customers: Record<
+      number,
+      {
+        id: number;
+        name: string;
+        email: string;
+        orders: number;
+        totalSpent: number;
+      }
+    > = {};
 
     for (const order of orders) {
       if (!order.user) continue;

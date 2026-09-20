@@ -17,7 +17,7 @@ export function RegisterForm() {
       <CardHeader className="space-y-1 text-center">
         <div className="flex justify-center mb-2">
           <div className="relative h-14 w-14">
-            <Image src="/logo.png" alt="SnapCart" fill className="object-contain" priority />
+            <Image src="/logo.png" alt="SnapCart" fill sizes="56px" className="object-contain" priority />
           </div>
         </div>
         <CardTitle className="text-2xl font-bold">Create Account</CardTitle>

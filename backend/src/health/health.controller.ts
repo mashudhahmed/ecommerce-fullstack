@@ -49,7 +49,7 @@ export class HealthController {
     }
 
     const result = await this.health.check(checks);
-    
+
     // Add system info
     return {
       ...result,
@@ -120,8 +120,12 @@ export class HealthController {
   async detailed() {
     const [database, disk, memory] = await Promise.all([
       this.databaseHealth.isHealthy('database').catch(() => null),
-      this.disk.checkStorage('disk', { thresholdPercent: 0.9, path: '/' }).catch(() => null),
-      this.memory.checkHeap('memory_heap', 1500 * 1024 * 1024).catch(() => null),
+      this.disk
+        .checkStorage('disk', { thresholdPercent: 0.9, path: '/' })
+        .catch(() => null),
+      this.memory
+        .checkHeap('memory_heap', 1500 * 1024 * 1024)
+        .catch(() => null),
     ]);
 
     const redisUrl = this.configService.get('redis.url');

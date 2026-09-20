@@ -7,7 +7,6 @@ import { MailerService } from '../mailer/mailer.service';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { RefreshToken } from './refresh-token.entity';
 
-
 const mockUserService = {
   findByEmail: jest.fn(),
   findByIdOrFail: jest.fn(),
@@ -33,6 +32,35 @@ const mockRefreshTokenRepo = {
   save: jest.fn(),
   create: jest.fn(),
   update: jest.fn(),
+  delete: jest.fn(),
+};
+
+import { LoginAttemptService } from './login-attempt.service';
+import { EventsGateway } from '../events/events.gateway';
+import { TwoFactorService } from './two-factor.service';
+import { TwoFactor } from './two-factor.entity';
+
+const mockLoginAttemptService = {
+  recordAttempt: jest.fn(),
+  isLockedOut: jest.fn().mockResolvedValue(false),
+  getRemainingLockoutTime: jest.fn().mockResolvedValue(0),
+};
+
+const mockEventsGateway = {
+  server: { emit: jest.fn() },
+};
+
+const mockTwoFactorService = {
+  generateTotpSecret: jest.fn(),
+  enableTwoFactor: jest.fn(),
+  verifyTwoFactor: jest.fn(),
+  disableTwoFactor: jest.fn(),
+};
+
+const mockTwoFactorRepo = {
+  findOne: jest.fn(),
+  save: jest.fn(),
+  create: jest.fn(),
   delete: jest.fn(),
 };
 
@@ -62,6 +90,22 @@ describe('AuthService', () => {
         {
           provide: getRepositoryToken(RefreshToken),
           useValue: mockRefreshTokenRepo,
+        },
+        {
+          provide: LoginAttemptService,
+          useValue: mockLoginAttemptService,
+        },
+        {
+          provide: EventsGateway,
+          useValue: mockEventsGateway,
+        },
+        {
+          provide: TwoFactorService,
+          useValue: mockTwoFactorService,
+        },
+        {
+          provide: getRepositoryToken(TwoFactor),
+          useValue: mockTwoFactorRepo,
         },
       ],
     }).compile();

@@ -56,7 +56,10 @@ export class ReviewsService {
     }
 
     // Check if user has purchased this product (verified purchase)
-    const hasPurchased = await this.hasUserPurchasedProduct(userId, dto.productId);
+    const hasPurchased = await this.hasUserPurchasedProduct(
+      userId,
+      dto.productId,
+    );
 
     const review = this.reviewRepository.create({
       user: { id: userId },
@@ -93,10 +96,14 @@ export class ReviewsService {
     limit: number = 10,
     rating?: number,
   ): Promise<any> {
+    const pageNum = Math.max(1, Number(page) || 1);
+    const limitNum = Math.max(1, Number(limit) || 10);
+
     const query = this.reviewRepository
       .createQueryBuilder('review')
       .leftJoinAndSelect('review.user', 'user')
-      .where('review.productId = :productId', { productId })
+      .leftJoinAndSelect('review.product', 'product')
+      .where('product.id = :productId', { productId })
       .andWhere('review.isApproved = true')
       .andWhere('review.isDeleted = false');
 
@@ -106,8 +113,8 @@ export class ReviewsService {
 
     const [data, total] = await query
       .orderBy('review.createdAt', 'DESC')
-      .skip((page - 1) * limit)
-      .take(limit)
+      .skip((pageNum - 1) * limitNum)
+      .take(limitNum)
       .getManyAndCount();
 
     const ratingStats = await this.getProductRatingStats(productId);
@@ -116,9 +123,9 @@ export class ReviewsService {
       data,
       meta: {
         total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit),
+        page: pageNum,
+        limit: limitNum,
+        totalPages: Math.ceil(total / limitNum),
         ...ratingStats,
       },
     };
@@ -130,6 +137,7 @@ export class ReviewsService {
   async getProductRatingStats(productId: number): Promise<any> {
     const result = await this.reviewRepository
       .createQueryBuilder('review')
+      .leftJoin('review.product', 'product')
       .select('AVG(review.rating)', 'averageRating')
       .addSelect('COUNT(review.id)', 'totalReviews')
       .addSelect('COUNT(CASE WHEN review.rating = 5 THEN 1 END)', 'rating5')
@@ -137,7 +145,7 @@ export class ReviewsService {
       .addSelect('COUNT(CASE WHEN review.rating = 3 THEN 1 END)', 'rating3')
       .addSelect('COUNT(CASE WHEN review.rating = 2 THEN 1 END)', 'rating2')
       .addSelect('COUNT(CASE WHEN review.rating = 1 THEN 1 END)', 'rating1')
-      .where('review.productId = :productId', { productId })
+      .where('product.id = :productId', { productId })
       .andWhere('review.isApproved = true')
       .andWhere('review.isDeleted = false')
       .getRawOne();
@@ -167,7 +175,9 @@ export class ReviewsService {
       WHERE id = $3`,
       [stats.average, stats.total, productId],
     );
-    this.logger.debug(`Updated product ${productId} rating to ${stats.average}`);
+    this.logger.debug(
+      `Updated product ${productId} rating to ${stats.average}`,
+    );
   }
 
   // ============================================================
@@ -329,10 +339,14 @@ export class ReviewsService {
       .leftJoinAndSelect('review.product', 'product');
 
     if (filters?.isApproved !== undefined) {
-      query.andWhere('review.isApproved = :isApproved', { isApproved: filters.isApproved });
+      query.andWhere('review.isApproved = :isApproved', {
+        isApproved: filters.isApproved,
+      });
     }
     if (filters?.isDeleted !== undefined) {
-      query.andWhere('review.isDeleted = :isDeleted', { isDeleted: filters.isDeleted });
+      query.andWhere('review.isDeleted = :isDeleted', {
+        isDeleted: filters.isDeleted,
+      });
     }
     if (filters?.rating) {
       query.andWhere('review.rating = :rating', { rating: filters.rating });
@@ -439,7 +453,10 @@ export class ReviewsService {
   // ============================================================
   // GET USER'S REVIEW FOR A PRODUCT
   // ============================================================
-  async getUserReviewForProduct(userId: number, productId: number): Promise<Review | null> {
+  async getUserReviewForProduct(
+    userId: number,
+    productId: number,
+  ): Promise<Review | null> {
     return this.reviewRepository.findOne({
       where: {
         user: { id: userId },
@@ -452,12 +469,17 @@ export class ReviewsService {
   // ============================================================
   // CHECK IF USER HAS PURCHASED A PRODUCT
   // ============================================================
-  private async hasUserPurchasedProduct(userId: number, productId: number): Promise<boolean> {
+  private async hasUserPurchasedProduct(
+    userId: number,
+    productId: number,
+  ): Promise<boolean> {
     const result = await this.orderRepository
       .createQueryBuilder('order')
+      .innerJoin('order.user', 'user')
       .innerJoin('order.items', 'item')
-      .where('order.userId = :userId', { userId })
-      .andWhere('item.productId = :productId', { productId })
+      .innerJoin('item.product', 'product')
+      .where('user.id = :userId', { userId })
+      .andWhere('product.id = :productId', { productId })
       .andWhere('order.status NOT IN (:...statuses)', {
         statuses: ['cancelled', 'pending'],
       })
@@ -502,8 +524,9 @@ export class ReviewsService {
   async getAverageRating(productId: number): Promise<number> {
     const result = await this.reviewRepository
       .createQueryBuilder('review')
+      .leftJoin('review.product', 'product')
       .select('AVG(review.rating)', 'average')
-      .where('review.productId = :productId', { productId })
+      .where('product.id = :productId', { productId })
       .andWhere('review.isApproved = true')
       .andWhere('review.isDeleted = false')
       .getRawOne();

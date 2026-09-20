@@ -1,5 +1,11 @@
 // src/wishlist/wishlist.entity.ts
-import { Entity, PrimaryGeneratedColumn, ManyToOne, CreateDateColumn, Index } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  ManyToOne,
+  CreateDateColumn,
+  Index,
+} from 'typeorm';
 import { Expose } from 'class-transformer';
 import { User } from '../user/user.entity';
 import { Product } from '../products/products.entity';

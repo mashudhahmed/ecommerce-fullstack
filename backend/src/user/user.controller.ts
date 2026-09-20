@@ -60,6 +60,14 @@ export class UserController {
     return this.userService.getPublicProfile(user);
   }
 
+  @Get('me')
+  @ApiOperation({ summary: 'Get current user profile (alias)' })
+  @ApiResponse({ status: 200, description: 'Profile retrieved successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async getMe(@Request() req: { user: { id: number } }) {
+    return this.getProfile(req);
+  }
+
   @Patch('profile')
   @ApiOperation({ summary: 'Update current user profile' })
   @ApiResponse({ status: 200, description: 'Profile updated successfully' })
@@ -102,7 +110,9 @@ export class UserController {
     // Validate file type
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
     if (!allowedTypes.includes(file.mimetype)) {
-      throw new BadRequestException('Invalid file type. Allowed: JPEG, PNG, WebP, GIF');
+      throw new BadRequestException(
+        'Invalid file type. Allowed: JPEG, PNG, WebP, GIF',
+      );
     }
 
     // Validate file size (5MB)
@@ -135,11 +145,11 @@ export class UserController {
   @ApiResponse({ status: 200, description: 'Avatar removed successfully' })
   async removeAvatar(@Request() req: { user: { id: number } }) {
     const user = await this.userService.findByIdOrFail(req.user.id);
-    
+
     // If there's an avatar URL, we could delete it from Cloudinary here
     // For now, just remove the avatar field
     await this.userService.update(req.user.id, { avatar: null });
-    
+
     return { message: 'Avatar removed successfully' };
   }
 
@@ -152,7 +162,11 @@ export class UserController {
     @Request() req: { user: { id: number } },
     @Body() dto: ChangeEmailDto,
   ) {
-    return this.userService.changeEmail(req.user.id, dto.newEmail, dto.password);
+    return this.userService.changeEmail(
+      req.user.id,
+      dto.newEmail,
+      dto.password,
+    );
   }
 
   @Delete('profile')
@@ -199,7 +213,10 @@ export class UserController {
     @Request() req: { user: { role: UserRole } },
   ) {
     const user = await this.userService.findByIdOrFail(id);
-    if (req.user.role === UserRole.ADMIN && user.role === UserRole.SUPER_ADMIN) {
+    if (
+      req.user.role === UserRole.ADMIN &&
+      user.role === UserRole.SUPER_ADMIN
+    ) {
       throw new ForbiddenException('Cannot view SuperAdmin details');
     }
     return this.userService.getPublicProfile(user);
@@ -216,7 +233,10 @@ export class UserController {
     @Request() req: { user: { role: UserRole } },
   ) {
     const user = await this.userService.findByIdOrFail(id);
-    if (req.user.role === UserRole.ADMIN && user.role === UserRole.SUPER_ADMIN) {
+    if (
+      req.user.role === UserRole.ADMIN &&
+      user.role === UserRole.SUPER_ADMIN
+    ) {
       throw new ForbiddenException('Cannot update SuperAdmin');
     }
     const updated = await this.userService.update(id, updateData);
@@ -238,7 +258,10 @@ export class UserController {
       throw new BadRequestException('Cannot delete your own account');
     }
 
-    if (req.user.role === UserRole.ADMIN && user.role === UserRole.SUPER_ADMIN) {
+    if (
+      req.user.role === UserRole.ADMIN &&
+      user.role === UserRole.SUPER_ADMIN
+    ) {
       throw new ForbiddenException('Cannot delete SuperAdmin');
     }
 
@@ -304,7 +327,9 @@ export class UserController {
   @ApiOperation({ summary: 'Search users' })
   async searchUsers(@Query('query') query: string) {
     if (!query || query.length < 2) {
-      throw new BadRequestException('Search query must be at least 2 characters');
+      throw new BadRequestException(
+        'Search query must be at least 2 characters',
+      );
     }
     return this.userService.searchUsers(query);
   }

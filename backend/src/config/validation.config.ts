@@ -39,4 +39,9 @@ export const validationSchema = Joi.object({
   // ✅ Add upload validation
   UPLOAD_DIRECTORY: Joi.string().default('./uploads'),
   UPLOAD_MAX_SIZE: Joi.number().default(5242880),
+
+  // ✅ Google OAuth validation (optional)
+  GOOGLE_CLIENT_ID: Joi.string().optional().allow(''),
+  GOOGLE_CLIENT_SECRET: Joi.string().optional().allow(''),
+  GOOGLE_CALLBACK_URL: Joi.string().uri().optional(),
 });

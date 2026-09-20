@@ -1,5 +1,12 @@
 // src/orders/dto/order-history.dto.ts
-import { IsOptional, IsEnum, IsString, IsNumber, Min, Max } from 'class-validator';
+import {
+  IsOptional,
+  IsEnum,
+  IsString,
+  IsNumber,
+  Min,
+  Max,
+} from 'class-validator';
 import { OrderStatus } from '../order.entity';
 
 export class OrderHistoryDto {

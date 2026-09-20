@@ -1,5 +1,13 @@
 // src/vendor/dto/bulk-product-upload.dto.ts
-import { IsArray, IsOptional, IsString, IsNumber, Min, Max, ValidateNested } from 'class-validator';
+import {
+  IsArray,
+  IsOptional,
+  IsString,
+  IsNumber,
+  Min,
+  Max,
+  ValidateNested,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 

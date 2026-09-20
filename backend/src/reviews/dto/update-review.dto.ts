@@ -10,10 +10,13 @@ export class UpdateReviewDto extends PartialType(CreateReviewDto) {
   @IsBoolean()
   isApproved?: boolean;
 
-  @ApiProperty({ 
-    example: ['https://cloudinary.com/image1.jpg', 'https://cloudinary.com/image2.jpg'],
+  @ApiProperty({
+    example: [
+      'https://cloudinary.com/image1.jpg',
+      'https://cloudinary.com/image2.jpg',
+    ],
     required: false,
-    description: 'URLs of existing images to keep'
+    description: 'URLs of existing images to keep',
   })
   @IsOptional()
   @IsArray()

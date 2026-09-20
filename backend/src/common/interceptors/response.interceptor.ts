@@ -67,10 +67,16 @@ function isAlreadyFormatted(data: any): boolean {
  * Response Interceptor – wraps all successful responses in a consistent format
  */
 @Injectable()
-export class ResponseInterceptor<T> implements NestInterceptor<T, ApiResponse<T>> {
+export class ResponseInterceptor<T> implements NestInterceptor<
+  T,
+  ApiResponse<T>
+> {
   constructor(private readonly reflector: Reflector) {}
 
-  intercept(context: ExecutionContext, next: CallHandler): Observable<ApiResponse<T>> {
+  intercept(
+    context: ExecutionContext,
+    next: CallHandler,
+  ): Observable<ApiResponse<T>> {
     const ctx = context.switchToHttp();
     const response = ctx.getResponse();
     const request = ctx.getRequest();
@@ -86,6 +92,11 @@ export class ResponseInterceptor<T> implements NestInterceptor<T, ApiResponse<T>
 
     return next.handle().pipe(
       map((data) => {
+        // If headers are already sent (redirects, raw responses, streams), do nothing
+        if (response.headersSent) {
+          return data;
+        }
+
         // If response is already formatted (by another interceptor), return as-is
         if (isAlreadyFormatted(data)) {
           return data;
@@ -93,16 +104,31 @@ export class ResponseInterceptor<T> implements NestInterceptor<T, ApiResponse<T>
 
         // Handle paginated responses
         if (isPaginatedResponse(data)) {
-          return this.formatPaginatedResponse(data, statusCode, request.url, customMessage);
+          return this.formatPaginatedResponse(
+            data,
+            statusCode,
+            request.url,
+            customMessage,
+          );
         }
 
         // Handle array responses
         if (Array.isArray(data)) {
-          return this.formatResponse(data, statusCode, request.url, customMessage);
+          return this.formatResponse(
+            data,
+            statusCode,
+            request.url,
+            customMessage,
+          );
         }
 
         // Handle single object or primitive responses
-        return this.formatResponse(data, statusCode, request.url, customMessage);
+        return this.formatResponse(
+          data,
+          statusCode,
+          request.url,
+          customMessage,
+        );
       }),
     );
   }
@@ -142,14 +168,29 @@ export class ResponseInterceptor<T> implements NestInterceptor<T, ApiResponse<T>
       total: meta.total || 0,
       page: meta.page || 1,
       limit: meta.limit || 20,
-      totalPages: meta.totalPages || Math.ceil((meta.total || 0) / (meta.limit || 20)),
-      hasNextPage: meta.hasNextPage !== undefined ? meta.hasNextPage : (meta.page || 1) < Math.ceil((meta.total || 0) / (meta.limit || 20)),
-      hasPreviousPage: meta.hasPreviousPage !== undefined ? meta.hasPreviousPage : (meta.page || 1) > 1,
+      totalPages:
+        meta.totalPages || Math.ceil((meta.total || 0) / (meta.limit || 20)),
+      hasNextPage:
+        meta.hasNextPage !== undefined
+          ? meta.hasNextPage
+          : (meta.page || 1) <
+            Math.ceil((meta.total || 0) / (meta.limit || 20)),
+      hasPreviousPage:
+        meta.hasPreviousPage !== undefined
+          ? meta.hasPreviousPage
+          : (meta.page || 1) > 1,
     };
 
     // Copy any additional meta fields (like stats, distribution, etc.)
     const additionalMeta: Record<string, any> = {};
-    const reservedKeys = ['total', 'page', 'limit', 'totalPages', 'hasNextPage', 'hasPreviousPage'];
+    const reservedKeys = [
+      'total',
+      'page',
+      'limit',
+      'totalPages',
+      'hasNextPage',
+      'hasPreviousPage',
+    ];
     for (const key of Object.keys(meta)) {
       if (!reservedKeys.includes(key)) {
         additionalMeta[key] = meta[key];
@@ -179,7 +220,8 @@ export class ResponseInterceptor<T> implements NestInterceptor<T, ApiResponse<T>
       [HttpStatus.OK]: 'Request successful',
       [HttpStatus.CREATED]: 'Resource created successfully',
       [HttpStatus.ACCEPTED]: 'Request accepted',
-      [HttpStatus.NON_AUTHORITATIVE_INFORMATION]: 'Request processed successfully',
+      [HttpStatus.NON_AUTHORITATIVE_INFORMATION]:
+        'Request processed successfully',
       [HttpStatus.NO_CONTENT]: 'No content',
       [HttpStatus.RESET_CONTENT]: 'Reset content',
       [HttpStatus.PARTIAL_CONTENT]: 'Partial content',

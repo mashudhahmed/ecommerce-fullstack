@@ -1,5 +1,10 @@
 // src/orders/orders-write.service.ts
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { Order, OrderStatus } from './order.entity';
@@ -47,7 +52,9 @@ export class OrdersWriteService {
       }
 
       if (!user.isVerified) {
-        throw new BadRequestException('Please verify your email before placing orders');
+        throw new BadRequestException(
+          'Please verify your email before placing orders',
+        );
       }
 
       let total = 0;
@@ -124,13 +131,9 @@ export class OrdersWriteService {
     createOrderDto: CreateOrderDto,
     idempotencyKey: string,
   ): Promise<Order> {
-    return this.idempotencyService.process(
-      idempotencyKey,
-      userId,
-      async () => {
-        return this.create(userId, createOrderDto);
-      },
-    );
+    return this.idempotencyService.process(idempotencyKey, userId, async () => {
+      return this.create(userId, createOrderDto);
+    });
   }
 
   private async sendOrderConfirmation(user: User, order: Order): Promise<void> {
@@ -138,7 +141,8 @@ export class OrdersWriteService {
       await this.mailerService.sendOrderConfirmation(user.email, order);
       this.metricsService.recordEmailSent('order_confirmation', 'success');
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       this.logger.error(`Failed to send order confirmation: ${errorMessage}`);
       this.metricsService.recordEmailSent('order_confirmation', 'failed');
     }

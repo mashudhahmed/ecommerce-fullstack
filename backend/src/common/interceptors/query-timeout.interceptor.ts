@@ -29,7 +29,7 @@ export class QueryTimeoutInterceptor implements NestInterceptor {
           return throwError(
             () =>
               new RequestTimeoutException(
-                `Query timed out after ${timeoutMs}ms`
+                `Query timed out after ${timeoutMs}ms`,
               ),
           );
         }

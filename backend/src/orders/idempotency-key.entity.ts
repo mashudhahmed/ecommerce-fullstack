@@ -1,5 +1,11 @@
 // src/orders/idempotency-key.entity.ts
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, Index } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  Index,
+} from 'typeorm';
 
 @Entity('idempotency_keys')
 @Index(['key', 'userId'])

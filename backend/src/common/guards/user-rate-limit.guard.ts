@@ -1,5 +1,11 @@
 // src/common/guards/user-rate-limit.guard.ts
-import { Injectable, CanActivate, ExecutionContext, HttpException, HttpStatus } from '@nestjs/common';
+import {
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  HttpException,
+  HttpStatus,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, LessThan } from 'typeorm';
 import { UserRateLimit } from '../entities/user-rate-limit.entity';
@@ -60,7 +66,9 @@ export class UserRateLimitGuard implements CanActivate {
 
     // Check limit
     if (entry.count >= this.maxRequests) {
-      const retryAfter = Math.ceil((entry.expiresAt.getTime() - now.getTime()) / 1000);
+      const retryAfter = Math.ceil(
+        (entry.expiresAt.getTime() - now.getTime()) / 1000,
+      );
       throw new HttpException(
         {
           statusCode: HttpStatus.TOO_MANY_REQUESTS,

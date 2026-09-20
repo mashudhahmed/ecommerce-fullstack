@@ -23,7 +23,11 @@ import { parse } from 'cookie';
 })
 @Injectable()
 export class EventsGateway
-  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect, OnModuleDestroy
+  implements
+    OnGatewayInit,
+    OnGatewayConnection,
+    OnGatewayDisconnect,
+    OnModuleDestroy
 {
   @WebSocketServer()
   server!: Server;
@@ -43,7 +47,9 @@ export class EventsGateway
   // ============================================================
   afterInit(server: Server) {
     const corsOrigin = this.configService.get<string>('cors.origin') || '*';
-    this.logger.log(`WebSocket Gateway initialized with CORS origin: ${corsOrigin}`);
+    this.logger.log(
+      `WebSocket Gateway initialized with CORS origin: ${corsOrigin}`,
+    );
   }
 
   // ============================================================
@@ -68,7 +74,9 @@ export class EventsGateway
       const userId = payload.sub;
 
       if (!userId) {
-        this.logger.warn(`Client ${client.id} disconnected: Invalid token (no sub)`);
+        this.logger.warn(
+          `Client ${client.id} disconnected: Invalid token (no sub)`,
+        );
         client.disconnect();
         return;
       }
@@ -191,7 +199,10 @@ export class EventsGateway
   // MESSAGE HANDLERS
   // ============================================================
   @SubscribeMessage('ping')
-  handlePing(client: Socket): { event: string; data: { pong: string; timestamp: string } } {
+  handlePing(client: Socket): {
+    event: string;
+    data: { pong: string; timestamp: string };
+  } {
     return {
       event: 'pong',
       data: {
@@ -202,7 +213,10 @@ export class EventsGateway
   }
 
   @SubscribeMessage('health')
-  handleHealth(client: Socket): { event: string; data: { status: string; timestamp: string } } {
+  handleHealth(client: Socket): {
+    event: string;
+    data: { status: string; timestamp: string };
+  } {
     return {
       event: 'health',
       data: {
@@ -213,10 +227,15 @@ export class EventsGateway
   }
 
   @SubscribeMessage('subscribe')
-  handleSubscribe(client: Socket, payload: { room: string }): { event: string; data: any } {
+  handleSubscribe(
+    client: Socket,
+    payload: { room: string },
+  ): { event: string; data: any } {
     if (payload?.room && typeof payload.room === 'string') {
       client.join(payload.room);
-      this.logger.log(`Client ${client.id} subscribed to room "${payload.room}"`);
+      this.logger.log(
+        `Client ${client.id} subscribed to room "${payload.room}"`,
+      );
       return {
         event: 'subscribed',
         data: { room: payload.room, success: true },
@@ -229,10 +248,15 @@ export class EventsGateway
   }
 
   @SubscribeMessage('unsubscribe')
-  handleUnsubscribe(client: Socket, payload: { room: string }): { event: string; data: any } {
+  handleUnsubscribe(
+    client: Socket,
+    payload: { room: string },
+  ): { event: string; data: any } {
     if (payload?.room && typeof payload.room === 'string') {
       client.leave(payload.room);
-      this.logger.log(`Client ${client.id} unsubscribed from room "${payload.room}"`);
+      this.logger.log(
+        `Client ${client.id} unsubscribed from room "${payload.room}"`,
+      );
       return {
         event: 'unsubscribed',
         data: { room: payload.room, success: true },

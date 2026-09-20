@@ -52,12 +52,13 @@ export class AdminController {
   @ApiOperation({ summary: 'Get admin dashboard statistics' })
   @ApiResponse({ status: 200, description: 'Stats retrieved successfully' })
   async getStats() {
-    const [totalUsers, totalProducts, orderStats, userStats] = await Promise.all([
-      this.userService.countUsers(),
-      this.productsService.findAll(),
-      this.ordersService.getAdminStats(),
-      this.userService.getUserStats(),
-    ]);
+    const [totalUsers, totalProducts, orderStats, userStats] =
+      await Promise.all([
+        this.userService.countUsers(),
+        this.productsService.findAll(),
+        this.ordersService.getAdminStats(),
+        this.userService.getUserStats(),
+      ]);
 
     return {
       totalUsers,
@@ -87,15 +88,28 @@ export class AdminController {
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiQuery({ name: 'status', required: false, type: String })
-  @ApiQuery({ name: 'sortBy', required: false, enum: ['createdAt', 'total', 'status'] })
+  @ApiQuery({
+    name: 'sortBy',
+    required: false,
+    enum: ['createdAt', 'total', 'status'],
+  })
   @ApiQuery({ name: 'sortOrder', required: false, enum: ['asc', 'desc'] })
-  async getOrders(@Query() pagination: PaginationDto, @Query('status') status?: string) {
-    return this.ordersService.findAllPaginated(pagination.page, pagination.limit);
+  async getOrders(
+    @Query() pagination: PaginationDto,
+    @Query('status') status?: string,
+  ) {
+    return this.ordersService.findAllPaginated(
+      pagination.page,
+      pagination.limit,
+    );
   }
 
   @Patch('order/:id/status')
   @ApiOperation({ summary: 'Update order status (Admin)' })
-  @ApiResponse({ status: 200, description: 'Order status updated successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Order status updated successfully',
+  })
   async updateOrderStatus(
     @Param('id', ParseIntPipe) id: number,
     @Body(new ValidationPipe()) dto: UpdateOrderStatusDto,
@@ -154,14 +168,20 @@ export class AdminController {
 
   @Get('vendors/pending')
   @ApiOperation({ summary: 'Get pending vendors' })
-  @ApiResponse({ status: 200, description: 'Pending vendors retrieved successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Pending vendors retrieved successfully',
+  })
   async getPendingVendors() {
     return this.userService.findPendingVendors();
   }
 
   @Get('vendors/stats')
   @ApiOperation({ summary: 'Get vendor statistics (Admin)' })
-  @ApiResponse({ status: 200, description: 'Vendor stats retrieved successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Vendor stats retrieved successfully',
+  })
   async getVendorStats() {
     return this.vendorService.getAdminVendorStats();
   }
@@ -185,10 +205,11 @@ export class AdminController {
 
   @Post('vendors/bulk-action')
   @ApiOperation({ summary: 'Bulk action on vendors (Admin)' })
-  @ApiResponse({ status: 200, description: 'Bulk action completed successfully' })
-  async bulkVendorAction(
-    @Body(new ValidationPipe()) dto: VendorBulkActionDto,
-  ) {
+  @ApiResponse({
+    status: 200,
+    description: 'Bulk action completed successfully',
+  })
+  async bulkVendorAction(@Body(new ValidationPipe()) dto: VendorBulkActionDto) {
     return this.vendorService.bulkVendorAction(
       dto.action,
       dto.vendorIds,
@@ -198,7 +219,10 @@ export class AdminController {
 
   @Patch('vendors/:id/suspend')
   @ApiOperation({ summary: 'Suspend or activate vendor (Admin)' })
-  @ApiResponse({ status: 200, description: 'Vendor suspension updated successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Vendor suspension updated successfully',
+  })
   async suspendVendor(
     @Param('id', ParseIntPipe) id: number,
     @Body(new ValidationPipe()) dto: VendorSuspendDto,
@@ -217,7 +241,10 @@ export class AdminController {
 
   @Get('orders/stats')
   @ApiOperation({ summary: 'Get order statistics (Admin)' })
-  @ApiResponse({ status: 200, description: 'Order stats retrieved successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Order stats retrieved successfully',
+  })
   @ApiQuery({ name: 'startDate', required: false, type: String })
   @ApiQuery({ name: 'endDate', required: false, type: String })
   async getOrderStats(
@@ -231,25 +258,33 @@ export class AdminController {
 
     let filteredOrders = orders;
     if (start) {
-      filteredOrders = filteredOrders.filter((o) => new Date(o.createdAt) >= start);
+      filteredOrders = filteredOrders.filter(
+        (o) => new Date(o.createdAt) >= start,
+      );
     }
     if (end) {
-      filteredOrders = filteredOrders.filter((o) => new Date(o.createdAt) <= end);
+      filteredOrders = filteredOrders.filter(
+        (o) => new Date(o.createdAt) <= end,
+      );
     }
 
     const totalRevenue = filteredOrders
       .filter((o) => o.status !== 'cancelled')
       .reduce((sum, o) => sum + Number(o.total), 0);
 
-    const statusDistribution = filteredOrders.reduce((acc, o) => {
-      acc[o.status] = (acc[o.status] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
+    const statusDistribution = filteredOrders.reduce(
+      (acc, o) => {
+        acc[o.status] = (acc[o.status] || 0) + 1;
+        return acc;
+      },
+      {} as Record<string, number>,
+    );
 
     return {
       totalOrders: filteredOrders.length,
       totalRevenue,
-      averageOrderValue: filteredOrders.length > 0 ? totalRevenue / filteredOrders.length : 0,
+      averageOrderValue:
+        filteredOrders.length > 0 ? totalRevenue / filteredOrders.length : 0,
       statusDistribution,
       period: {
         start: start || 'all',

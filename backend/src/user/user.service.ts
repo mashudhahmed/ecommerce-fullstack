@@ -36,7 +36,9 @@ export class UserService {
         where: { email: email.toLowerCase().trim() },
       });
     } catch (error: any) {
-      this.logger.error(`Error finding user by email: ${error?.message ?? String(error)}`);
+      this.logger.error(
+        `Error finding user by email: ${error?.message ?? String(error)}`,
+      );
       return null;
     }
   }
@@ -60,7 +62,9 @@ export class UserService {
         where: { id },
       });
     } catch (error: any) {
-      this.logger.error(`Error finding user by id: ${error?.message ?? String(error)}`);
+      this.logger.error(
+        `Error finding user by id: ${error?.message ?? String(error)}`,
+      );
       return null;
     }
   }
@@ -173,7 +177,8 @@ export class UserService {
   }): Promise<User[]> {
     const where: FindOptionsWhere<User> = {};
     if (filters?.role) where.role = filters.role;
-    if (filters?.isVerified !== undefined) where.isVerified = filters.isVerified;
+    if (filters?.isVerified !== undefined)
+      where.isVerified = filters.isVerified;
     if (filters?.isVendorApproved !== undefined)
       where.isVendorApproved = filters.isVendorApproved;
 
@@ -228,10 +233,18 @@ export class UserService {
         'user.updatedAt',
       ]);
 
-    const allowedSortFields = ['name', 'email', 'role', 'createdAt', 'updatedAt', 'id'];
-    const sortField = sortBy && allowedSortFields.includes(sortBy) ? sortBy : 'createdAt';
+    const allowedSortFields = [
+      'name',
+      'email',
+      'role',
+      'createdAt',
+      'updatedAt',
+      'id',
+    ];
+    const sortField =
+      sortBy && allowedSortFields.includes(sortBy) ? sortBy : 'createdAt';
     const sortOrderValue = sortOrder === 'asc' ? 'ASC' : 'DESC';
-    query.orderBy(`user.${sortField}`, sortOrderValue as 'ASC' | 'DESC');
+    query.orderBy(`user.${sortField}`, sortOrderValue);
 
     const [data, total] = await query
       .skip((page - 1) * limit)
@@ -277,10 +290,17 @@ export class UserService {
         'user.createdAt',
       ]);
 
-    const allowedSortFields = ['name', 'email', 'createdAt', 'vendorBusinessName', 'id'];
-    const sortField = sortBy && allowedSortFields.includes(sortBy) ? sortBy : 'createdAt';
+    const allowedSortFields = [
+      'name',
+      'email',
+      'createdAt',
+      'vendorBusinessName',
+      'id',
+    ];
+    const sortField =
+      sortBy && allowedSortFields.includes(sortBy) ? sortBy : 'createdAt';
     const sortOrderValue = sortOrder === 'asc' ? 'ASC' : 'DESC';
-    query.orderBy(`user.${sortField}`, sortOrderValue as 'ASC' | 'DESC');
+    query.orderBy(`user.${sortField}`, sortOrderValue);
 
     const [data, total] = await query
       .skip((page - 1) * limit)
@@ -421,7 +441,10 @@ export class UserService {
 
     if (updateData.password) {
       if (!updateData.password.startsWith('$2b$')) {
-        updateData.password = await bcrypt.hash(updateData.password, BCRYPT_ROUNDS);
+        updateData.password = await bcrypt.hash(
+          updateData.password,
+          BCRYPT_ROUNDS,
+        );
       }
     }
 
@@ -438,7 +461,11 @@ export class UserService {
     this.logger.log(`Password updated for user: ${id}`);
   }
 
-  async changeEmail(id: number, newEmail: string, password: string): Promise<User> {
+  async changeEmail(
+    id: number,
+    newEmail: string,
+    password: string,
+  ): Promise<User> {
     if (!newEmail) {
       throw new BadRequestException('New email is required');
     }
@@ -454,7 +481,9 @@ export class UserService {
     }
 
     if (newEmail === user.email) {
-      throw new BadRequestException('New email must be different from current email');
+      throw new BadRequestException(
+        'New email must be different from current email',
+      );
     }
 
     const existingUser = await this.findByEmail(newEmail);
@@ -468,7 +497,11 @@ export class UserService {
     return updatedUser;
   }
 
-  async updateVerificationCode(email: string, code: string, expiry: Date): Promise<User> {
+  async updateVerificationCode(
+    email: string,
+    code: string,
+    expiry: Date,
+  ): Promise<User> {
     const user = await this.findByEmailOrFail(email);
     user.verificationCode = code;
     user.verificationCodeExpiry = expiry;
@@ -483,7 +516,10 @@ export class UserService {
     if (!user) {
       throw new NotFoundException('Invalid verification code');
     }
-    if (user.verificationCodeExpiry && user.verificationCodeExpiry < new Date()) {
+    if (
+      user.verificationCodeExpiry &&
+      user.verificationCodeExpiry < new Date()
+    ) {
       throw new NotFoundException('Verification code expired');
     }
 
@@ -493,7 +529,11 @@ export class UserService {
     return this.userRepository.save(user);
   }
 
-  async updateResetCode(email: string, code: string, expiry: Date): Promise<User> {
+  async updateResetCode(
+    email: string,
+    code: string,
+    expiry: Date,
+  ): Promise<User> {
     const user = await this.findByEmailOrFail(email);
     user.resetCode = code;
     user.resetCodeExpiry = expiry;
@@ -515,7 +555,11 @@ export class UserService {
     return user;
   }
 
-  async setPasswordResetToken(email: string, tokenHash: string, expiry: Date): Promise<void> {
+  async setPasswordResetToken(
+    email: string,
+    tokenHash: string,
+    expiry: Date,
+  ): Promise<void> {
     const user = await this.findByEmailOrFail(email);
     user.resetTokenHash = tokenHash;
     user.resetTokenExpiry = expiry;
@@ -686,7 +730,10 @@ export class UserService {
   async getUsersByDateRange(startDate: Date, endDate: Date): Promise<User[]> {
     return this.userRepository
       .createQueryBuilder('user')
-      .where('user.createdAt BETWEEN :startDate AND :endDate', { startDate, endDate })
+      .where('user.createdAt BETWEEN :startDate AND :endDate', {
+        startDate,
+        endDate,
+      })
       .select([
         'user.id',
         'user.name',

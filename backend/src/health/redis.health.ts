@@ -10,7 +10,7 @@ export class RedisHealthIndicator extends HealthIndicator {
 
   constructor(private configService: ConfigService) {
     super();
-    
+
     const redisUrl = this.configService.get('redis.url');
     if (redisUrl) {
       this.redis = new Redis(redisUrl);
@@ -20,7 +20,7 @@ export class RedisHealthIndicator extends HealthIndicator {
   async isHealthy(key: string): Promise<HealthIndicatorResult> {
     try {
       if (!this.redis) {
-        return this.getStatus(key, true, { 
+        return this.getStatus(key, true, {
           status: 'disabled',
           message: 'Redis is not configured',
         });
@@ -28,7 +28,7 @@ export class RedisHealthIndicator extends HealthIndicator {
 
       // Ping Redis
       const pong = await this.redis.ping();
-      
+
       // Get Redis info
       const info = await this.redis.info();
       const parsedInfo = this.parseRedisInfo(info);

@@ -87,7 +87,10 @@ export class WishlistController {
     @Request() req: { user: { id: number } },
     @Param('productId', ParseIntPipe) productId: number,
   ) {
-    const isInWishlist = await this.wishlistService.isInWishlist(req.user.id, productId);
+    const isInWishlist = await this.wishlistService.isInWishlist(
+      req.user.id,
+      productId,
+    );
     return { isInWishlist };
   }
 

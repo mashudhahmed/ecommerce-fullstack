@@ -23,7 +23,9 @@ export class CreateUserDto {
   name!: string;
 
   @ApiProperty({ example: 'john@example.com' })
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim().toLowerCase() : value))
+  @Transform(({ value }) =>
+    typeof value === 'string' ? value.trim().toLowerCase() : value,
+  )
   @IsEmail()
   @MaxLength(254)
   email!: string;
@@ -33,7 +35,8 @@ export class CreateUserDto {
   @MinLength(8)
   @MaxLength(72)
   @Matches(PASSWORD_REGEX, {
-    message: 'Password must contain uppercase, lowercase, number, and special character',
+    message:
+      'Password must contain uppercase, lowercase, number, and special character',
   })
   password!: string;
 

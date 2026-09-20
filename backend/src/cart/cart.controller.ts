@@ -42,7 +42,10 @@ export class CartController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Add item to cart' })
   @ApiResponse({ status: 201, description: 'Item added to cart successfully' })
-  @ApiResponse({ status: 400, description: 'Invalid input or insufficient stock' })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid input or insufficient stock',
+  })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiBody({ type: AddToCartDto })
   async addToCart(
@@ -68,7 +71,10 @@ export class CartController {
   // ============================================================
   @Get('summary')
   @ApiOperation({ summary: 'Get cart summary with total and items' })
-  @ApiResponse({ status: 200, description: 'Cart summary retrieved successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Cart summary retrieved successfully',
+  })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getCartSummary(@Request() req: { user: { id: number } }) {
     return this.cartService.getCartSummary(req.user.id);
@@ -79,7 +85,10 @@ export class CartController {
   // ============================================================
   @Get('total')
   @ApiOperation({ summary: 'Get cart total amount' })
-  @ApiResponse({ status: 200, description: 'Cart total retrieved successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Cart total retrieved successfully',
+  })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getCartTotal(@Request() req: { user: { id: number } }) {
     return this.cartService.getCartTotal(req.user.id);
@@ -90,7 +99,10 @@ export class CartController {
   // ============================================================
   @Get('count')
   @ApiOperation({ summary: 'Get number of items in cart' })
-  @ApiResponse({ status: 200, description: 'Cart item count retrieved successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Cart item count retrieved successfully',
+  })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getCartItemCount(@Request() req: { user: { id: number } }) {
     return this.cartService.getCartItemCount(req.user.id);
@@ -103,7 +115,10 @@ export class CartController {
   @Throttle({ default: { limit: 10, ttl: 60 } })
   @ApiOperation({ summary: 'Update item quantity in cart' })
   @ApiResponse({ status: 200, description: 'Quantity updated successfully' })
-  @ApiResponse({ status: 400, description: 'Invalid input or insufficient stock' })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid input or insufficient stock',
+  })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'Cart item not found' })
   @ApiBody({ type: UpdateCartDto })
@@ -111,7 +126,11 @@ export class CartController {
     @Request() req: { user: { id: number } },
     @Body(new ValidationPipe()) dto: UpdateCartDto,
   ) {
-    return this.cartService.updateQuantity(req.user.id, dto.productId, dto.quantity);
+    return this.cartService.updateQuantity(
+      req.user.id,
+      dto.productId,
+      dto.quantity,
+    );
   }
 
   // ============================================================
@@ -167,7 +186,8 @@ export class CartController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async mergeCart(
     @Request() req: { user: { id: number } },
-    @Body('guestCartItems') guestCartItems: { productId: number; quantity: number }[],
+    @Body('guestCartItems')
+    guestCartItems: { productId: number; quantity: number }[],
   ) {
     return this.cartService.mergeCart(req.user.id, guestCartItems);
   }

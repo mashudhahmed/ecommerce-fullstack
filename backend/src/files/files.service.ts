@@ -36,7 +36,9 @@ export class FilesService {
         });
         this.logger.log('Cloudinary configured successfully');
       } catch (error: any) {
-        this.logger.warn('Cloudinary configuration failed, using local storage');
+        this.logger.warn(
+          'Cloudinary configuration failed, using local storage',
+        );
       }
     }
   }
@@ -64,7 +66,9 @@ export class FilesService {
       try {
         return await this.uploadToCloudinary(file, folder);
       } catch (error: any) {
-        this.logger.warn(`Cloudinary upload failed, falling back to local: ${error.message}`);
+        this.logger.warn(
+          `Cloudinary upload failed, falling back to local: ${error.message}`,
+        );
         // Fall through to local upload
       }
     }
@@ -122,7 +126,9 @@ export class FilesService {
 
       await fs.writeFile(filePath, file.buffer);
 
-      const baseUrl = this.configService.get('app.frontendUrl') || 'http://localhost:3001';
+      const baseUrl =
+        this.configService.get<string>('app.backendUrl') ||
+        `http://localhost:${this.configService.get('port') || 3001}`;
       const url = `${baseUrl}/uploads/${filename}`;
 
       this.logger.log(`File uploaded locally: ${filename}`);
@@ -184,7 +190,9 @@ export class FilesService {
   // ============================================================
 
   getFileUrl(filename: string): string {
-    const baseUrl = this.configService.get('app.frontendUrl') || 'http://localhost:3001';
+    const baseUrl =
+      this.configService.get<string>('app.backendUrl') ||
+      `http://localhost:${this.configService.get('port') || 3001}`;
     return `${baseUrl}/uploads/${filename}`;
   }
 }

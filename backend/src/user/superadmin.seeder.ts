@@ -25,7 +25,9 @@ export class SuperAdminSeeder implements OnApplicationBootstrap {
       const password = this.configService.get<string>('superAdmin.password');
 
       if (!email || !password) {
-        this.logger.warn('⚠️  SUPERADMIN_EMAIL or SUPERADMIN_PASSWORD not set in .env');
+        this.logger.warn(
+          '⚠️  SUPERADMIN_EMAIL or SUPERADMIN_PASSWORD not set in .env',
+        );
         this.logger.warn('⚠️  Skipping SuperAdmin seeding');
         return null;
       }
@@ -74,7 +76,8 @@ export class SuperAdminSeeder implements OnApplicationBootstrap {
         this.logger.log('✅ SuperAdmin already exists (duplicate email)');
         return null;
       }
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
       this.logger.error('❌ Failed to seed SuperAdmin', errorMessage);
       throw error;
     }

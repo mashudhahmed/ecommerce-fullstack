@@ -1,7 +1,7 @@
 // components/auth/LoginForm.tsx
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -215,6 +215,7 @@ export function LoginForm() {
   const [twoFactorToken, setTwoFactorToken] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
   const [isOtpLoading, setIsOtpLoading] = useState(false);
+  const handledParamsRef = useRef<string | null>(null);
 
   const redirectUrl = searchParams.get('redirect') || '/dashboard';
 
@@ -235,6 +236,12 @@ export function LoginForm() {
   }, [isAuthenticated, loginSuccess, redirectUrl, storeState.isAuthenticated]);
 
   useEffect(() => {
+    const currentParams = searchParams.toString();
+    if (!currentParams || handledParamsRef.current === currentParams) {
+      return;
+    }
+    handledParamsRef.current = currentParams;
+
     const sessionExpired = searchParams.get('session');
     const verification = searchParams.get('verification');
     const registered = searchParams.get('registered');
@@ -249,10 +256,18 @@ export function LoginForm() {
     if (registered) {
       toast.success('Account created successfully! Please login.');
     }
-    // ✅ Surfaces failures the backend redirects back with, e.g.
-    // {FRONTEND_URL}/login?error=google_auth_failed
-    if (oauthError) {
+    // ✅ Surfaces failures, cancellations, or unconfigured state the backend redirects back with
+    if (oauthError === 'google_not_configured') {
+      toast.info('Google sign-in is not configured yet. Please sign in with your email and password.');
+    } else if (oauthError === 'google_cancelled') {
+      toast.info('Google sign-in was cancelled.');
+    } else if (oauthError) {
       toast.error('Google sign-in failed. Please try again or use your email and password.');
+    }
+
+    // Clean URL query parameters to avoid duplicate toasts on refresh/rerender
+    if (oauthError || sessionExpired || verification || registered) {
+      window.history.replaceState({}, '', window.location.pathname);
     }
   }, [searchParams]);
 
@@ -351,8 +366,6 @@ export function LoginForm() {
     toast.success('New verification code sent to your email.');
   }, []);
 
-  // ✅ Full browser redirect, not a fetch — see the comment on
-  // buildGoogleAuthUrl above for why this can't be an AJAX call.
   const handleGoogleLogin = useCallback(() => {
     window.location.href = buildGoogleAuthUrl(redirectUrl);
   }, [redirectUrl]);
@@ -383,7 +396,7 @@ export function LoginForm() {
           <CardHeader className="space-y-3 text-center">
             <div className="flex justify-center">
               <div className="relative h-14 w-14">
-                <Image src="/logo.png" alt="SnapCart" fill className="object-contain" />
+                <Image src="/logo.png" alt="SnapCart" fill sizes="56px" className="object-contain" />
               </div>
             </div>
             <div className="flex items-center justify-center gap-2">
@@ -469,7 +482,7 @@ export function LoginForm() {
         <CardHeader className="space-y-1 text-center">
           <div className="mb-2 flex justify-center">
             <div className="relative h-14 w-14">
-              <Image src="/logo.png" alt="SnapCart" fill className="object-contain" priority />
+              <Image src="/logo.png" alt="SnapCart" fill sizes="56px" className="object-contain" priority />
             </div>
           </div>
 

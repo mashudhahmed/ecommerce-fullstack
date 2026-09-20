@@ -13,7 +13,7 @@ import { User } from '../user/user.entity';
 // src/notifications/notification.entity.ts
 export enum NotificationType {
   ORDER_CONFIRMATION = 'order_confirmation',
-  ORDER_STATUS_UPDATED = 'order_updated',      // ✅ Add this
+  ORDER_STATUS_UPDATED = 'order_updated', // ✅ Add this
   ORDER_SHIPPED = 'order_shipped',
   ORDER_DELIVERED = 'order_delivered',
   ORDER_CANCELLED = 'order_cancelled',
@@ -86,10 +86,10 @@ export class Notification {
   @Expose()
   readAt?: Date;
 
-  @Column({ 
-    type: 'varchar', 
-    length: 20, 
-    default: 'pending' 
+  @Column({
+    type: 'varchar',
+    length: 20,
+    default: 'pending',
   })
   @Expose()
   deliveryStatus!: DeliveryStatus;

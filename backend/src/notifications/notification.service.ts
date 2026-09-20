@@ -2,7 +2,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, LessThan } from 'typeorm';
-import { Notification, NotificationType, NotificationChannel } from './notification.entity';
+import {
+  Notification,
+  NotificationType,
+  NotificationChannel,
+} from './notification.entity';
 import { User } from '../user/user.entity';
 import { MailerService } from '../mailer/mailer.service';
 import { UserService } from '../user/user.service';
@@ -27,7 +31,10 @@ export class NotificationService {
   // ============================================================
   // RATE LIMITING CONFIG
   // ============================================================
-  private readonly rateLimits = new Map<string, { count: number; resetAt: Date }>();
+  private readonly rateLimits = new Map<
+    string,
+    { count: number; resetAt: Date }
+  >();
   private readonly rateLimitConfig = {
     [NotificationChannel.EMAIL]: { limit: 50, window: 60 * 60 * 1000 },
     [NotificationChannel.SMS]: { limit: 10, window: 60 * 60 * 1000 },
@@ -68,7 +75,9 @@ export class NotificationService {
   ): Promise<Notification> {
     // ✅ Rate limiting check
     if (!this.checkRateLimit(userId, channel)) {
-      this.logger.warn(`Rate limit exceeded for user ${userId}, channel ${channel}`);
+      this.logger.warn(
+        `Rate limit exceeded for user ${userId}, channel ${channel}`,
+      );
       throw new Error(`Rate limit exceeded for ${channel} notifications`);
     }
 
@@ -89,7 +98,9 @@ export class NotificationService {
 
     // ✅ Deliver with retry mechanism
     this.deliverWithRetry(saved).catch((err) => {
-      this.logger.error(`Failed to deliver notification ${saved.id}: ${err.message}`);
+      this.logger.error(
+        `Failed to deliver notification ${saved.id}: ${err.message}`,
+      );
     });
 
     return saved;
@@ -104,24 +115,24 @@ export class NotificationService {
   ): Promise<void> {
     try {
       await this.deliver(notification);
-      
+
       // ✅ Mark as delivered
       notification.deliveryStatus = 'delivered';
       notification.deliveredAt = new Date();
       notification.deliveryAttempts = attempt + 1;
       await this.notificationRepo.save(notification);
-      
+
       this.logger.log(`Notification ${notification.id} delivered successfully`);
     } catch (error: any) {
       notification.deliveryAttempts = attempt + 1;
-      
+
       if (attempt < this.MAX_RETRY_ATTEMPTS) {
         // ✅ Retry with exponential backoff
         const delay = this.RETRY_DELAYS[attempt] || 10000;
         this.logger.warn(
-          `Notification ${notification.id} failed (attempt ${attempt + 1}/${this.MAX_RETRY_ATTEMPTS}), retrying in ${delay}ms`
+          `Notification ${notification.id} failed (attempt ${attempt + 1}/${this.MAX_RETRY_ATTEMPTS}), retrying in ${delay}ms`,
         );
-        
+
         await this.sleep(delay);
         return this.deliverWithRetry(notification, attempt + 1);
       } else {
@@ -129,20 +140,25 @@ export class NotificationService {
         notification.deliveryStatus = 'failed';
         notification.deliveryError = error.message;
         await this.notificationRepo.save(notification);
-        
-        this.logger.error(`Notification ${notification.id} failed after ${this.MAX_RETRY_ATTEMPTS} attempts`);
+
+        this.logger.error(
+          `Notification ${notification.id} failed after ${this.MAX_RETRY_ATTEMPTS} attempts`,
+        );
       }
     }
   }
 
   private sleep(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   // ============================================================
   // ✅ RATE LIMITING CHECK
   // ============================================================
-  private checkRateLimit(userId: number, channel: NotificationChannel): boolean {
+  private checkRateLimit(
+    userId: number,
+    channel: NotificationChannel,
+  ): boolean {
     const config = this.rateLimitConfig[channel];
     if (!config) return true;
 
@@ -151,7 +167,10 @@ export class NotificationService {
     const current = this.rateLimits.get(key);
 
     if (!current || current.resetAt < now) {
-      this.rateLimits.set(key, { count: 1, resetAt: new Date(now.getTime() + config.window) });
+      this.rateLimits.set(key, {
+        count: 1,
+        resetAt: new Date(now.getTime() + config.window),
+      });
       return true;
     }
 
@@ -201,7 +220,9 @@ export class NotificationService {
         notification.content,
       );
 
-      this.logger.log(`Email sent to ${user.email} for notification ${notification.id}`);
+      this.logger.log(
+        `Email sent to ${user.email} for notification ${notification.id}`,
+      );
     } catch (error: any) {
       this.logger.error(`Failed to send email: ${error.message}`);
       throw error;
@@ -223,13 +244,22 @@ export class NotificationService {
         throw new Error(`User ${notification.userId} has no phone number`);
       }
 
-      if (!this.twilioAccountSid || !this.twilioAuthToken || !this.twilioPhoneNumber) {
-        this.logger.warn(`Twilio not configured – SMS would be sent to ${phoneNumber}`);
+      if (
+        !this.twilioAccountSid ||
+        !this.twilioAuthToken ||
+        !this.twilioPhoneNumber
+      ) {
+        this.logger.warn(
+          `Twilio not configured – SMS would be sent to ${phoneNumber}`,
+        );
         return;
       }
 
       if (twilioClient) {
-        const client = twilioClient(this.twilioAccountSid, this.twilioAuthToken);
+        const client = twilioClient(
+          this.twilioAccountSid,
+          this.twilioAuthToken,
+        );
         await client.messages.create({
           body: notification.content,
           to: phoneNumber,
@@ -377,6 +407,6 @@ export class NotificationService {
     });
 
     this.logger.log(`Cleaned up ${result.affected} old notifications`);
-    return result.affected || 0;  // ✅ Return number, not DeleteResult
+    return result.affected || 0; // ✅ Return number, not DeleteResult
   }
 }

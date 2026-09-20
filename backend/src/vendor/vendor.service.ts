@@ -100,11 +100,13 @@ export class VendorService {
   ) {}
 
   @Trace('vendor.getPublicVendors')
-  async getPublicVendors(filters: {
-    search?: string;
-    sortBy?: string;
-    sortOrder?: 'asc' | 'desc';
-  } = {}): Promise<VendorProfile[]> {
+  async getPublicVendors(
+    filters: {
+      search?: string;
+      sortBy?: string;
+      sortOrder?: 'asc' | 'desc';
+    } = {},
+  ): Promise<VendorProfile[]> {
     const cacheKey = `vendors:public:${JSON.stringify(filters)}`;
     const cached = await this.cacheService.get<VendorProfile[]>(cacheKey);
     if (cached) {
@@ -129,11 +131,19 @@ export class VendorService {
       );
     }
 
-    const allowedSortFields = ['name', 'email', 'createdAt', 'vendorBusinessName', 'id'];
-    const sortField = filters.sortBy && allowedSortFields.includes(filters.sortBy)
-      ? filters.sortBy
-      : 'createdAt';
-    const sortOrder = (filters.sortOrder?.toUpperCase() === 'ASC' ? 'ASC' : 'DESC') as 'ASC' | 'DESC';
+    const allowedSortFields = [
+      'name',
+      'email',
+      'createdAt',
+      'vendorBusinessName',
+      'id',
+    ];
+    const sortField =
+      filters.sortBy && allowedSortFields.includes(filters.sortBy)
+        ? filters.sortBy
+        : 'createdAt';
+    const sortOrder =
+      filters.sortOrder?.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
     query.orderBy(`user.${sortField}`, sortOrder);
 
     const vendors = await query.getMany();
@@ -316,11 +326,11 @@ export class VendorService {
       this.dataSource
         .createQueryBuilder()
         .select([
-          'COUNT(*) as totalVendors',
-          `COUNT(CASE WHEN isVendorApproved = true AND isVerified = true THEN 1 END) as activeVendors`,
-          `COUNT(CASE WHEN isVendorApproved = false AND isVerified = true THEN 1 END) as pendingVendors`,
-          `COUNT(CASE WHEN isVendorRejected = true THEN 1 END) as rejectedVendors`,
-          `COUNT(CASE WHEN isVendorApproved = true AND isVerified = false THEN 1 END) as suspendedVendors`,
+          'COUNT(*) as "totalVendors"',
+          `COUNT(CASE WHEN "user"."isVendorApproved" = true AND "user"."isVerified" = true THEN 1 END) as "activeVendors"`,
+          `COUNT(CASE WHEN "user"."isVendorApproved" = false AND "user"."isVerified" = true THEN 1 END) as "pendingVendors"`,
+          `COUNT(CASE WHEN "user"."isVendorRejected" = true THEN 1 END) as "rejectedVendors"`,
+          `COUNT(CASE WHEN "user"."isVendorApproved" = true AND "user"."isVerified" = false THEN 1 END) as "suspendedVendors"`,
         ])
         .from(User, 'user')
         .where('user.role = :role', { role: UserRole.VENDOR })
@@ -350,10 +360,7 @@ export class VendorService {
 
       this.dataSource
         .createQueryBuilder()
-        .select([
-          'DATE(user.createdAt) as date',
-          'COUNT(*) as count',
-        ])
+        .select(['DATE(user.createdAt) as date', 'COUNT(*) as count'])
         .from(User, 'user')
         .where('user.role = :role', { role: UserRole.VENDOR })
         .groupBy('DATE(user.createdAt)')
@@ -389,10 +396,17 @@ export class VendorService {
     limit: number = 20,
   ): Promise<{ data: any[]; meta: any }> {
     const cacheKey = `vendor:${vendorId}:orders:${status || 'all'}:${page}:${limit}`;
-    const cached = await this.cacheService.get<{ data: any[]; meta: any }>(cacheKey);
-    
+    const cached = await this.cacheService.get<{ data: any[]; meta: any }>(
+      cacheKey,
+    );
+
     // ✅ FIX: Check if cached has the required properties
-    if (cached && typeof cached === 'object' && 'data' in cached && 'meta' in cached) {
+    if (
+      cached &&
+      typeof cached === 'object' &&
+      'data' in cached &&
+      'meta' in cached
+    ) {
       this.metricsService.recordCacheHit('vendor:orders');
       return cached;
     }
@@ -461,10 +475,17 @@ export class VendorService {
     inStock?: boolean,
   ): Promise<{ data: Product[]; meta: any }> {
     const cacheKey = `vendor:${vendorId}:products:${inStock !== undefined ? (inStock ? 'in-stock' : 'out-of-stock') : 'all'}:${page}:${limit}`;
-    const cached = await this.cacheService.get<{ data: Product[]; meta: any }>(cacheKey);
-    
+    const cached = await this.cacheService.get<{ data: Product[]; meta: any }>(
+      cacheKey,
+    );
+
     // ✅ FIX: Check if cached has the required properties
-    if (cached && typeof cached === 'object' && 'data' in cached && 'meta' in cached) {
+    if (
+      cached &&
+      typeof cached === 'object' &&
+      'data' in cached &&
+      'meta' in cached
+    ) {
       this.metricsService.recordCacheHit('vendor:products');
       return cached;
     }
@@ -534,13 +555,16 @@ export class VendorService {
 
   @Trace('vendor.bulkUploadProducts')
   @QueryTimeout(60000)
-  async bulkUploadProducts(vendorId: number, products: any[]): Promise<BulkUploadResult> {
+  async bulkUploadProducts(
+    vendorId: number,
+    products: any[],
+  ): Promise<BulkUploadResult> {
     const MAX_BULK = BULK_LIMITS.PRODUCTS.MAX_BULK_UPLOAD;
 
     if (products.length > MAX_BULK) {
       throw new BadRequestException(
         `Maximum ${MAX_BULK} products can be uploaded at once. ` +
-        `You provided ${products.length}. Please split into smaller batches.`
+          `You provided ${products.length}. Please split into smaller batches.`,
       );
     }
 
@@ -597,12 +621,17 @@ export class VendorService {
     if (productEntities.length > 0) {
       const saved = await this.productRepository.save(productEntities as any);
       result.success = saved.length;
-      result.created = saved.map((p: Product) => ({ id: p.id, title: p.title }));
+      result.created = saved.map((p: Product) => ({
+        id: p.id,
+        title: p.title,
+      }));
 
       for (const p of saved) {
         this.metricsService.recordProductCreation(vendorId);
       }
-      this.logger.log(`Bulk upload: ${result.success} created, ${result.failed} failed`);
+      this.logger.log(
+        `Bulk upload: ${result.success} created, ${result.failed} failed`,
+      );
     }
 
     await this.cacheService.del(`vendor:${vendorId}:products:*`);
@@ -613,13 +642,16 @@ export class VendorService {
 
   @Trace('vendor.bulkDeleteProducts')
   @QueryTimeout(30000)
-  async bulkDeleteProducts(vendorId: number, productIds: number[]): Promise<BulkDeleteResult> {
+  async bulkDeleteProducts(
+    vendorId: number,
+    productIds: number[],
+  ): Promise<BulkDeleteResult> {
     const MAX_BULK = BULK_LIMITS.PRODUCTS.MAX_BULK_DELETE;
 
     if (productIds.length > MAX_BULK) {
       throw new BadRequestException(
         `Maximum ${MAX_BULK} products can be deleted at once. ` +
-        `You provided ${productIds.length}. Please split into smaller batches.`
+          `You provided ${productIds.length}. Please split into smaller batches.`,
       );
     }
 
@@ -642,7 +674,10 @@ export class VendorService {
           where: { id, owner: { id: vendorId } },
         });
         if (!product) {
-          result.failed.push({ id, error: 'Product not found or does not belong to vendor' });
+          result.failed.push({
+            id,
+            error: 'Product not found or does not belong to vendor',
+          });
           continue;
         }
         product.isActive = false;
@@ -651,7 +686,9 @@ export class VendorService {
         await this.cacheService.del(`product:${id}`);
       }
       await queryRunner.commitTransaction();
-      this.logger.log(`Bulk delete: ${result.success.length} deleted, ${result.failed.length} failed`);
+      this.logger.log(
+        `Bulk delete: ${result.success.length} deleted, ${result.failed.length} failed`,
+      );
     } catch (error) {
       await queryRunner.rollbackTransaction();
       throw error;
@@ -677,7 +714,7 @@ export class VendorService {
     if (vendorIds.length > MAX_BULK) {
       throw new BadRequestException(
         `Maximum ${MAX_BULK} vendors can be processed at once. ` +
-        `You provided ${vendorIds.length}. Please split into smaller batches.`
+          `You provided ${vendorIds.length}. Please split into smaller batches.`,
       );
     }
 
@@ -692,7 +729,9 @@ export class VendorService {
 
     const validActions = ['approve', 'reject', 'suspend', 'activate'];
     if (!validActions.includes(action)) {
-      throw new BadRequestException(`Invalid action: ${action}. Allowed: ${validActions.join(', ')}`);
+      throw new BadRequestException(
+        `Invalid action: ${action}. Allowed: ${validActions.join(', ')}`,
+      );
     }
 
     for (const vendorId of vendorIds) {
@@ -707,7 +746,10 @@ export class VendorService {
         switch (action) {
           case 'approve':
             if (vendor.isVendorApproved) {
-              result.failed.push({ id: vendorId, error: 'Vendor already approved' });
+              result.failed.push({
+                id: vendorId,
+                error: 'Vendor already approved',
+              });
               continue;
             }
             vendor.isVendorApproved = true;
@@ -717,7 +759,10 @@ export class VendorService {
 
           case 'reject':
             if (vendor.isVendorRejected) {
-              result.failed.push({ id: vendorId, error: 'Vendor already rejected' });
+              result.failed.push({
+                id: vendorId,
+                error: 'Vendor already rejected',
+              });
               continue;
             }
             vendor.isVendorRejected = true;
@@ -727,7 +772,10 @@ export class VendorService {
 
           case 'suspend':
             if (!vendor.isVendorApproved) {
-              result.failed.push({ id: vendorId, error: 'Vendor already suspended or not approved' });
+              result.failed.push({
+                id: vendorId,
+                error: 'Vendor already suspended or not approved',
+              });
               continue;
             }
             vendor.isVendorApproved = false;
@@ -737,7 +785,10 @@ export class VendorService {
 
           case 'activate':
             if (vendor.isVendorApproved) {
-              result.failed.push({ id: vendorId, error: 'Vendor already active' });
+              result.failed.push({
+                id: vendorId,
+                error: 'Vendor already active',
+              });
               continue;
             }
             vendor.isVendorApproved = true;
@@ -769,7 +820,10 @@ export class VendorService {
 
         this.logger.log(`Vendor ${vendorId} ${action}d`);
       } catch (error: any) {
-        result.failed.push({ id: vendorId, error: error.message || 'Unknown error' });
+        result.failed.push({
+          id: vendorId,
+          error: error.message || 'Unknown error',
+        });
       }
     }
 
@@ -793,13 +847,15 @@ export class VendorService {
 
     if (suspended) {
       if (!vendor.isVendorApproved) {
-        throw new BadRequestException('Vendor is already suspended or not approved');
+        throw new BadRequestException(
+          'Vendor is already suspended or not approved',
+        );
       }
       vendor.isVendorApproved = false;
       vendor.isVendorRejected = false;
       vendor.vendorRejectionReason = reason || 'Suspended by admin';
       this.logger.log(`Vendor ${vendorId} suspended by admin`);
-      
+
       this.eventsService.emitVendorRejected({
         vendorId: vendor.id,
         email: vendor.email,
@@ -815,7 +871,7 @@ export class VendorService {
       vendor.isVendorRejected = false;
       vendor.vendorRejectionReason = null;
       this.logger.log(`Vendor ${vendorId} activated by admin`);
-      
+
       this.eventsService.emitVendorApproved({
         vendorId: vendor.id,
         email: vendor.email,
@@ -845,12 +901,16 @@ export class VendorService {
     });
 
     if (!product) {
-      throw new NotFoundException('Product not found or does not belong to vendor');
+      throw new NotFoundException(
+        'Product not found or does not belong to vendor',
+      );
     }
 
     product.isActive = isActive;
     const updated = await this.productRepository.save(product);
-    this.logger.log(`Product ${productId} status updated to ${isActive} by vendor ${vendorId}`);
+    this.logger.log(
+      `Product ${productId} status updated to ${isActive} by vendor ${vendorId}`,
+    );
 
     await this.cacheService.del(`product:${productId}`);
     await this.cacheService.del(`vendor:${vendorId}:products:*`);
@@ -868,7 +928,9 @@ export class VendorService {
     endDate?: string,
     status?: string,
   ): Promise<{ data: any[]; filename: string; contentType: string }> {
-    const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const start = startDate
+      ? new Date(startDate)
+      : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     const end = endDate ? new Date(endDate) : new Date();
 
     const orders = await this.getOrdersWithDateRange(vendorId, start, end);
@@ -892,7 +954,8 @@ export class VendorService {
 
     const contentTypeMap: Record<string, string> = {
       csv: 'text/csv',
-      excel: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      excel:
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       json: 'application/json',
       pdf: 'application/pdf',
     };
@@ -982,7 +1045,10 @@ export class VendorService {
       .filter((o) => o.status !== 'cancelled')
       .reduce((sum, o) => sum + Number(o.total), 0);
 
-    const growthRate = previousRevenue > 0 ? ((totalRevenue - previousRevenue) / previousRevenue) * 100 : 0;
+    const growthRate =
+      previousRevenue > 0
+        ? ((totalRevenue - previousRevenue) / previousRevenue) * 100
+        : 0;
 
     const salesTrend = AnalyticsUtils.groupByDay(currentOrders);
     const topProducts = await this.getTopProducts(vendorId, 10);
@@ -1020,7 +1086,11 @@ export class VendorService {
       return cached;
     }
 
-    const orders = await this.getOrdersWithDateRange(vendorId, startDate, endDate);
+    const orders = await this.getOrdersWithDateRange(
+      vendorId,
+      startDate,
+      endDate,
+    );
 
     const totalRevenue = orders
       .filter((o) => o.status !== 'cancelled')
@@ -1065,7 +1135,8 @@ export class VendorService {
       orderTrends: AnalyticsUtils.groupByDay(orders),
       statusDistribution: AnalyticsUtils.getStatusDistribution(orders),
       peakHours: AnalyticsUtils.getPeakHours(orders),
-      averageProcessingTime: AnalyticsUtils.calculateAverageProcessingTime(orders),
+      averageProcessingTime:
+        AnalyticsUtils.calculateAverageProcessingTime(orders),
       averageDeliveryTime: AnalyticsUtils.calculateAverageDeliveryTime(orders),
       topCustomers: AnalyticsUtils.getTopCustomers(orders, 10),
     };
@@ -1120,7 +1191,10 @@ export class VendorService {
     };
   }
 
-  private async getTopProducts(vendorId: number, limit: number = 10): Promise<any[]> {
+  private async getTopProducts(
+    vendorId: number,
+    limit: number = 10,
+  ): Promise<any[]> {
     const orderItems = await this.orderItemRepository
       .createQueryBuilder('orderItem')
       .leftJoinAndSelect('orderItem.product', 'product')
@@ -1129,7 +1203,10 @@ export class VendorService {
       .andWhere('order.status != :status', { status: 'cancelled' })
       .getMany();
 
-    const productStats: Record<number, { id: number; title: string; sold: number; revenue: number }> = {};
+    const productStats: Record<
+      number,
+      { id: number; title: string; sold: number; revenue: number }
+    > = {};
 
     for (const item of orderItems) {
       const key = item.product.id;

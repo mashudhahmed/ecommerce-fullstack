@@ -3,8 +3,10 @@
   "compilerOptions": {
     "module": "commonjs",
     "moduleResolution": "node",
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
     "types": ["jest", "node"]
   },
-  "include": ["src/**/*.spec.ts", "test/**/*.ts"],
+  "include": ["src/**/*", "test/**/*"],
   "exclude": ["node_modules", "dist"]
 }

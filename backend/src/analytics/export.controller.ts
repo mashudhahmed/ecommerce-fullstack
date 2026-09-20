@@ -45,7 +45,11 @@ export class ExportController {
   @Get('users')
   @ApiOperation({ summary: 'Export users data' })
   @ApiResponse({ status: 200, description: 'Users exported successfully' })
-  @ApiQuery({ name: 'format', enum: ['excel', 'pdf', 'csv', 'json'], required: false })
+  @ApiQuery({
+    name: 'format',
+    enum: ['excel', 'pdf', 'csv', 'json'],
+    required: false,
+  })
   @ApiQuery({ name: 'role', enum: UserRole, required: false })
   @ApiQuery({ name: 'isVerified', type: Boolean, required: false })
   @ApiQuery({ name: 'search', type: String, required: false })
@@ -68,7 +72,8 @@ export class ExportController {
       } else {
         const filters: any = {};
         if (role) filters.role = role;
-        if (isVerified !== undefined) filters.isVerified = isVerified === 'true';
+        if (isVerified !== undefined)
+          filters.isVerified = isVerified === 'true';
         users = await this.userService.findAll(filters);
       }
 
@@ -103,7 +108,9 @@ export class ExportController {
       await this.exportService.downloadFile(result, res);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown error';
-      throw new InternalServerErrorException(`Failed to export users: ${message}`);
+      throw new InternalServerErrorException(
+        `Failed to export users: ${message}`,
+      );
     }
   }
 
@@ -114,7 +121,11 @@ export class ExportController {
   @Get('orders')
   @ApiOperation({ summary: 'Export orders data' })
   @ApiResponse({ status: 200, description: 'Orders exported successfully' })
-  @ApiQuery({ name: 'format', enum: ['excel', 'pdf', 'csv', 'json'], required: false })
+  @ApiQuery({
+    name: 'format',
+    enum: ['excel', 'pdf', 'csv', 'json'],
+    required: false,
+  })
   @ApiQuery({ name: 'status', type: String, required: false })
   @ApiQuery({ name: 'startDate', type: String, required: false })
   @ApiQuery({ name: 'endDate', type: String, required: false })
@@ -174,7 +185,9 @@ export class ExportController {
       await this.exportService.downloadFile(result, res);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown error';
-      throw new InternalServerErrorException(`Failed to export orders: ${message}`);
+      throw new InternalServerErrorException(
+        `Failed to export orders: ${message}`,
+      );
     }
   }
 
@@ -185,7 +198,11 @@ export class ExportController {
   @Get('products')
   @ApiOperation({ summary: 'Export products data' })
   @ApiResponse({ status: 200, description: 'Products exported successfully' })
-  @ApiQuery({ name: 'format', enum: ['excel', 'pdf', 'csv', 'json'], required: false })
+  @ApiQuery({
+    name: 'format',
+    enum: ['excel', 'pdf', 'csv', 'json'],
+    required: false,
+  })
   @ApiQuery({ name: 'categoryId', type: Number, required: false })
   @ApiQuery({ name: 'inStock', type: Boolean, required: false })
   async exportProducts(
@@ -246,7 +263,9 @@ export class ExportController {
       await this.exportService.downloadFile(result, res);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown error';
-      throw new InternalServerErrorException(`Failed to export products: ${message}`);
+      throw new InternalServerErrorException(
+        `Failed to export products: ${message}`,
+      );
     }
   }
 
@@ -257,7 +276,11 @@ export class ExportController {
   @Get('analytics')
   @ApiOperation({ summary: 'Export analytics report' })
   @ApiResponse({ status: 200, description: 'Analytics exported successfully' })
-  @ApiQuery({ name: 'format', enum: ['excel', 'pdf', 'csv', 'json'], required: false })
+  @ApiQuery({
+    name: 'format',
+    enum: ['excel', 'pdf', 'csv', 'json'],
+    required: false,
+  })
   @ApiQuery({ name: 'startDate', type: String, required: false })
   @ApiQuery({ name: 'endDate', type: String, required: false })
   async exportAnalytics(
@@ -288,7 +311,8 @@ export class ExportController {
       // Calculate analytics
       const totalOrders = orders.length;
       const totalRevenue = orders.reduce((sum, o) => sum + Number(o.total), 0);
-      const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+      const averageOrderValue =
+        totalOrders > 0 ? totalRevenue / totalOrders : 0;
 
       const statusDistribution = orders.reduce(
         (acc, o) => {
@@ -302,7 +326,10 @@ export class ExportController {
       const exportData = [
         { Metric: 'Total Orders', Value: totalOrders },
         { Metric: 'Total Revenue', Value: `$${totalRevenue.toFixed(2)}` },
-        { Metric: 'Average Order Value', Value: `$${averageOrderValue.toFixed(2)}` },
+        {
+          Metric: 'Average Order Value',
+          Value: `$${averageOrderValue.toFixed(2)}`,
+        },
         ...Object.entries(statusDistribution).map(([status, count]) => ({
           Metric: `Orders - ${status}`,
           Value: count,

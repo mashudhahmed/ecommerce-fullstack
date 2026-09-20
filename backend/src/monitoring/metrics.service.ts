@@ -146,10 +146,18 @@ export class MetricsService implements OnModuleInit {
   }
 
   // HTTP metrics
-  recordHttpRequest(method: string, route: string, statusCode: number, duration: number): void {
+  recordHttpRequest(
+    method: string,
+    route: string,
+    statusCode: number,
+    duration: number,
+  ): void {
     if (!this.httpRequestDuration) return;
     const status = String(statusCode);
-    this.httpRequestDuration.observe({ method, route, status_code: status }, duration);
+    this.httpRequestDuration.observe(
+      { method, route, status_code: status },
+      duration,
+    );
     this.httpRequestTotal.inc({ method, route, status_code: status });
     if (statusCode >= 400) {
       this.httpRequestErrors.inc({ method, route, status_code: status });

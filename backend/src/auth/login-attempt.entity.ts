@@ -1,5 +1,11 @@
 // src/auth/login-attempt.entity.ts
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, Index } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  Index,
+} from 'typeorm';
 
 @Entity('login_attempts')
 @Index(['email', 'ipAddress'])

@@ -14,9 +14,9 @@ import { MonitoringModule } from '../monitoring/monitoring.module';
     TypeOrmModule.forFeature([Notification, User]),
     UserModule,
     MailerModule,
-    MonitoringModule
+    MonitoringModule,
   ],
-  controllers: [NotificationsController],  // ✅ Controller registered here
+  controllers: [NotificationsController], // ✅ Controller registered here
   providers: [NotificationService],
   exports: [NotificationService],
 })

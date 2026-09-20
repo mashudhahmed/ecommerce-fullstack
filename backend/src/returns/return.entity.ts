@@ -1,5 +1,12 @@
 // src/returns/return.entity.ts
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  CreateDateColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 import { Expose } from 'class-transformer';
 import { Order } from '../orders/order.entity';
 import { User } from '../user/user.entity';

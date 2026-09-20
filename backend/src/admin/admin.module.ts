@@ -13,7 +13,7 @@ import { MonitoringModule } from '../monitoring/monitoring.module';
     OrdersModule,
     UserModule,
     VendorModule,
-    MonitoringModule
+    MonitoringModule,
   ],
   controllers: [AdminController],
 })

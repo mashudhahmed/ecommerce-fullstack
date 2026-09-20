@@ -23,8 +23,11 @@ export class LoggingMiddleware implements NestMiddleware {
     const originalSend = res.send;
     let responseBody: any;
 
-    res.send = function(data: any): Response {
+    res.send = function (data: any): Response {
       responseBody = data;
+      if (this.headersSent) {
+        return this;
+      }
       return originalSend.call(this, data);
     };
 

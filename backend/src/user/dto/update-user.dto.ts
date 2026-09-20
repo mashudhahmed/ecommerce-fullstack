@@ -1,5 +1,13 @@
 // src/user/dto/update-user.dto.ts - Enhanced
-import { IsOptional, IsString, MinLength, MaxLength, IsEmail, Matches, IsUrl } from 'class-validator';
+import {
+  IsOptional,
+  IsString,
+  MinLength,
+  MaxLength,
+  IsEmail,
+  Matches,
+  IsUrl,
+} from 'class-validator';
 
 export class UpdateUserDto {
   @IsOptional()
@@ -18,7 +26,8 @@ export class UpdateUserDto {
   @MinLength(8)
   @MaxLength(72)
   @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])/, {
-    message: 'Password must contain uppercase, lowercase, number, and special character',
+    message:
+      'Password must contain uppercase, lowercase, number, and special character',
   })
   password?: string;
 

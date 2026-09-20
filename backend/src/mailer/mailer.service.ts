@@ -11,7 +11,9 @@ type TemplateFunction = HandlebarsTemplateDelegate;
 
 @Injectable()
 export class MailerService implements OnModuleInit {
-  private transporter: nodemailer.Transporter;
+  private transporter: nodemailer.Transporter | null = null;
+  private isSmtpConfigured = false;
+  private isSmtpVerified = false;
   private readonly logger = new Logger(MailerService.name);
   private readonly fromName: string;
   private readonly fromEmail: string;
@@ -28,7 +30,8 @@ export class MailerService implements OnModuleInit {
   constructor(private configService: ConfigService) {
     this.fromName = this.configService.get('email.fromName') || 'SnapCart';
     this.fromEmail = this.configService.get('email.user') || '';
-    this.frontendUrl = this.configService.get('app.frontendUrl') || 'http://localhost:3000';
+    this.frontendUrl =
+      this.configService.get('app.frontendUrl') || 'http://localhost:3000';
     this.adminUrl = `${this.frontendUrl}/admin`;
 
     // ✅ Production-ready: Initialize transporter with proper error handling
@@ -39,14 +42,33 @@ export class MailerService implements OnModuleInit {
   }
 
   private initializeTransporter(): void {
+    const host = this.configService.get<string>('email.host');
+    const user = this.configService.get<string>('email.user');
+    const pass = this.configService.get<string>('email.pass');
+
+    // ✅ Detect placeholder or missing credentials
+    if (
+      !host ||
+      !user ||
+      !pass ||
+      pass === 'app_password_placeholder' ||
+      pass.includes('placeholder')
+    ) {
+      this.isSmtpConfigured = false;
+      this.logger.warn(
+        '⚠️ SMTP credentials not fully configured (placeholder password detected). Mock email delivery enabled for development: all emails and verification codes will be logged to this console.',
+      );
+      return;
+    }
+
     try {
       this.transporter = nodemailer.createTransport({
-        host: this.configService.get('email.host'),
+        host,
         port: this.configService.get('email.port'),
         secure: this.configService.get('email.secure') || false,
         auth: {
-          user: this.fromEmail,
-          pass: this.configService.get('email.pass'),
+          user,
+          pass,
         },
         tls: {
           rejectUnauthorized: false,
@@ -56,25 +78,36 @@ export class MailerService implements OnModuleInit {
         greetingTimeout: 5000,
         socketTimeout: 10000,
       });
+      this.isSmtpConfigured = true;
 
       // ✅ Verify SMTP connection on startup
       this.verifyConnection();
     } catch (error) {
+      this.isSmtpConfigured = false;
       this.logger.error('❌ Failed to initialize email transporter:', error);
     }
   }
 
   private async verifyConnection(): Promise<void> {
+    if (!this.transporter) return;
     try {
       await this.transporter.verify();
+      this.isSmtpVerified = true;
       this.logger.log('✅ SMTP connection verified successfully');
     } catch (error) {
+      this.isSmtpVerified = false;
       const msg = error instanceof Error ? error.message : String(error);
-      this.logger.warn('⚠️ SMTP connection verification failed. Email sending may not work:', msg);
+      this.logger.warn(
+        `⚠️ SMTP connection verification failed: ${msg}. Mock email mode enabled for development.`,
+      );
     }
   }
 
-  private resolveTemplatePaths(): { emails: string; partials: string; layouts: string } {
+  private resolveTemplatePaths(): {
+    emails: string;
+    partials: string;
+    layouts: string;
+  } {
     // ✅ Try multiple possible paths (in order of priority)
     const possiblePaths = [
       // 1. From src directory (development)
@@ -100,7 +133,9 @@ export class MailerService implements OnModuleInit {
     if (!templatesPath) {
       // ✅ Use fallback path and log warning
       templatesPath = path.join(__dirname, 'templates');
-      this.logger.warn(`⚠️ Templates not found in any expected location. Using fallback: ${templatesPath}`);
+      this.logger.warn(
+        `⚠️ Templates not found in any expected location. Using fallback: ${templatesPath}`,
+      );
     }
 
     return {
@@ -116,12 +151,16 @@ export class MailerService implements OnModuleInit {
 
   private async loadTemplates(): Promise<void> {
     try {
-      this.logger.log(`📁 Loading email templates from: ${this.templatePaths.emails}`);
+      this.logger.log(
+        `📁 Loading email templates from: ${this.templatePaths.emails}`,
+      );
 
       // ✅ Check if directories exist
       const dirsExist = this.ensureDirectoriesExist();
       if (!dirsExist) {
-        this.logger.error('❌ Template directories are missing. Email templates will not work.');
+        this.logger.error(
+          '❌ Template directories are missing. Email templates will not work.',
+        );
         return;
       }
 
@@ -131,7 +170,9 @@ export class MailerService implements OnModuleInit {
       // ✅ Load layout
       const layoutTemplate = await this.loadLayout();
       if (!layoutTemplate) {
-        this.logger.error('❌ Layout template not found. Email templates will not work.');
+        this.logger.error(
+          '❌ Layout template not found. Email templates will not work.',
+        );
         return;
       }
 
@@ -139,11 +180,12 @@ export class MailerService implements OnModuleInit {
       await this.loadEmailTemplates(layoutTemplate);
 
       this.templatesLoaded = true;
-      this.logger.log(`✅ Loaded ${this.templates.size} email templates successfully`);
+      this.logger.log(
+        `✅ Loaded ${this.templates.size} email templates successfully`,
+      );
 
       // ✅ Log available templates for debugging
       this.logTemplateNames();
-
     } catch (error) {
       this.logger.error('❌ Failed to load email templates:', error);
       this.templatesLoaded = false;
@@ -166,7 +208,10 @@ export class MailerService implements OnModuleInit {
           fs.mkdirSync(dir.path, { recursive: true });
           this.logger.log(`✅ Created ${dir.name} directory: ${dir.path}`);
         } catch (error) {
-          this.logger.error(`❌ Failed to create ${dir.name} directory:`, error);
+          this.logger.error(
+            `❌ Failed to create ${dir.name} directory:`,
+            error,
+          );
           allExist = false;
         }
       }
@@ -188,7 +233,7 @@ export class MailerService implements OnModuleInit {
           const name = path.basename(file, '.hbs');
           const content = fs.readFileSync(
             path.join(this.templatePaths.partials, file),
-            'utf-8'
+            'utf-8',
           );
           handlebars.registerPartial(name, content);
           registered++;
@@ -207,7 +252,7 @@ export class MailerService implements OnModuleInit {
   private async loadLayout(): Promise<TemplateFunction | null> {
     try {
       const layoutPath = path.join(this.templatePaths.layouts, 'main.hbs');
-      
+
       if (!fs.existsSync(layoutPath)) {
         this.logger.warn(`⚠️ Layout file not found: ${layoutPath}`);
         return null;
@@ -221,7 +266,9 @@ export class MailerService implements OnModuleInit {
     }
   }
 
-  private async loadEmailTemplates(layoutTemplate: TemplateFunction): Promise<void> {
+  private async loadEmailTemplates(
+    layoutTemplate: TemplateFunction,
+  ): Promise<void> {
     try {
       const files = fs.readdirSync(this.templatePaths.emails);
 
@@ -261,7 +308,6 @@ export class MailerService implements OnModuleInit {
       }
 
       this.logger.log(`✅ Loaded ${loaded} email templates`);
-
     } catch (error) {
       this.logger.error('❌ Failed to load email templates:', error);
     }
@@ -281,9 +327,11 @@ export class MailerService implements OnModuleInit {
     if (!this.templatesLoaded) {
       this.logger.warn(`⚠️ Templates not loaded, attempting to reload...`);
       this.loadTemplates();
-      
+
       if (!this.templatesLoaded) {
-        throw new Error('Email templates failed to load. Please check template files.');
+        throw new Error(
+          'Email templates failed to load. Please check template files.',
+        );
       }
     }
 
@@ -291,11 +339,13 @@ export class MailerService implements OnModuleInit {
     if (!template) {
       const available = Array.from(this.templates.keys());
       this.logger.error(`❌ Template "${templateName}" not found`);
-      this.logger.log(`📋 Available templates: ${available.join(', ') || 'None'}`);
-      
+      this.logger.log(
+        `📋 Available templates: ${available.join(', ') || 'None'}`,
+      );
+
       // ✅ Try to load templates again (in case they were added after startup)
       this.loadTemplates();
-      
+
       // ✅ Check again
       const retryTemplate = this.templates.get(templateName);
       if (retryTemplate) {
@@ -309,7 +359,9 @@ export class MailerService implements OnModuleInit {
       }
 
       // ✅ Return fallback HTML if template not found
-      this.logger.error(`❌ Template "${templateName}" still not found after retry`);
+      this.logger.error(
+        `❌ Template "${templateName}" still not found after retry`,
+      );
       return this.getFallbackTemplate(templateName, data);
     }
 
@@ -321,7 +373,10 @@ export class MailerService implements OnModuleInit {
         adminUrl: this.adminUrl,
       });
     } catch (error) {
-      this.logger.error(`❌ Error rendering template "${templateName}":`, error);
+      this.logger.error(
+        `❌ Error rendering template "${templateName}":`,
+        error,
+      );
       return this.getFallbackTemplate(templateName, data);
     }
   }
@@ -352,10 +407,10 @@ export class MailerService implements OnModuleInit {
 
   private getFallbackMessage(templateName: string, data: any): string {
     const messages: Record<string, string> = {
-      'verification': `Your verification code is: <strong>${data.code}</strong>`,
+      verification: `Your verification code is: <strong>${data.code}</strong>`,
       'password-reset': `Your password reset code is: <strong>${data.code}</strong>`,
       'two-factor-code': `Your 2FA verification code is: <strong>${data.code}</strong>`,
-      'welcome': `Welcome to SnapCart! We're excited to have you.`,
+      welcome: `Welcome to SnapCart! We're excited to have you.`,
       'order-confirmation': `Your order #${data.orderId} has been confirmed. Total: $${data.total}`,
       'order-status-update': `Your order #${data.orderId} status is now: ${data.status}`,
       'vendor-approval': `Your vendor account has been approved!`,
@@ -366,7 +421,10 @@ export class MailerService implements OnModuleInit {
       'two-factor-backup-codes': `Your backup codes have been generated.`,
       'vendor-registration': `A new vendor has registered.`,
     };
-    return messages[templateName] || `Email template "${templateName}" is not available.`;
+    return (
+      messages[templateName] ||
+      `Email template "${templateName}" is not available.`
+    );
   }
 
   // ============================================================
@@ -374,17 +432,34 @@ export class MailerService implements OnModuleInit {
   // ============================================================
 
   async sendTwoFactorCode(to: string, code: string, userName: string) {
-    const html = this.renderTemplate('two-factor-code', { name: userName, code });
+    const html = this.renderTemplate('two-factor-code', {
+      name: userName,
+      code,
+    });
     return this.sendMail(to, '🔐 Your 2FA Verification Code', html);
   }
 
-  async sendTwoFactorBackupCodes(to: string, backupCodes: string[], userName: string) {
-    const html = this.renderTemplate('two-factor-backup-codes', { name: userName, codes: backupCodes });
+  async sendTwoFactorBackupCodes(
+    to: string,
+    backupCodes: string[],
+    userName: string,
+  ) {
+    const html = this.renderTemplate('two-factor-backup-codes', {
+      name: userName,
+      codes: backupCodes,
+    });
     return this.sendMail(to, '🔑 Your 2FA Backup Codes', html);
   }
 
-  async sendVerificationEmail(to: string, verificationCode: string, userName: string) {
-    const html = this.renderTemplate('verification', { name: userName, code: verificationCode });
+  async sendVerificationEmail(
+    to: string,
+    verificationCode: string,
+    userName: string,
+  ) {
+    const html = this.renderTemplate('verification', {
+      name: userName,
+      code: verificationCode,
+    });
     return this.sendMail(to, 'Verify Your Email Address', html);
   }
 
@@ -394,11 +469,19 @@ export class MailerService implements OnModuleInit {
   }
 
   async sendPasswordResetCode(to: string, resetCode: string, userName: string) {
-    const html = this.renderTemplate('password-reset', { name: userName, code: resetCode });
+    const html = this.renderTemplate('password-reset', {
+      name: userName,
+      code: resetCode,
+    });
     return this.sendMail(to, 'Password Reset Code', html);
   }
 
-  async sendLoginNotification(to: string, userName: string, ipAddress?: string, userAgent?: string) {
+  async sendLoginNotification(
+    to: string,
+    userName: string,
+    ipAddress?: string,
+    userAgent?: string,
+  ) {
     const html = this.renderTemplate('login-notification', {
       name: userName,
       loginTime: new Date().toLocaleString(),
@@ -431,14 +514,19 @@ export class MailerService implements OnModuleInit {
       },
     });
 
-    const adminEmails = this.configService.get('email.adminEmails')?.split(',') || [];
+    const adminEmails =
+      this.configService.get('email.adminEmails')?.split(',') || [];
     if (adminEmails.length === 0) {
       this.logger.warn('No admin emails configured for vendor notifications');
       return;
     }
 
     for (const adminEmail of adminEmails) {
-      await this.sendMail(adminEmail.trim(), 'New Vendor Registration - Pending Approval', html);
+      await this.sendMail(
+        adminEmail.trim(),
+        'New Vendor Registration - Pending Approval',
+        html,
+      );
     }
   }
 
@@ -447,8 +535,15 @@ export class MailerService implements OnModuleInit {
     return this.sendMail(to, 'Vendor Account Approved!', html);
   }
 
-  async sendVendorRejectionEmail(to: string, userName: string, reason?: string) {
-    const html = this.renderTemplate('vendor-rejection', { name: userName, reason });
+  async sendVendorRejectionEmail(
+    to: string,
+    userName: string,
+    reason?: string,
+  ) {
+    const html = this.renderTemplate('vendor-rejection', {
+      name: userName,
+      reason,
+    });
     return this.sendMail(to, 'Vendor Account Update', html);
   }
 
@@ -487,6 +582,32 @@ export class MailerService implements OnModuleInit {
       throw new Error('Invalid email parameters');
     }
 
+    const isDev = (process.env.NODE_ENV || 'development') !== 'production';
+
+    // ✅ Development Mock Delivery: when SMTP is not configured or unverified
+    if (!this.isSmtpConfigured || !this.isSmtpVerified || !this.transporter) {
+      const codeMatch =
+        html.match(/(?:code|verification code|reset code|code is:?)\s*<\/?[^>]*>\s*([A-Za-z0-9]{4,8})/i) ||
+        html.match(/<strong>([A-Za-z0-9]{6})<\/strong>/i) ||
+        html.match(/>([0-9]{6})</);
+      const extractedCode = codeMatch ? codeMatch[1] : null;
+
+      this.logger.log(
+        `📧 [DEV MOCK EMAIL] To: ${to} | Subject: "${subject}"` +
+          (extractedCode ? ` | Security Code: [ ${extractedCode} ]` : ''),
+      );
+
+      if (isDev) {
+        return {
+          messageId: `mock-dev-${Date.now()}@snapcart.local`,
+          accepted: [to],
+          rejected: [],
+          response: '250 Mock email accepted for development',
+          mock: true,
+        };
+      }
+    }
+
     try {
       const info = await this.transporter.sendMail({
         from: `"${this.fromName}" <${this.fromEmail}>`,
@@ -497,8 +618,23 @@ export class MailerService implements OnModuleInit {
       this.logger.log(`📧 Email sent to ${to}: ${subject}`);
       return info;
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
       this.logger.error(`❌ Failed to send email to ${to}: ${errorMessage}`);
+
+      if (isDev) {
+        this.logger.warn(
+          `⚠️ SMTP delivery failed, falling back to mock delivery for: ${to}`,
+        );
+        return {
+          messageId: `mock-fallback-${Date.now()}@snapcart.local`,
+          accepted: [to],
+          rejected: [],
+          response: '250 Fallback mock email accepted',
+          mock: true,
+        };
+      }
+
       throw error;
     }
   }

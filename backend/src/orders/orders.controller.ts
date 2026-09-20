@@ -12,14 +12,14 @@ import {
   HttpCode,
   HttpStatus,
   ForbiddenException,
-  Headers,                              // ✅ Added
+  Headers, // ✅ Added
 } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
   ApiResponse,
   ApiBearerAuth,
-  ApiHeader,                            // ✅ Added
+  ApiHeader, // ✅ Added
 } from '@nestjs/swagger';
 import { OrdersService } from './orders.service';
 import { CreateOrderDto } from './dto/create-order.dto';
@@ -28,7 +28,7 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { OrderStatus } from './order.entity';
 import { UserRole } from '../user/user.entity';
-import { UserRateLimitGuard } from '../common/guards/user-rate-limit.guard';   // ✅ Added
+import { UserRateLimitGuard } from '../common/guards/user-rate-limit.guard'; // ✅ Added
 
 @ApiTags('Orders')
 @Controller('orders')
@@ -47,12 +47,12 @@ export class OrdersController {
     required: false,
     example: '550e8400-e29b-41d4-a716-446655440000',
   })
-  @UseGuards(JwtAuthGuard, UserRateLimitGuard)   // ✅ Rate limiting added
+  @UseGuards(JwtAuthGuard, UserRateLimitGuard) // ✅ Rate limiting added
   @Post()
   async create(
     @Request() req: { user: { id: number } },
     @Body() createOrderDto: CreateOrderDto,
-    @Headers('idempotency-key') idempotencyKey?: string,   // ✅ Added
+    @Headers('idempotency-key') idempotencyKey?: string, // ✅ Added
   ) {
     if (idempotencyKey) {
       return this.ordersService.createWithIdempotency(
@@ -81,7 +81,10 @@ export class OrdersController {
   // ============================================================
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get current user order summary' })
-  @ApiResponse({ status: 200, description: 'Order summary retrieved successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Order summary retrieved successfully',
+  })
   @UseGuards(JwtAuthGuard)
   @Get('my/summary')
   async getMyOrderSummary(@Request() req: { user: { id: number } }) {
@@ -93,11 +96,16 @@ export class OrdersController {
   // ============================================================
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get vendor orders' })
-  @ApiResponse({ status: 200, description: 'Vendor orders retrieved successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Vendor orders retrieved successfully',
+  })
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.VENDOR, UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Get('vendor')
-  async getVendorOrders(@Request() req: { user: { id: number; role: UserRole } }) {
+  async getVendorOrders(
+    @Request() req: { user: { id: number; role: UserRole } },
+  ) {
     // Only vendors can see their orders, admins can see all vendor orders
     if (req.user.role === UserRole.VENDOR) {
       return this.ordersService.findByVendor(req.user.id);
@@ -111,11 +119,16 @@ export class OrdersController {
   // ============================================================
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get vendor order summary' })
-  @ApiResponse({ status: 200, description: 'Vendor order summary retrieved successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Vendor order summary retrieved successfully',
+  })
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.VENDOR, UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Get('vendor/summary')
-  async getVendorOrderSummary(@Request() req: { user: { id: number; role: UserRole } }) {
+  async getVendorOrderSummary(
+    @Request() req: { user: { id: number; role: UserRole } },
+  ) {
     if (req.user.role === UserRole.VENDOR) {
       return this.ordersService.getVendorOrderSummary(req.user.id);
     }
@@ -127,7 +140,10 @@ export class OrdersController {
   // ============================================================
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get all orders (Admin only)' })
-  @ApiResponse({ status: 200, description: 'All orders retrieved successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'All orders retrieved successfully',
+  })
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Get()
@@ -140,7 +156,10 @@ export class OrdersController {
   // ============================================================
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get admin order statistics' })
-  @ApiResponse({ status: 200, description: 'Admin stats retrieved successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Admin stats retrieved successfully',
+  })
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Get('admin/stats')
@@ -164,7 +183,9 @@ export class OrdersController {
     const order = await this.ordersService.findOne(id);
 
     // Check if user can view this order
-    const isAdmin = [UserRole.ADMIN, UserRole.SUPER_ADMIN].includes(req.user.role);
+    const isAdmin = [UserRole.ADMIN, UserRole.SUPER_ADMIN].includes(
+      req.user.role,
+    );
     const isOwner = order.user.id === req.user.id;
 
     // Check if user is vendor and order contains their products
@@ -176,7 +197,9 @@ export class OrdersController {
     }
 
     if (!isAdmin && !isOwner && !isVendorWithProducts) {
-      throw new ForbiddenException('You do not have permission to view this order');
+      throw new ForbiddenException(
+        'You do not have permission to view this order',
+      );
     }
 
     // If vendor, filter items to only show their products
@@ -194,7 +217,10 @@ export class OrdersController {
   // ============================================================
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update order status (Admin only)' })
-  @ApiResponse({ status: 200, description: 'Order status updated successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Order status updated successfully',
+  })
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Patch(':id/status')
@@ -212,8 +238,14 @@ export class OrdersController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Cancel an order' })
   @ApiResponse({ status: 200, description: 'Order cancelled successfully' })
-  @ApiResponse({ status: 403, description: 'Forbidden - Cannot cancel this order' })
-  @ApiResponse({ status: 400, description: 'Bad request - Order cannot be cancelled' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Cannot cancel this order',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request - Order cannot be cancelled',
+  })
   @UseGuards(JwtAuthGuard)
   @Patch(':id/cancel')
   @HttpCode(HttpStatus.OK)
@@ -229,7 +261,10 @@ export class OrdersController {
   // ============================================================
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update order status for vendor products' })
-  @ApiResponse({ status: 200, description: 'Order status updated successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Order status updated successfully',
+  })
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.VENDOR, UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Patch(':id/vendor-status')
@@ -240,14 +275,18 @@ export class OrdersController {
   ) {
     // Check if vendor can update this order
     const order = await this.ordersService.findOne(id);
-    const isAdmin = [UserRole.ADMIN, UserRole.SUPER_ADMIN].includes(req.user.role);
+    const isAdmin = [UserRole.ADMIN, UserRole.SUPER_ADMIN].includes(
+      req.user.role,
+    );
 
     if (!isAdmin) {
       const hasVendorProducts = order.items.some(
         (item) => item.product.owner?.id === req.user.id,
       );
       if (!hasVendorProducts) {
-        throw new ForbiddenException('This order does not contain your products');
+        throw new ForbiddenException(
+          'This order does not contain your products',
+        );
       }
     }
 
@@ -266,5 +305,23 @@ export class OrdersController {
     }
 
     return this.ordersService.updateStatus(id, status, req.user.id);
+  }
+
+  // ============================================================
+  // GET ORDER TIMELINE (Authenticated User - Owner, Vendor, or Admin)
+  // ============================================================
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get timeline for an order' })
+  @ApiResponse({
+    status: 200,
+    description: 'Order timeline retrieved successfully',
+  })
+  @UseGuards(JwtAuthGuard)
+  @Get(':id/timeline')
+  async getOrderTimeline(
+    @Param('id', ParseIntPipe) id: number,
+    @Request() req: { user: { id: number; role: UserRole } },
+  ) {
+    return this.ordersService.getOrderTimeline(id, req.user.id, req.user.role);
   }
 }

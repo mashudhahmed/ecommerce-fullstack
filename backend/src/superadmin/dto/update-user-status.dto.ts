@@ -3,9 +3,9 @@ import { IsBoolean, IsNotEmpty } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class UpdateUserStatusDto {
-  @ApiProperty({ 
+  @ApiProperty({
     example: true,
-    description: 'Set to true to verify user, false to unverify'
+    description: 'Set to true to verify user, false to unverify',
   })
   @IsBoolean()
   @IsNotEmpty()

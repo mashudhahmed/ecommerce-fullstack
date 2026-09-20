@@ -8,10 +8,11 @@ import { OrdersController } from './orders.controller';
 import { Product } from '../products/products.entity';
 import { User } from '../user/user.entity';
 import { MailerModule } from '../mailer/mailer.module';
+import { OrderTimeline } from './order-timeline.entity';
 import { IdempotencyKey } from './idempotency-key.entity';
 import { IdempotencyService } from './idempotency.service';
 import { EventsModule } from '../events/events.module';
-import { UserRateLimit } from '../common/entities/user-rate-limit.entity';   // ✅ Import the entity
+import { UserRateLimit } from '../common/entities/user-rate-limit.entity'; // ✅ Import the entity
 import { MonitoringModule } from '../monitoring/monitoring.module';
 
 @Module({
@@ -19,12 +20,13 @@ import { MonitoringModule } from '../monitoring/monitoring.module';
     TypeOrmModule.forFeature([
       Order,
       OrderItem,
+      OrderTimeline,
       Product,
       User,
       IdempotencyKey,
       UserRateLimit,
-      MonitoringModule
     ]),
+    MonitoringModule,
     MailerModule,
     EventsModule,
   ],

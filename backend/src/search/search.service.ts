@@ -20,7 +20,8 @@ export class SearchService implements OnApplicationBootstrap {
     @InjectRepository(Product)
     private readonly productRepository: Repository<Product>,
   ) {
-    const node = this.configService.get('elasticsearch.node') || 'http://localhost:9200';
+    const node =
+      this.configService.get('elasticsearch.node') || 'http://localhost:9200';
     this.client = new Client({
       node,
       requestTimeout: 3000, // fail fast instead of hanging on driver default timeout
@@ -49,16 +50,18 @@ export class SearchService implements OnApplicationBootstrap {
     this.indexingInProgress = true;
 
     try {
+      await this.client.ping();
       await this.createIndex();
       await this.indexAllProducts();
       this.isHealthy = true;
       this.indexingInProgress = false;
-      this.logger.log('✅ Search index ready');
-    } catch (err) {
+      this.logger.log('✅ ElasticSearch index ready and products synchronized');
+    } catch (err: any) {
       this.isHealthy = false;
       this.indexingInProgress = false;
-      this.logger.error('❌ Search indexing failed, retrying in 30s', err);
-      setTimeout(() => this.initializeSearchIndex(), 30_000);
+      this.logger.warn(
+        `⚠️ ElasticSearch is unavailable (${err?.message || 'ConnectionError'}). Seamlessly enabled PostgreSQL database fallback for all search queries.`,
+      );
     }
   }
 
@@ -152,12 +155,16 @@ export class SearchService implements OnApplicationBootstrap {
 
     for (let i = 0; i < products.length; i += CONCURRENCY) {
       const batch = products.slice(i, i + CONCURRENCY);
-      const results = await Promise.allSettled(batch.map((p) => this.indexProduct(p)));
+      const results = await Promise.allSettled(
+        batch.map((p) => this.indexProduct(p)),
+      );
       failedCount += results.filter((r) => r.status === 'rejected').length;
     }
 
     if (failedCount > 0) {
-      throw new Error(`${failedCount}/${products.length} products failed to index`);
+      throw new Error(
+        `${failedCount}/${products.length} products failed to index`,
+      );
     }
 
     this.logger.log('All products indexed successfully');
@@ -167,6 +174,7 @@ export class SearchService implements OnApplicationBootstrap {
    * Index a single product
    */
   async indexProduct(product: Product): Promise<void> {
+    if (!this.isHealthy) return;
     const index = this.configService.get('elasticsearch.index') || 'products';
 
     try {
@@ -210,6 +218,7 @@ export class SearchService implements OnApplicationBootstrap {
    * Remove a product from index
    */
   async deleteProduct(productId: number): Promise<void> {
+    if (!this.isHealthy) return;
     const index = this.configService.get('elasticsearch.index') || 'products';
 
     try {
@@ -219,7 +228,10 @@ export class SearchService implements OnApplicationBootstrap {
       });
       this.logger.log(`Product ${productId} deleted from search index`);
     } catch (error) {
-      this.logger.error(`Failed to delete product ${productId} from search index`, error);
+      this.logger.error(
+        `Failed to delete product ${productId} from search index`,
+        error,
+      );
     }
   }
 
@@ -227,6 +239,9 @@ export class SearchService implements OnApplicationBootstrap {
    * Search products with filters
    */
   async search(query: string, filters: any = {}): Promise<any> {
+    if (!this.isHealthy) {
+      return this.databaseFallbackSearch(query, filters);
+    }
     const index = this.configService.get('elasticsearch.index') || 'products';
 
     const must: any[] = [];
@@ -325,27 +340,25 @@ export class SearchService implements OnApplicationBootstrap {
         limit: filters.limit || 20,
         aggs: {
           categories:
-            (response.aggregations?.categories as any)?.buckets?.map((b: any) => ({
-              id: parseInt(b.key),
-              count: b.doc_count,
-            })) || [],
+            (response.aggregations?.categories as any)?.buckets?.map(
+              (b: any) => ({
+                id: parseInt(b.key),
+                count: b.doc_count,
+              }),
+            ) || [],
           priceRanges:
-            (response.aggregations?.price_ranges as any)?.buckets?.map((b: any) => ({
-              from: b.from,
-              to: b.to,
-              count: b.doc_count,
-            })) || [],
+            (response.aggregations?.price_ranges as any)?.buckets?.map(
+              (b: any) => ({
+                from: b.from,
+                to: b.to,
+                count: b.doc_count,
+              }),
+            ) || [],
         },
       };
     } catch (error) {
-      this.logger.error('Search failed', error);
-      return {
-        data: [],
-        total: 0,
-        page: filters.page || 1,
-        limit: filters.limit || 20,
-        aggs: { categories: [], priceRanges: [] },
-      };
+      this.logger.warn('ElasticSearch query failed; using database search fallback');
+      return this.databaseFallbackSearch(query, filters);
     }
   }
 
@@ -353,6 +366,10 @@ export class SearchService implements OnApplicationBootstrap {
    * Autocomplete suggestions
    */
   async autocomplete(query: string): Promise<string[]> {
+    if (!this.isHealthy) {
+      return this.databaseFallbackAutocomplete(query);
+    }
+
     const index = this.configService.get('elasticsearch.index') || 'products';
 
     if (!query || query.length < 2) {
@@ -375,9 +392,125 @@ export class SearchService implements OnApplicationBootstrap {
 
       return response.hits.hits.map((hit: any) => hit._source.title);
     } catch (error) {
-      this.logger.error('Autocomplete failed', error);
+      this.logger.warn('ElasticSearch autocomplete failed; using database fallback');
+      return this.databaseFallbackAutocomplete(query);
+    }
+  }
+
+  /**
+   * PostgreSQL Database Fallback Search
+   */
+  async databaseFallbackSearch(query: string, filters: any = {}): Promise<any> {
+    const page = Math.max(1, Number(filters.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(filters.limit) || 20));
+
+    const qb = this.productRepository
+      .createQueryBuilder('product')
+      .leftJoinAndSelect('product.category', 'category')
+      .leftJoinAndSelect('product.owner', 'owner')
+      .where('product.isActive = true');
+
+    if (query && query.trim()) {
+      qb.andWhere(
+        '(LOWER(product.title) LIKE :q OR LOWER(product.description) LIKE :q)',
+        { q: `%${query.trim().toLowerCase()}%` },
+      );
+    }
+
+    if (filters.categoryId) {
+      qb.andWhere('product.categoryId = :categoryId', {
+        categoryId: Number(filters.categoryId),
+      });
+    }
+
+    if (filters.minPrice !== undefined) {
+      qb.andWhere('product.price >= :minPrice', {
+        minPrice: Number(filters.minPrice),
+      });
+    }
+
+    if (filters.maxPrice !== undefined) {
+      qb.andWhere('product.price <= :maxPrice', {
+        maxPrice: Number(filters.maxPrice),
+      });
+    }
+
+    if (filters.inStock) {
+      qb.andWhere('product.stock > 0');
+    }
+
+    if (filters.minRating) {
+      qb.andWhere('product.averageRating >= :minRating', {
+        minRating: Number(filters.minRating),
+      });
+    }
+
+    if (filters.vendorId) {
+      qb.andWhere('product.ownerId = :vendorId', {
+        vendorId: Number(filters.vendorId),
+      });
+    }
+
+    const sortOrder = filters.sortOrder === 'asc' ? 'ASC' : 'DESC';
+    if (filters.sortBy === 'price') {
+      qb.orderBy('product.price', sortOrder);
+    } else if (filters.sortBy === 'rating') {
+      qb.orderBy('product.averageRating', sortOrder);
+    } else {
+      qb.orderBy('product.createdAt', 'DESC');
+    }
+
+    const [products, total] = await qb
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
+
+    return {
+      data: products.map((p) => ({
+        id: p.id,
+        title: p.title,
+        description: p.description,
+        price: Number(p.price),
+        stock: p.stock,
+        category: p.category
+          ? { id: p.category.id, name: p.category.name }
+          : null,
+        vendor: p.owner ? { id: p.owner.id, name: p.owner.name } : null,
+        isActive: p.isActive,
+        averageRating: Number(p.averageRating || 0),
+        totalReviews: Number(p.totalReviews || 0),
+        createdAt: p.createdAt,
+        updatedAt: p.updatedAt,
+      })),
+      total,
+      page,
+      limit,
+      aggs: {
+        categories: [],
+        priceRanges: [],
+      },
+    };
+  }
+
+  /**
+   * PostgreSQL Database Fallback Autocomplete
+   */
+  async databaseFallbackAutocomplete(query: string): Promise<string[]> {
+    if (!query || query.trim().length < 2) {
       return [];
     }
+
+    const products = await this.productRepository
+      .createQueryBuilder('product')
+      .select(['product.title'])
+      .where('product.isActive = true')
+      .andWhere('LOWER(product.title) LIKE :q', {
+        q: `%${query.trim().toLowerCase()}%`,
+      })
+      .limit(10)
+      .getMany();
+
+    return products.map((p) => p.title);
   }
 
   /**

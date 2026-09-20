@@ -3,7 +3,7 @@ import { Global, Module } from '@nestjs/common';
 import { MonitoringController } from './monitoring.controller';
 import { MetricsService } from '../monitoring/metrics.service';
 
-@Global() 
+@Global()
 @Module({
   controllers: [MonitoringController],
   providers: [MetricsService],

@@ -27,7 +27,7 @@ export class IdempotencyService {
     });
 
     // Check for existing key
-    let existing = await this.idempotencyRepo.findOne({
+    const existing = await this.idempotencyRepo.findOne({
       where: { key, userId },
     });
 
@@ -40,7 +40,9 @@ export class IdempotencyService {
       if (existing.status === 'pending') {
         const staleThreshold = new Date(Date.now() - 30000);
         if (existing.createdAt < staleThreshold) {
-          this.logger.warn(`Stale pending idempotency key: ${key}, allowing retry`);
+          this.logger.warn(
+            `Stale pending idempotency key: ${key}, allowing retry`,
+          );
           await this.idempotencyRepo.delete({ id: existing.id });
         } else {
           throw new ConflictException('Request is already being processed');

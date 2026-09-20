@@ -1,5 +1,11 @@
 // src/common/entities/user-rate-limit.entity.ts
-import { Entity, PrimaryGeneratedColumn, Column, Index, CreateDateColumn } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  Index,
+  CreateDateColumn,
+} from 'typeorm';
 
 @Entity('user_rate_limits')
 @Index(['userId', 'endpoint'])

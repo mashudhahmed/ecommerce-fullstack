@@ -1,5 +1,11 @@
 // src/orders/order-timeline.entity.ts
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  CreateDateColumn,
+} from 'typeorm';
 import { Order } from './order.entity';
 import { User } from '../user/user.entity';
 

@@ -48,13 +48,15 @@ export class SuperadminService {
    */
   async getAdmins(page: number = 1, limit: number = 20) {
     this.logger.log(`📋 Fetching admins - Page: ${page}, Limit: ${limit}`);
-    
+
     const admins = await this.userService.findByRole(UserRole.ADMIN);
     const start = (page - 1) * limit;
     const end = start + limit;
 
     return {
-      data: admins.slice(start, end).map((u) => this.userService.getPublicProfile(u)),
+      data: admins
+        .slice(start, end)
+        .map((u) => this.userService.getPublicProfile(u)),
       meta: {
         total: admins.length,
         page,
@@ -70,11 +72,11 @@ export class SuperadminService {
   async getAdmin(id: number) {
     this.logger.log(`📋 Fetching admin: ${id}`);
     const user = await this.userService.findByIdOrFail(id);
-    
+
     if (user.role !== UserRole.ADMIN) {
       throw new BadRequestException('User is not an admin');
     }
-    
+
     return this.userService.getPublicProfile(user);
   }
 
@@ -84,11 +86,11 @@ export class SuperadminService {
   async updateAdmin(id: number, dto: UpdateUserDto) {
     this.logger.log(`📝 Updating admin: ${id}`);
     const user = await this.userService.findByIdOrFail(id);
-    
+
     if (user.role !== UserRole.ADMIN) {
       throw new BadRequestException('User is not an admin');
     }
-    
+
     const updated = await this.userService.update(id, dto);
     return this.userService.getPublicProfile(updated);
   }
@@ -99,7 +101,7 @@ export class SuperadminService {
   async deleteAdmin(id: number) {
     this.logger.log(`🗑️ Deleting admin: ${id}`);
     const user = await this.userService.findByIdOrFail(id);
-    
+
     if (user.role !== UserRole.ADMIN) {
       throw new BadRequestException('User is not an admin');
     }
@@ -130,7 +132,15 @@ export class SuperadminService {
     sortBy?: string;
     sortOrder?: 'asc' | 'desc';
   }) {
-    const { page = 1, limit = 20, role, search, isVerified, sortBy, sortOrder } = filters;
+    const {
+      page = 1,
+      limit = 20,
+      role,
+      search,
+      isVerified,
+      sortBy,
+      sortOrder,
+    } = filters;
 
     this.logger.log(`📋 Fetching users - Page: ${page}, Limit: ${limit}`);
 
@@ -160,7 +170,9 @@ export class SuperadminService {
     const end = start + limit;
 
     return {
-      data: users.slice(start, end).map((u) => this.userService.getPublicProfile(u)),
+      data: users
+        .slice(start, end)
+        .map((u) => this.userService.getPublicProfile(u)),
       meta: {
         total: users.length,
         page,
@@ -185,11 +197,11 @@ export class SuperadminService {
   async updateUser(id: number, dto: UpdateUserDto) {
     this.logger.log(`📝 Updating user: ${id}`);
     const user = await this.userService.findByIdOrFail(id);
-    
+
     if (user.role === UserRole.SUPER_ADMIN) {
       throw new BadRequestException('Cannot modify Super Admin');
     }
-    
+
     const updated = await this.userService.update(id, dto);
     return this.userService.getPublicProfile(updated);
   }
@@ -200,11 +212,11 @@ export class SuperadminService {
   async deleteUser(id: number) {
     this.logger.log(`🗑️ Deleting user: ${id}`);
     const user = await this.userService.findByIdOrFail(id);
-    
+
     if (user.role === UserRole.SUPER_ADMIN) {
       throw new BadRequestException('Cannot delete Super Admin');
     }
-    
+
     return this.authService.deleteUser(id);
   }
 
@@ -214,14 +226,14 @@ export class SuperadminService {
   async updateUserStatus(id: number, isVerified: boolean) {
     this.logger.log(`📝 Updating user status: ${id} -> ${isVerified}`);
     const user = await this.userService.findByIdOrFail(id);
-    
+
     if (user.role === UserRole.SUPER_ADMIN) {
       throw new BadRequestException('Cannot modify Super Admin');
     }
-    
+
     await this.userService.update(id, { isVerified });
     const updated = await this.userService.findByIdOrFail(id);
-    
+
     return {
       message: `User ${isVerified ? 'verified' : 'unverified'} successfully`,
       user: this.userService.getPublicProfile(updated),
@@ -234,18 +246,18 @@ export class SuperadminService {
   async changeUserRole(id: number, role: UserRole) {
     this.logger.log(`📝 Changing user role: ${id} -> ${role}`);
     const user = await this.userService.findByIdOrFail(id);
-    
+
     if (user.role === UserRole.SUPER_ADMIN) {
       throw new BadRequestException('Cannot modify Super Admin');
     }
-    
+
     if (role === UserRole.SUPER_ADMIN) {
       throw new BadRequestException('Cannot assign Super Admin role');
     }
-    
+
     await this.userService.update(id, { role });
     const updated = await this.userService.findByIdOrFail(id);
-    
+
     return {
       message: `User role changed to ${role}`,
       user: this.userService.getPublicProfile(updated),
@@ -261,7 +273,7 @@ export class SuperadminService {
    */
   async bulkDeleteUsers(userIds: number[]) {
     this.logger.log(`🗑️ Bulk deleting ${userIds.length} users`);
-    
+
     if (!userIds || userIds.length === 0) {
       throw new BadRequestException('No user IDs provided');
     }
@@ -281,7 +293,8 @@ export class SuperadminService {
         await this.userService.delete(id);
         results.success.push(id);
       } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : 'Unknown error';
+        const message =
+          error instanceof Error ? error.message : 'Unknown error';
         results.failed.push({ id, error: message });
       }
     }
@@ -301,7 +314,7 @@ export class SuperadminService {
    */
   async getStatistics() {
     this.logger.log('📊 Fetching comprehensive statistics');
-    
+
     const [
       totalUsers,
       totalVendors,
@@ -318,9 +331,13 @@ export class SuperadminService {
       this.userService.countByRole(UserRole.SUPER_ADMIN),
       this.userService.countVerifiedUsers(),
       this.userService.countPendingVendors(),
-      this.userService.countByRole(UserRole.VENDOR).then((count) =>
-        this.userService.findApprovedVendors().then((vendors) => vendors.length),
-      ),
+      this.userService
+        .countByRole(UserRole.VENDOR)
+        .then((count) =>
+          this.userService
+            .findApprovedVendors()
+            .then((vendors) => vendors.length),
+        ),
       this.userService.getRecentUsers(10),
     ]);
 
@@ -347,7 +364,7 @@ export class SuperadminService {
    */
   async getSystemStatus() {
     this.logger.log('📊 Fetching system status');
-    
+
     const [totalUsers, verifiedUsers] = await Promise.all([
       this.userService.countUsers(),
       this.userService.countVerifiedUsers(),
@@ -379,7 +396,7 @@ export class SuperadminService {
   async getVendorPerformance(period: string = 'month', limit: number = 20) {
     this.logger.log(`📊 Fetching vendor performance - Period: ${period}`);
     const stats = await this.vendorService.getAdminVendorStats();
-    
+
     return {
       ...stats,
       period,
@@ -391,28 +408,38 @@ export class SuperadminService {
   /**
    * Get vendor orders
    */
-  async getVendorOrders(vendorId: number, status?: string, page: number = 1, limit: number = 20) {
+  async getVendorOrders(
+    vendorId: number,
+    status?: string,
+    page: number = 1,
+    limit: number = 20,
+  ) {
     this.logger.log(`📋 Fetching vendor orders: ${vendorId}`);
     const vendor = await this.userService.findByIdOrFail(vendorId);
-    
+
     if (vendor.role !== UserRole.VENDOR) {
       throw new BadRequestException('User is not a vendor');
     }
-    
+
     return this.vendorService.getVendorOrders(vendorId, status, page, limit);
   }
 
   /**
    * Get vendor products
    */
-  async getVendorProducts(vendorId: number, page: number = 1, limit: number = 20, inStock?: boolean) {
+  async getVendorProducts(
+    vendorId: number,
+    page: number = 1,
+    limit: number = 20,
+    inStock?: boolean,
+  ) {
     this.logger.log(`📋 Fetching vendor products: ${vendorId}`);
     const vendor = await this.userService.findByIdOrFail(vendorId);
-    
+
     if (vendor.role !== UserRole.VENDOR) {
       throw new BadRequestException('User is not a vendor');
     }
-    
+
     return this.vendorService.getVendorProducts(vendorId, page, limit, inStock);
   }
 
@@ -423,7 +450,7 @@ export class SuperadminService {
     this.logger.log(`📊 Fetching vendor ranking - Metric: ${metric}`);
     const stats = await this.vendorService.getAdminVendorStats();
     const topVendors = stats.topVendors || [];
-    
+
     const sortedVendors = [...topVendors].sort((a, b) => {
       if (metric === 'revenue') return (b.revenue || 0) - (a.revenue || 0);
       if (metric === 'orders') return (b.orders || 0) - (a.orders || 0);
@@ -443,7 +470,7 @@ export class SuperadminService {
   async getVendorGrowthReport(period: string = 'month') {
     this.logger.log(`📊 Fetching vendor growth report - Period: ${period}`);
     const stats = await this.vendorService.getAdminVendorStats();
-    
+
     return {
       period,
       totalVendors: stats.totalVendors,
@@ -462,7 +489,7 @@ export class SuperadminService {
   async exportVendorReport(format: string = 'csv') {
     this.logger.log(`📊 Exporting vendor report - Format: ${format}`);
     const stats = await this.vendorService.getAdminVendorStats();
-    
+
     const reportData = {
       summary: {
         totalVendors: stats.totalVendors,
@@ -495,11 +522,11 @@ export class SuperadminService {
    */
   async getSystemHealth() {
     this.logger.log('📊 Checking system health');
-    
+
     // Check database connection
     let databaseStatus = 'healthy';
     let databaseError: string | null = null;
-    
+
     try {
       await this.userRepository.query('SELECT 1');
     } catch (error: unknown) {
@@ -532,13 +559,13 @@ export class SuperadminService {
    */
   async getRecentActivity(limit: number = 10) {
     this.logger.log(`📋 Fetching recent activity - Limit: ${limit}`);
-    
+
     // Get recent users
     const recentUsers = await this.userService.getRecentUsers(limit);
-    
+
     // Get recent vendor applications
     const pendingVendors = await this.userService.findPendingVendors();
-    
+
     return {
       recentUsers: recentUsers.map((u) => this.userService.getPublicProfile(u)),
       pendingVendors: pendingVendors.map((v) => ({

@@ -16,18 +16,23 @@ export class TracingInterceptor implements NestInterceptor {
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
     const request = context.switchToHttp().getRequest();
     const startTime = Date.now();
-    const requestId = request.headers['x-request-id'] || 
-                      Math.random().toString(36).substring(2, 15);
+    const requestId =
+      request.headers['x-request-id'] ||
+      Math.random().toString(36).substring(2, 15);
 
     return next.handle().pipe(
       tap({
         next: () => {
           const duration = Date.now() - startTime;
-          this.logger.debug(`[${requestId}] ${request.method} ${request.url} completed in ${duration}ms`);
+          this.logger.debug(
+            `[${requestId}] ${request.method} ${request.url} completed in ${duration}ms`,
+          );
         },
         error: (error) => {
           const duration = Date.now() - startTime;
-          this.logger.error(`[${requestId}] ${request.method} ${request.url} failed in ${duration}ms: ${error.message}`);
+          this.logger.error(
+            `[${requestId}] ${request.method} ${request.url} failed in ${duration}ms: ${error.message}`,
+          );
         },
       }),
     );

@@ -174,7 +174,9 @@ export class CartService {
       throw new NotFoundException('Cart item not found');
     }
 
-    this.logger.log(`Cart item removed for user ${userId}, product ${productId}`);
+    this.logger.log(
+      `Cart item removed for user ${userId}, product ${productId}`,
+    );
   }
 
   // ============================================================

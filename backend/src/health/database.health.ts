@@ -16,7 +16,7 @@ export class DatabaseHealthIndicator extends HealthIndicator {
   async isHealthy(key: string): Promise<HealthIndicatorResult> {
     try {
       await this.dataSource.query('SELECT 1');
-      
+
       const stats = await this.dataSource.query(`
         SELECT 
           (SELECT count(*) FROM users) as user_count,

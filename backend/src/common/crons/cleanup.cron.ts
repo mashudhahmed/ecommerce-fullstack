@@ -17,14 +17,14 @@ export class CleanupCron {
   @Cron(CronExpression.EVERY_HOUR)
   async cleanupExpiredTokens() {
     this.logger.log('Cleaning up expired tokens...');
-    
+
     try {
       // Clean expired refresh tokens
       const refreshResult = await this.dataSource.query(`
         DELETE FROM refresh_tokens 
         WHERE "expiresAt" < NOW() OR revoked = true
       `);
-      
+
       // Clean expired blacklisted tokens
       const blacklistResult = await this.dataSource.query(`
         DELETE FROM token_blacklist 
@@ -63,15 +63,16 @@ export class CleanupCron {
 
       this.logger.log(
         `Cleanup completed: ` +
-        `${refreshResult[0]?.count || 0} refresh tokens, ` +
-        `${blacklistResult[0]?.count || 0} blacklisted tokens, ` +
-        `${verificationResult[0]?.count || 0} verification codes, ` +
-        `${resetResult[0]?.count || 0} reset codes, ` +
-        `${resetTokenResult[0]?.count || 0} reset tokens, ` +
-        `${loginAttemptResult[0]?.count || 0} login attempts`
+          `${refreshResult[0]?.count || 0} refresh tokens, ` +
+          `${blacklistResult[0]?.count || 0} blacklisted tokens, ` +
+          `${verificationResult[0]?.count || 0} verification codes, ` +
+          `${resetResult[0]?.count || 0} reset codes, ` +
+          `${resetTokenResult[0]?.count || 0} reset tokens, ` +
+          `${loginAttemptResult[0]?.count || 0} login attempts`,
       );
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
       this.logger.error('Failed to clean up expired items:', errorMessage);
     }
   }
@@ -80,7 +81,7 @@ export class CleanupCron {
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
   async cleanupSoftDeletedUsers() {
     this.logger.log('Cleaning up soft-deleted users older than 30 days...');
-    
+
     try {
       const result = await this.dataSource.query(`
         DELETE FROM users 
@@ -88,9 +89,12 @@ export class CleanupCron {
         AND "deletedAt" < NOW() - INTERVAL '30 days'
       `);
 
-      this.logger.log(`Permanently deleted ${result[0]?.count || 0} old soft-deleted users`);
+      this.logger.log(
+        `Permanently deleted ${result[0]?.count || 0} old soft-deleted users`,
+      );
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
       this.logger.error('Failed to clean up soft-deleted users:', errorMessage);
     }
   }
@@ -99,7 +103,7 @@ export class CleanupCron {
   @Cron('*/15 * * * *')
   async cleanupExpiredSessions() {
     this.logger.log('Cleaning up expired sessions...');
-    
+
     try {
       const tableCheck = await this.dataSource.query(`
         SELECT EXISTS (
@@ -121,7 +125,8 @@ export class CleanupCron {
         this.logger.log('Session table does not exist, skipping cleanup');
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
       this.logger.error('Failed to clean up expired sessions:', errorMessage);
     }
   }
@@ -130,7 +135,7 @@ export class CleanupCron {
   @Cron('0 2 * * *')
   async cleanupOrphanedRecords() {
     this.logger.log('Cleaning up orphaned records...');
-    
+
     try {
       const orderItemsResult = await this.dataSource.query(`
         DELETE FROM order_items 
@@ -153,12 +158,13 @@ export class CleanupCron {
 
       this.logger.log(
         `Orphaned records cleaned: ` +
-        `${orderItemsResult[0]?.count || 0} order items, ` +
-        `${cartItemsResult[0]?.count || 0} cart items, ` +
-        `${productsResult[0]?.count || 0} products updated`
+          `${orderItemsResult[0]?.count || 0} order items, ` +
+          `${cartItemsResult[0]?.count || 0} cart items, ` +
+          `${productsResult[0]?.count || 0} products updated`,
       );
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
       this.logger.error('Failed to clean up orphaned records:', errorMessage);
     }
   }
@@ -167,7 +173,7 @@ export class CleanupCron {
   @Cron('0 3 * * 0')
   async cleanupOldLogs() {
     this.logger.log('Cleaning up old logs...');
-    
+
     try {
       const loginAttemptResult = await this.dataSource.query(`
         DELETE FROM login_attempts 
@@ -181,11 +187,12 @@ export class CleanupCron {
 
       this.logger.log(
         `Old logs cleaned: ` +
-        `${loginAttemptResult[0]?.count || 0} login attempts, ` +
-        `${refreshResult[0]?.count || 0} refresh tokens`
+          `${loginAttemptResult[0]?.count || 0} login attempts, ` +
+          `${refreshResult[0]?.count || 0} refresh tokens`,
       );
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
       this.logger.error('Failed to clean up old logs:', errorMessage);
     }
   }

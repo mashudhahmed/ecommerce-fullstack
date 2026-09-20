@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UserController } from './user.controller';
 import { UserService } from './user.service';
+import { FilesService } from '../files/files.service';
 
 describe('UserController', () => {
   let controller: UserController;
@@ -17,6 +18,13 @@ describe('UserController', () => {
             update: jest.fn(),
             delete: jest.fn(),
             findAll: jest.fn(),
+          },
+        },
+        {
+          provide: FilesService,
+          useValue: {
+            uploadFile: jest.fn(),
+            deleteFile: jest.fn(),
           },
         },
       ],

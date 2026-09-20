@@ -1,5 +1,10 @@
 // src/auth/two-factor.service.ts
-import { Injectable, BadRequestException, UnauthorizedException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  UnauthorizedException,
+  Logger,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { TwoFactor, TwoFactorMethod } from './two-factor.entity';
@@ -20,13 +25,17 @@ export class TwoFactorService {
     private readonly mailerService: MailerService,
   ) {}
 
-  async generateSecret(userId: number): Promise<{ secret: string; qrCode: string; otpauthUrl: string }> {
+  async generateSecret(
+    userId: number,
+  ): Promise<{ secret: string; qrCode: string; otpauthUrl: string }> {
     const user = await this.userRepo.findOne({ where: { id: userId } });
     if (!user) {
       throw new BadRequestException('User not found');
     }
 
-    const existing = await this.twoFactorRepo.findOne({ where: { userId, isEnabled: true } });
+    const existing = await this.twoFactorRepo.findOne({
+      where: { userId, isEnabled: true },
+    });
     if (existing) {
       throw new BadRequestException('2FA is already enabled');
     }
@@ -112,11 +121,15 @@ export class TwoFactorService {
     }
 
     if (!twoFactor.tempCode || !twoFactor.tempCodeExpiry) {
-      throw new BadRequestException('No 2FA code requested. Please request a new code.');
+      throw new BadRequestException(
+        'No 2FA code requested. Please request a new code.',
+      );
     }
 
     if (twoFactor.tempCodeExpiry < new Date()) {
-      throw new BadRequestException('2FA code expired. Please request a new one.');
+      throw new BadRequestException(
+        '2FA code expired. Please request a new one.',
+      );
     }
 
     if (twoFactor.tempCode !== code) {
@@ -140,12 +153,19 @@ export class TwoFactorService {
     }
 
     if (twoFactor.backupCodes && twoFactor.backupCodes.includes(token)) {
-      twoFactor.backupCodes = twoFactor.backupCodes.filter((code) => code !== token);
+      twoFactor.backupCodes = twoFactor.backupCodes.filter(
+        (code) => code !== token,
+      );
       await this.twoFactorRepo.save(twoFactor);
       return true;
     }
 
-    if (twoFactor.tempCode && twoFactor.tempCode === token && twoFactor.tempCodeExpiry && twoFactor.tempCodeExpiry > new Date()) {
+    if (
+      twoFactor.tempCode &&
+      twoFactor.tempCode === token &&
+      twoFactor.tempCodeExpiry &&
+      twoFactor.tempCodeExpiry > new Date()
+    ) {
       twoFactor.tempCode = null;
       twoFactor.tempCodeExpiry = null;
       await this.twoFactorRepo.save(twoFactor);
@@ -166,7 +186,10 @@ export class TwoFactorService {
     return verified;
   }
 
-  async verifyAndEnable(userId: number, code: string): Promise<{ verified: boolean; backupCodes: string[] }> {
+  async verifyAndEnable(
+    userId: number,
+    code: string,
+  ): Promise<{ verified: boolean; backupCodes: string[] }> {
     const twoFactor = await this.twoFactorRepo.findOne({ where: { userId } });
     if (!twoFactor) {
       throw new BadRequestException('2FA not initialized');
@@ -180,7 +203,9 @@ export class TwoFactorService {
       throw new UnauthorizedException('Invalid OTP code');
     }
 
-    const backupCodes = Array.from({ length: 10 }, () => this.generateBackupCode());
+    const backupCodes = Array.from({ length: 10 }, () =>
+      this.generateBackupCode(),
+    );
 
     twoFactor.isEnabled = true;
     twoFactor.method = TwoFactorMethod.EMAIL;
@@ -192,7 +217,11 @@ export class TwoFactorService {
 
     const user = await this.userRepo.findOne({ where: { id: userId } });
     if (user) {
-      await this.mailerService.sendTwoFactorBackupCodes(user.email, backupCodes, user.name);
+      await this.mailerService.sendTwoFactorBackupCodes(
+        user.email,
+        backupCodes,
+        user.name,
+      );
     }
 
     return { verified: true, backupCodes };
@@ -224,18 +253,26 @@ export class TwoFactorService {
   }
 
   async generateBackupCodes(userId: number): Promise<string[]> {
-    const twoFactor = await this.twoFactorRepo.findOne({ where: { userId, isEnabled: true } });
+    const twoFactor = await this.twoFactorRepo.findOne({
+      where: { userId, isEnabled: true },
+    });
     if (!twoFactor) {
       throw new BadRequestException('2FA not enabled');
     }
 
-    const backupCodes = Array.from({ length: 10 }, () => this.generateBackupCode());
+    const backupCodes = Array.from({ length: 10 }, () =>
+      this.generateBackupCode(),
+    );
     twoFactor.backupCodes = backupCodes;
     await this.twoFactorRepo.save(twoFactor);
 
     const user = await this.userRepo.findOne({ where: { id: userId } });
     if (user) {
-      await this.mailerService.sendTwoFactorBackupCodes(user.email, backupCodes, user.name);
+      await this.mailerService.sendTwoFactorBackupCodes(
+        user.email,
+        backupCodes,
+        user.name,
+      );
     }
 
     return backupCodes;

@@ -1,13 +1,20 @@
 // src/vendor/dto/vendor-notification.dto.ts
-import { IsOptional, IsNumber, IsBoolean, Min, Max, IsString } from 'class-validator';
+import {
+  IsOptional,
+  IsNumber,
+  IsBoolean,
+  Min,
+  Max,
+  IsString,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 
 export class VendorNotificationFilterDto {
-  @ApiProperty({ 
+  @ApiProperty({
     example: 1,
     required: false,
-    description: 'Page number'
+    description: 'Page number',
   })
   @IsOptional()
   @IsNumber()
@@ -15,10 +22,10 @@ export class VendorNotificationFilterDto {
   @Type(() => Number)
   page?: number = 1;
 
-  @ApiProperty({ 
+  @ApiProperty({
     example: 20,
     required: false,
-    description: 'Items per page'
+    description: 'Items per page',
   })
   @IsOptional()
   @IsNumber()
@@ -27,20 +34,20 @@ export class VendorNotificationFilterDto {
   @Type(() => Number)
   limit?: number = 20;
 
-  @ApiProperty({ 
+  @ApiProperty({
     example: false,
     required: false,
-    description: 'Filter by read status'
+    description: 'Filter by read status',
   })
   @IsOptional()
   @IsBoolean()
   @Type(() => Boolean)
   read?: boolean;
 
-  @ApiProperty({ 
+  @ApiProperty({
     example: 'order',
     required: false,
-    description: 'Filter by notification type'
+    description: 'Filter by notification type',
   })
   @IsOptional()
   @IsString()

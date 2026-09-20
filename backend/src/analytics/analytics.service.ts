@@ -83,19 +83,22 @@ export class AnalyticsService {
 
   @Trace('analytics.getSalesOverview')
   @QueryTimeout(30000)
-  async getSalesOverview(startDate: Date, endDate: Date): Promise<SalesOverview> {
+  async getSalesOverview(
+    startDate: Date,
+    endDate: Date,
+  ): Promise<SalesOverview> {
     const cacheKey = `analytics:sales:${startDate.toISOString()}:${endDate.toISOString()}`;
-    
+
     const cached = await this.cacheService.get<SalesOverview>(cacheKey);
     if (cached) {
       this.logger.debug('Cache hit for sales overview');
       this.metricsService.recordCacheHit('analytics:sales');
       return cached;
     }
-    
+
     this.metricsService.recordCacheMiss('analytics:sales');
     this.logger.debug(`Getting sales overview for ${startDate} to ${endDate}`);
-    
+
     const startTime = Date.now();
 
     const orders = await this.orderRepository.find({
@@ -121,7 +124,7 @@ export class AnalyticsService {
       totalSales,
       totalOrders,
       averageOrderValue,
-      dailyData: dailyData.map(d => ({
+      dailyData: dailyData.map((d) => ({
         date: d.date,
         total: d.revenue,
         count: d.orders,
@@ -139,13 +142,16 @@ export class AnalyticsService {
 
   @Trace('analytics.getProductPerformance')
   @QueryTimeout(30000)
-  async getProductPerformance(startDate: Date, endDate: Date): Promise<{
+  async getProductPerformance(
+    startDate: Date,
+    endDate: Date,
+  ): Promise<{
     bestSellers: ProductPerformanceResult[];
     topRevenue: ProductPerformanceResult[];
     lowPerformance: ProductPerformanceResult[];
   }> {
     const cacheKey = `analytics:products:${startDate.toISOString()}:${endDate.toISOString()}`;
-    
+
     const cached = await this.cacheService.get<{
       bestSellers: ProductPerformanceResult[];
       topRevenue: ProductPerformanceResult[];
@@ -156,10 +162,12 @@ export class AnalyticsService {
       this.metricsService.recordCacheHit('analytics:products');
       return cached;
     }
-    
+
     this.metricsService.recordCacheMiss('analytics:products');
-    this.logger.debug(`Getting product performance for ${startDate} to ${endDate}`);
-    
+    this.logger.debug(
+      `Getting product performance for ${startDate} to ${endDate}`,
+    );
+
     const startTime = Date.now();
 
     const results = await this.dataSource
@@ -174,8 +182,13 @@ export class AnalyticsService {
       .from(OrderItem, 'orderItem')
       .leftJoin('orderItem.product', 'product')
       .leftJoin('orderItem.order', 'order')
-      .where('order.createdAt BETWEEN :start AND :end', { start: startDate, end: endDate })
-      .andWhere('order.status != :cancelled', { cancelled: OrderStatus.CANCELLED })
+      .where('order.createdAt BETWEEN :start AND :end', {
+        start: startDate,
+        end: endDate,
+      })
+      .andWhere('order.status != :cancelled', {
+        cancelled: OrderStatus.CANCELLED,
+      })
       .andWhere('product.isActive = :isActive', { isActive: true })
       .groupBy('product.id, product.title')
       .getRawMany();
@@ -189,9 +202,15 @@ export class AnalyticsService {
     }));
 
     const result = {
-      bestSellers: parsedResults.sort((a, b) => b.totalSold - a.totalSold).slice(0, 10),
-      topRevenue: parsedResults.sort((a, b) => b.totalRevenue - a.totalRevenue).slice(0, 10),
-      lowPerformance: parsedResults.sort((a, b) => a.totalSold - b.totalSold).slice(0, 10),
+      bestSellers: parsedResults
+        .sort((a, b) => b.totalSold - a.totalSold)
+        .slice(0, 10),
+      topRevenue: parsedResults
+        .sort((a, b) => b.totalRevenue - a.totalRevenue)
+        .slice(0, 10),
+      lowPerformance: parsedResults
+        .sort((a, b) => a.totalSold - b.totalSold)
+        .slice(0, 10),
     };
 
     const duration = (Date.now() - startTime) / 1000;
@@ -204,17 +223,20 @@ export class AnalyticsService {
 
   @Trace('analytics.getUserAnalytics')
   @QueryTimeout(15000)
-  async getUserAnalytics(startDate: Date, endDate: Date): Promise<UserAnalyticsResult> {
+  async getUserAnalytics(
+    startDate: Date,
+    endDate: Date,
+  ): Promise<UserAnalyticsResult> {
     const cacheKey = `analytics:users:${startDate.toISOString()}:${endDate.toISOString()}`;
-    
+
     const cached = await this.cacheService.get<UserAnalyticsResult>(cacheKey);
     if (cached) {
       this.logger.debug('Cache hit for user analytics');
       return cached;
     }
-    
+
     this.logger.debug(`Getting user analytics for ${startDate} to ${endDate}`);
-    
+
     const startTime = Date.now();
 
     const [totalUsers, newUsers, orders, activeUsers] = await Promise.all([
@@ -231,8 +253,13 @@ export class AnalyticsService {
       this.orderRepository
         .createQueryBuilder('order')
         .select('order.userId')
-        .where('order.createdAt BETWEEN :start AND :end', { start: startDate, end: endDate })
-        .andWhere('order.status != :cancelled', { cancelled: OrderStatus.CANCELLED })
+        .where('order.createdAt BETWEEN :start AND :end', {
+          start: startDate,
+          end: endDate,
+        })
+        .andWhere('order.status != :cancelled', {
+          cancelled: OrderStatus.CANCELLED,
+        })
         .groupBy('order.userId')
         .getRawMany(),
     ]);
@@ -246,7 +273,8 @@ export class AnalyticsService {
       newUsers,
       activeUsers: activeUsers.length,
       orders,
-      conversionRate: totalUsers > 0 ? (activeUsers.length / totalUsers) * 100 : 0,
+      conversionRate:
+        totalUsers > 0 ? (activeUsers.length / totalUsers) * 100 : 0,
     };
 
     await this.cacheService.set(cacheKey, result, this.CACHE_TTL);
@@ -261,15 +289,15 @@ export class AnalyticsService {
     endDate: Date,
   ): Promise<VendorAnalyticsResult> {
     const cacheKey = `analytics:vendor:${vendorId}:${startDate.toISOString()}:${endDate.toISOString()}`;
-    
+
     const cached = await this.cacheService.get<VendorAnalyticsResult>(cacheKey);
     if (cached) {
       this.logger.debug(`Cache hit for vendor analytics ${vendorId}`);
       return cached;
     }
-    
+
     this.logger.debug(`Getting vendor analytics for vendor ${vendorId}`);
-    
+
     const startTime = Date.now();
 
     const result = await this.dataSource
@@ -282,8 +310,13 @@ export class AnalyticsService {
       .leftJoin('product.orderItems', 'orderItem')
       .leftJoin('orderItem.order', 'order')
       .where('product.ownerId = :vendorId', { vendorId })
-      .andWhere('order.createdAt BETWEEN :start AND :end', { start: startDate, end: endDate })
-      .andWhere('order.status != :cancelled', { cancelled: OrderStatus.CANCELLED })
+      .andWhere('order.createdAt BETWEEN :start AND :end', {
+        start: startDate,
+        end: endDate,
+      })
+      .andWhere('order.status != :cancelled', {
+        cancelled: OrderStatus.CANCELLED,
+      })
       .getRawOne();
 
     const totalRevenue = Number(result?.totalRevenue || 0);
@@ -307,7 +340,7 @@ export class AnalyticsService {
   @QueryTimeout(60000)
   async exportReport(startDate: Date, endDate: Date): Promise<ReportData> {
     this.logger.log(`Generating report for ${startDate} to ${endDate}`);
-    
+
     const startTime = Date.now();
 
     const [sales, products, users] = await Promise.all([
@@ -363,7 +396,7 @@ export class AnalyticsService {
     });
 
     const dailyData = AnalyticsUtils.groupByDay(orders);
-    
+
     const dateMap = new Map<string, { revenue: number; orders: number }>();
     for (const d of dailyData) {
       dateMap.set(d.date, { revenue: d.revenue, orders: d.orders });
@@ -391,22 +424,29 @@ export class AnalyticsService {
 
   @Trace('analytics.getCategoryPerformance')
   @QueryTimeout(20000)
-  async getCategoryPerformance(startDate: Date, endDate: Date): Promise<{
-    categoryId: number;
-    categoryName: string;
-    totalRevenue: number;
-    totalOrders: number;
-    productCount: number;
-  }[]> {
-    const cacheKey = `analytics:categories:${startDate.toISOString()}:${endDate.toISOString()}`;
-    
-    const cached = await this.cacheService.get<{
+  async getCategoryPerformance(
+    startDate: Date,
+    endDate: Date,
+  ): Promise<
+    {
       categoryId: number;
       categoryName: string;
       totalRevenue: number;
       totalOrders: number;
       productCount: number;
-    }[]>(cacheKey);
+    }[]
+  > {
+    const cacheKey = `analytics:categories:${startDate.toISOString()}:${endDate.toISOString()}`;
+
+    const cached = await this.cacheService.get<
+      {
+        categoryId: number;
+        categoryName: string;
+        totalRevenue: number;
+        totalOrders: number;
+        productCount: number;
+      }[]
+    >(cacheKey);
     if (cached) {
       return cached;
     }
@@ -424,8 +464,13 @@ export class AnalyticsService {
       .leftJoin('product.category', 'category')
       .leftJoin('product.orderItems', 'orderItem')
       .leftJoin('orderItem.order', 'order')
-      .where('order.createdAt BETWEEN :start AND :end', { start: startDate, end: endDate })
-      .andWhere('order.status != :cancelled', { cancelled: OrderStatus.CANCELLED })
+      .where('order.createdAt BETWEEN :start AND :end', {
+        start: startDate,
+        end: endDate,
+      })
+      .andWhere('order.status != :cancelled', {
+        cancelled: OrderStatus.CANCELLED,
+      })
       .groupBy('category.id, category.name')
       .getRawMany();
 

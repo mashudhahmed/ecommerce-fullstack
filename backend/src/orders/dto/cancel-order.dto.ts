@@ -7,4 +7,3 @@ export class CancelOrderDto {
   @MaxLength(500)
   reason?: string;
 }
-

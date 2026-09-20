@@ -9,6 +9,8 @@ import {
   Max,
   ArrayMinSize,
   ArrayMaxSize,
+  IsOptional,
+  IsString,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
@@ -37,4 +39,13 @@ export class CreateOrderDto {
   @Type(() => OrderItemDto)
   @IsNotEmpty()
   items!: OrderItemDto[];
+
+  @ApiProperty({
+    example: '123 Main St, New York, NY 10001',
+    description: 'Shipping address',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  shippingAddress?: string;
 }

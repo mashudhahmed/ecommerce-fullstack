@@ -62,17 +62,22 @@ export class ReviewsController {
   @ApiResponse({ status: 200, description: 'Reviews retrieved successfully' })
   async getProductReviews(
     @Param('productId', ParseIntPipe) productId: number,
-    @Query('page') page: number = 1,
-    @Query('limit') limit: number = 10,
-    @Query('rating') rating?: number,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('rating') rating?: string,
   ) {
-    return this.reviewsService.findByProduct(productId, page, limit, rating);
+    const pageNum = page ? parseInt(page, 10) : 1;
+    const limitNum = limit ? parseInt(limit, 10) : 10;
+    const ratingNum = rating ? parseInt(rating, 10) : undefined;
+    return this.reviewsService.findByProduct(productId, pageNum, limitNum, ratingNum);
   }
 
   @Get('product/:productId/stats')
   @ApiOperation({ summary: 'Get product review stats' })
   @ApiResponse({ status: 200, description: 'Review stats retrieved' })
-  async getProductReviewStats(@Param('productId', ParseIntPipe) productId: number) {
+  async getProductReviewStats(
+    @Param('productId', ParseIntPipe) productId: number,
+  ) {
     return this.reviewAnalyticsService.getProductReviewStats(productId);
   }
 
@@ -171,7 +176,7 @@ export class ReviewsController {
     @UploadedFiles() files: { images?: MulterFile[] },
   ) {
     const existingReview = await this.reviewsService.findOne(id);
-    
+
     // ✅ Use dto.existingImages or fallback to existing images
     let imageUrls: string[] = dto.existingImages || existingReview.images || [];
 
@@ -197,7 +202,12 @@ export class ReviewsController {
       images: imageUrls,
     };
 
-    return this.reviewsService.update(id, req.user.id, updateData, req.user.role);
+    return this.reviewsService.update(
+      id,
+      req.user.id,
+      updateData,
+      req.user.role,
+    );
   }
 
   @Delete(':id')

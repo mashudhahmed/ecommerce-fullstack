@@ -17,7 +17,9 @@ export class CreateCategoryDto {
   @IsString()
   @IsNotEmpty({ message: 'Category name is required' })
   @MaxLength(100, { message: 'Category name must not exceed 100 characters' })
-  @Matches(/^[a-zA-Z0-9\s\-&]+$/, { message: 'Category name contains invalid characters' })
+  @Matches(/^[a-zA-Z0-9\s\-&]+$/, {
+    message: 'Category name contains invalid characters',
+  })
   name!: string;
 
   @ApiProperty({ example: 'All electronic devices', required: false })

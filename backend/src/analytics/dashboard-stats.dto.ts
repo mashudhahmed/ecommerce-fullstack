@@ -22,6 +22,16 @@ export class DashboardStats {
   customerTrend!: { date: string; value: number }[];
 
   // Top performers
-  topProducts!: { id: number; title: string; revenue: number; orders: number }[];
-  topCategories!: { id: number; name: string; revenue: number; orders: number }[];
+  topProducts!: {
+    id: number;
+    title: string;
+    revenue: number;
+    orders: number;
+  }[];
+  topCategories!: {
+    id: number;
+    name: string;
+    revenue: number;
+    orders: number;
+  }[];
 }

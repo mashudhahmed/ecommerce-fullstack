@@ -66,10 +66,12 @@ export class AuthService {
 
     // ✅ Check if user exists using the fixed findByEmail
     const existingUser = await this.userService.findByEmail(email);
-    
+
     if (existingUser) {
       this.logger.warn(`⚠️ Registration attempt with existing email: ${email}`);
-      throw new ConflictException('Email already registered. Please login instead.');
+      throw new ConflictException(
+        'Email already registered. Please login instead.',
+      );
     }
 
     const hashedPassword = await bcrypt.hash(dto.password, BCRYPT_ROUNDS);
@@ -84,22 +86,31 @@ export class AuthService {
 
     const verificationCode = this.userService.generateSixDigitCode();
     const expiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
-    await this.userService.updateVerificationCode(user.email, verificationCode, expiry);
+    await this.userService.updateVerificationCode(
+      user.email,
+      verificationCode,
+      expiry,
+    );
 
     this.fireAndForget(
-      this.mailerService.sendVerificationEmail(user.email, verificationCode, user.name),
+      this.mailerService.sendVerificationEmail(
+        user.email,
+        verificationCode,
+        user.name,
+      ),
       `verification email to ${user.email}`,
     );
 
-    this.eventsGateway.notifyUser(
-      user.id.toString(),
-      'user_registered',
-      { userId: user.id, email: user.email, role: user.role },
-    );
+    this.eventsGateway.notifyUser(user.id.toString(), 'user_registered', {
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+    });
 
     return {
       success: true,
-      message: 'Registration successful. Please check your email for verification code.',
+      message:
+        'Registration successful. Please check your email for verification code.',
       userId: user.id,
       email: user.email,
       requiresVerification: true,
@@ -117,10 +128,14 @@ export class AuthService {
 
     // ✅ Check if user exists using the fixed findByEmail
     const existingUser = await this.userService.findByEmail(email);
-    
+
     if (existingUser) {
-      this.logger.warn(`⚠️ Vendor registration attempt with existing email: ${email}`);
-      throw new ConflictException('Email already registered. Please login instead.');
+      this.logger.warn(
+        `⚠️ Vendor registration attempt with existing email: ${email}`,
+      );
+      throw new ConflictException(
+        'Email already registered. Please login instead.',
+      );
     }
 
     const hashedPassword = await bcrypt.hash(dto.password, BCRYPT_ROUNDS);
@@ -142,10 +157,18 @@ export class AuthService {
 
     const verificationCode = this.userService.generateSixDigitCode();
     const expiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
-    await this.userService.updateVerificationCode(user.email, verificationCode, expiry);
+    await this.userService.updateVerificationCode(
+      user.email,
+      verificationCode,
+      expiry,
+    );
 
     this.fireAndForget(
-      this.mailerService.sendVerificationEmail(user.email, verificationCode, user.name),
+      this.mailerService.sendVerificationEmail(
+        user.email,
+        verificationCode,
+        user.name,
+      ),
       `verification email to ${user.email}`,
     );
 
@@ -154,11 +177,11 @@ export class AuthService {
       `vendor registration notification`,
     );
 
-    this.eventsGateway.notifyUser(
-      user.id.toString(),
-      'vendor_registered',
-      { userId: user.id, email: user.email, businessName: user.vendorBusinessName },
-    );
+    this.eventsGateway.notifyUser(user.id.toString(), 'vendor_registered', {
+      userId: user.id,
+      email: user.email,
+      businessName: user.vendorBusinessName,
+    });
 
     return {
       success: true,
@@ -191,10 +214,11 @@ export class AuthService {
     );
 
     if (isLocked) {
-      const remainingMinutes = await this.loginAttemptService.getLockoutRemainingMinutes(
-        dto.email,
-        meta.ipAddress || 'unknown',
-      );
+      const remainingMinutes =
+        await this.loginAttemptService.getLockoutRemainingMinutes(
+          dto.email,
+          meta.ipAddress || 'unknown',
+        );
       throw new UnauthorizedException(
         `Too many failed attempts. Please try again in ${remainingMinutes} minutes.`,
       );
@@ -226,11 +250,16 @@ export class AuthService {
     }
 
     // Clear failed attempts on success
-    await this.loginAttemptService.clearAttempts(dto.email, meta.ipAddress || 'unknown');
+    await this.loginAttemptService.clearAttempts(
+      dto.email,
+      meta.ipAddress || 'unknown',
+    );
 
     // Check if email is verified
     if (!user.isVerified) {
-      throw new UnauthorizedException('Please verify your email before logging in.');
+      throw new UnauthorizedException(
+        'Please verify your email before logging in.',
+      );
     }
 
     // Vendor approval checks
@@ -241,7 +270,9 @@ export class AuthService {
         );
       }
       if (!user.isVendorApproved) {
-        throw new ForbiddenException('Your vendor account is pending admin approval.');
+        throw new ForbiddenException(
+          'Your vendor account is pending admin approval.',
+        );
       }
     }
 
@@ -257,7 +288,10 @@ export class AuthService {
     }
 
     if (twoFactor && dto.twoFactorToken) {
-      const valid = await this.twoFactorService.verifyToken(user.id, dto.twoFactorToken);
+      const valid = await this.twoFactorService.verifyToken(
+        user.id,
+        dto.twoFactorToken,
+      );
       if (!valid) {
         throw new UnauthorizedException('Invalid 2FA token');
       }
@@ -272,20 +306,89 @@ export class AuthService {
       `login notification to ${user.email}`,
     );
 
-    this.eventsGateway.notifyUser(
-      user.id.toString(),
-      'user_logged_in',
-      {
-        userId: user.id,
-        email: user.email,
-        role: user.role,
-        timestamp: new Date().toISOString(),
-        ip: meta.ipAddress,
-      },
-    );
+    this.eventsGateway.notifyUser(user.id.toString(), 'user_logged_in', {
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+      timestamp: new Date().toISOString(),
+      ip: meta.ipAddress,
+    });
 
     return {
       message: 'Login successful',
+      tokens,
+      user: this.toPublicUser(user),
+    };
+  }
+
+  // ============================================================
+  // GOOGLE OAUTH
+  // ============================================================
+  async validateGoogleUser(
+    profile: {
+      googleId: string;
+      email: string;
+      name: string;
+      avatar?: string;
+    },
+    meta: { userAgent?: string; ipAddress?: string },
+  ): Promise<{
+    message: string;
+    tokens: TokenPair;
+    user: any;
+  }> {
+    const email = profile.email?.toLowerCase()?.trim();
+    if (!email || !email.includes('@')) {
+      throw new BadRequestException(
+        'A valid email address is required from Google account',
+      );
+    }
+    let user = await this.userService.findByEmail(email);
+
+    if (user) {
+      this.logger.log(`🔗 Existing user authenticating with Google: ${email}`);
+      const updates: Partial<User> = {};
+      if (!user.googleId) updates.googleId = profile.googleId;
+      if (!user.avatar && profile.avatar) updates.avatar = profile.avatar;
+      if (!user.isVerified) updates.isVerified = true;
+
+      if (Object.keys(updates).length > 0) {
+        user = await this.userService.update(user.id, updates);
+      }
+    } else {
+      this.logger.log(`✨ Provisioning new user via Google: ${email}`);
+      const randomPassword = crypto.randomBytes(32).toString('hex');
+      const hashedPassword = await bcrypt.hash(randomPassword, BCRYPT_ROUNDS);
+
+      user = await this.userService.create({
+        name: profile.name || email.split('@')[0],
+        email,
+        password: hashedPassword,
+        role: UserRole.USER,
+        isVerified: true,
+        googleId: profile.googleId,
+        avatar: profile.avatar,
+      });
+
+      this.fireAndForget(
+        this.mailerService.sendWelcomeEmail(user.email, user.name),
+        `welcome email to ${user.email}`,
+      );
+    }
+
+    const tokens = await this.issueTokenPair(user, meta);
+
+    this.eventsGateway.notifyUser(user.id.toString(), 'user_logged_in', {
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+      timestamp: new Date().toISOString(),
+      ip: meta.ipAddress,
+      provider: 'google',
+    });
+
+    return {
+      message: 'Google login successful',
       tokens,
       user: this.toPublicUser(user),
     };
@@ -311,7 +414,9 @@ export class AuthService {
     });
 
     if (!stored || stored.revoked || stored.expiresAt < new Date()) {
-      throw new UnauthorizedException('Invalid or expired session. Please login again.');
+      throw new UnauthorizedException(
+        'Invalid or expired session. Please login again.',
+      );
     }
 
     stored.revoked = true;
@@ -326,7 +431,10 @@ export class AuthService {
   // ============================================================
   // VERIFY EMAIL
   // ============================================================
-  async verifyEmail(email: string, code: string): Promise<{
+  async verifyEmail(
+    email: string,
+    code: string,
+  ): Promise<{
     message: string;
     tokens: TokenPair;
     user: any;
@@ -342,11 +450,10 @@ export class AuthService {
 
     const tokens = await this.issueTokenPair(user, {});
 
-    this.eventsGateway.notifyUser(
-      user.id.toString(),
-      'email_verified',
-      { userId: user.id, email: user.email },
-    );
+    this.eventsGateway.notifyUser(user.id.toString(), 'email_verified', {
+      userId: user.id,
+      email: user.email,
+    });
 
     return {
       message: 'Email verified successfully!',
@@ -426,7 +533,11 @@ export class AuthService {
   // ============================================================
   // CHANGE PASSWORD
   // ============================================================
-  async changePassword(userId: number, currentPassword: string, newPassword: string) {
+  async changePassword(
+    userId: number,
+    currentPassword: string,
+    newPassword: string,
+  ) {
     this.logger.log(`🔐 Password change attempt for user: ${userId}`);
 
     const user = await this.userService.findByIdWithPassword(userId);
@@ -434,7 +545,10 @@ export class AuthService {
       throw new NotFoundException('User not found');
     }
 
-    const isPasswordValid = await bcrypt.compare(currentPassword, user.password);
+    const isPasswordValid = await bcrypt.compare(
+      currentPassword,
+      user.password,
+    );
     if (!isPasswordValid) {
       throw new UnauthorizedException('Current password is incorrect');
     }
@@ -449,11 +563,9 @@ export class AuthService {
       `password changed email to ${user.email}`,
     );
 
-    this.eventsGateway.notifyUser(
-      user.id.toString(),
-      'password_changed',
-      { userId: user.id },
-    );
+    this.eventsGateway.notifyUser(user.id.toString(), 'password_changed', {
+      userId: user.id,
+    });
 
     return { message: 'Password changed successfully' };
   }
@@ -477,7 +589,9 @@ export class AuthService {
     // Find user
     const user = await this.userService.findByEmail(email);
     if (!user) {
-      this.logger.warn(`⚠️ Password reset requested for non-existent email: ${email}`);
+      this.logger.warn(
+        `⚠️ Password reset requested for non-existent email: ${email}`,
+      );
       return genericResponse;
     }
 
@@ -488,7 +602,11 @@ export class AuthService {
 
     // ✅ Send email with the code
     try {
-      await this.mailerService.sendPasswordResetCode(user.email, resetCode, user.name);
+      await this.mailerService.sendPasswordResetCode(
+        user.email,
+        resetCode,
+        user.name,
+      );
       this.logger.log(`✅ Reset code sent to ${email}`);
     } catch (error) {
       this.logger.error(`❌ Failed to send reset code to ${email}`, error);
@@ -508,7 +626,7 @@ export class AuthService {
     try {
       // ✅ Verify the code exists and is valid
       const user = await this.userService.verifyResetCode(email, code);
-      
+
       if (!user) {
         throw new BadRequestException('Invalid or expired verification code');
       }
@@ -552,7 +670,7 @@ export class AuthService {
 
     // ✅ Hash new password
     const hashedPassword = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
-    
+
     // ✅ Reset password and clear all reset tokens
     await this.userService.resetPassword(user.email, hashedPassword);
 
@@ -641,7 +759,9 @@ export class AuthService {
       throw new BadRequestException('Vendor is already approved');
     }
     if (vendor.isVendorRejected) {
-      throw new BadRequestException('Vendor has been rejected. Cannot approve.');
+      throw new BadRequestException(
+        'Vendor has been rejected. Cannot approve.',
+      );
     }
 
     await this.userService.update(vendor.id, {
@@ -657,11 +777,10 @@ export class AuthService {
 
     const updatedVendor = await this.userService.findByIdOrFail(vendorId);
 
-    this.eventsGateway.notifyUser(
-      vendorId.toString(),
-      'vendor_approved',
-      { vendorId, approvedAt: new Date().toISOString() },
-    );
+    this.eventsGateway.notifyUser(vendorId.toString(), 'vendor_approved', {
+      vendorId,
+      approvedAt: new Date().toISOString(),
+    });
 
     return {
       message: 'Vendor approved successfully',
@@ -691,15 +810,19 @@ export class AuthService {
     });
 
     this.fireAndForget(
-      this.mailerService.sendVendorRejectionEmail(vendor.email, vendor.name, reason),
+      this.mailerService.sendVendorRejectionEmail(
+        vendor.email,
+        vendor.name,
+        reason,
+      ),
       `vendor rejection email to ${vendor.email}`,
     );
 
-    this.eventsGateway.notifyUser(
-      vendorId.toString(),
-      'vendor_rejected',
-      { vendorId, reason, rejectedAt: new Date().toISOString() },
-    );
+    this.eventsGateway.notifyUser(vendorId.toString(), 'vendor_rejected', {
+      vendorId,
+      reason,
+      rejectedAt: new Date().toISOString(),
+    });
 
     return {
       message: 'Vendor rejected successfully',
@@ -748,7 +871,9 @@ export class AuthService {
         this.userService.countPendingVendors(),
         this.userService
           .countByRole(UserRole.VENDOR)
-          .then(() => this.userService.findApprovedVendors().then((v) => v.length)),
+          .then(() =>
+            this.userService.findApprovedVendors().then((v) => v.length),
+          ),
         this.userService
           .findByRole(UserRole.VENDOR)
           .then((v) => v.filter((u) => u.isVendorRejected).length),
@@ -759,13 +884,16 @@ export class AuthService {
       pendingVendors,
       approvedVendors,
       rejectedVendors,
-      approvalRate: totalVendors > 0 ? (approvedVendors / totalVendors) * 100 : 0,
+      approvalRate:
+        totalVendors > 0 ? (approvedVendors / totalVendors) * 100 : 0,
       timestamp: new Date().toISOString(),
     };
   }
 
   async bulkApproveVendors(vendorIds: number[], adminId: number) {
-    this.logger.log(`✅ Bulk approving ${vendorIds.length} vendors by admin: ${adminId}`);
+    this.logger.log(
+      `✅ Bulk approving ${vendorIds.length} vendors by admin: ${adminId}`,
+    );
 
     const results = {
       success: [] as number[],
@@ -790,8 +918,14 @@ export class AuthService {
     };
   }
 
-  async bulkRejectVendors(vendorIds: number[], adminId: number, reason?: string) {
-    this.logger.log(`❌ Bulk rejecting ${vendorIds.length} vendors by admin: ${adminId}`);
+  async bulkRejectVendors(
+    vendorIds: number[],
+    adminId: number,
+    reason?: string,
+  ) {
+    this.logger.log(
+      `❌ Bulk rejecting ${vendorIds.length} vendors by admin: ${adminId}`,
+    );
 
     const results = {
       success: [] as number[],
@@ -839,7 +973,9 @@ export class AuthService {
     });
 
     if (!user) {
-      throw new NotFoundException(`Vendor with business name "${businessName}" not found`);
+      throw new NotFoundException(
+        `Vendor with business name "${businessName}" not found`,
+      );
     }
 
     return this.toPublicUser(user);
@@ -934,6 +1070,8 @@ export class AuthService {
       vendorPhoneNumber: user.vendorPhoneNumber,
       vendorAddress: user.vendorAddress,
       vendorBusinessRegistration: user.vendorBusinessRegistration,
+      avatar: user.avatar,
+      googleId: user.googleId,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     };

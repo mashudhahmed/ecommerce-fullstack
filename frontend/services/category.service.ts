@@ -1,5 +1,5 @@
 // services/category.service.ts
-import { apiClient } from '@/lib/api-client';
+import { apiClient, unwrapData } from '@/lib/api-client';
 import { ApiResponse } from '@/types';
 import { fallbackCategories } from '@/lib/fallback-categories';
 
@@ -30,10 +30,17 @@ export const categoryService = {
   // ✅ Get all categories with fallback
   async getCategories(): Promise<Category[]> {
     try {
-      const { data } = await apiClient.get<ApiResponse<Category[]>>('/categories');
-      return data.data || fallbackCategories;
-    } catch (error) {
-      console.error('❌ Failed to fetch categories:', error);
+      const response = await apiClient.get<ApiResponse<Category[]>>('/categories');
+      const categories = unwrapData<Category[]>(response.data);
+      if (Array.isArray(categories) && categories.length > 0) {
+        return categories;
+      }
+      return fallbackCategories;
+    } catch (error: any) {
+      const message =
+        error?.message ||
+        (typeof error === 'object' ? JSON.stringify(error) : String(error));
+      console.error('❌ Failed to fetch categories:', message);
       return fallbackCategories;
     }
   },
@@ -41,10 +48,17 @@ export const categoryService = {
   // ✅ Get category tree with fallback
   async getCategoryTree(): Promise<Category[]> {
     try {
-      const { data } = await apiClient.get<ApiResponse<Category[]>>('/categories/tree');
-      return data.data || fallbackCategories;
-    } catch (error) {
-      console.error('❌ Failed to fetch category tree:', error);
+      const response = await apiClient.get<ApiResponse<Category[]>>('/categories/tree');
+      const tree = unwrapData<Category[]>(response.data);
+      if (Array.isArray(tree) && tree.length > 0) {
+        return tree;
+      }
+      return fallbackCategories;
+    } catch (error: any) {
+      const message =
+        error?.message ||
+        (typeof error === 'object' ? JSON.stringify(error) : String(error));
+      console.error('❌ Failed to fetch category tree:', message);
       return fallbackCategories;
     }
   },
@@ -52,10 +66,13 @@ export const categoryService = {
   // ✅ Get single category
   async getCategory(id: number): Promise<Category | null> {
     try {
-      const { data } = await apiClient.get<ApiResponse<Category>>(`/categories/${id}`);
-      return data.data || null;
-    } catch (error) {
-      console.error(`❌ Failed to fetch category ${id}:`, error);
+      const response = await apiClient.get<ApiResponse<Category>>(`/categories/${id}`);
+      return unwrapData<Category>(response.data) || null;
+    } catch (error: any) {
+      const message =
+        error?.message ||
+        (typeof error === 'object' ? JSON.stringify(error) : String(error));
+      console.error(`❌ Failed to fetch category ${id}:`, message);
       return null;
     }
   },
@@ -63,24 +80,27 @@ export const categoryService = {
   // ✅ Get category by slug
   async getCategoryBySlug(slug: string): Promise<Category | null> {
     try {
-      const { data } = await apiClient.get<ApiResponse<Category>>(`/categories/slug/${slug}`);
-      return data.data || null;
-    } catch (error) {
-      console.error(`❌ Failed to fetch category by slug ${slug}:`, error);
+      const response = await apiClient.get<ApiResponse<Category>>(`/categories/slug/${slug}`);
+      return unwrapData<Category>(response.data) || null;
+    } catch (error: any) {
+      const message =
+        error?.message ||
+        (typeof error === 'object' ? JSON.stringify(error) : String(error));
+      console.error(`❌ Failed to fetch category by slug ${slug}:`, message);
       return null;
     }
   },
 
   // ✅ Create category (admin only)
   async createCategory(data: CreateCategoryData): Promise<Category> {
-    const { data: response } = await apiClient.post<ApiResponse<Category>>('/categories', data);
-    return response.data;
+    const response = await apiClient.post<ApiResponse<Category>>('/categories', data);
+    return unwrapData<Category>(response.data);
   },
 
   // ✅ Update category (admin only)
   async updateCategory(id: number, data: Partial<CreateCategoryData>): Promise<Category> {
-    const { data: response } = await apiClient.put<ApiResponse<Category>>(`/categories/${id}`, data);
-    return response.data;
+    const response = await apiClient.put<ApiResponse<Category>>(`/categories/${id}`, data);
+    return unwrapData<Category>(response.data);
   },
 
   // ✅ Delete category (admin only)
@@ -95,10 +115,13 @@ export const categoryService = {
     rootCategories: number;
   }> {
     try {
-      const { data } = await apiClient.get<ApiResponse<any>>('/categories/stats');
-      return data.data || { total: 0, active: 0, rootCategories: 0 };
-    } catch (error) {
-      console.error('❌ Failed to fetch category stats:', error);
+      const response = await apiClient.get<ApiResponse<any>>('/categories/stats');
+      return unwrapData<any>(response.data) || { total: 0, active: 0, rootCategories: 0 };
+    } catch (error: any) {
+      const message =
+        error?.message ||
+        (typeof error === 'object' ? JSON.stringify(error) : String(error));
+      console.error('❌ Failed to fetch category stats:', message);
       return { total: 0, active: 0, rootCategories: 0 };
     }
   },

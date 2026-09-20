@@ -71,7 +71,10 @@ export class SampleDataSeeder implements OnApplicationBootstrap {
         { name: 'Electronics', description: 'Devices and gadgets' },
         { name: 'Clothing', description: 'Fashion and apparel' },
         { name: 'Books', description: 'Books and literature' },
-        { name: 'Home & Garden', description: 'Home improvement and gardening' },
+        {
+          name: 'Home & Garden',
+          description: 'Home improvement and gardening',
+        },
         { name: 'Toys & Games', description: 'Fun for all ages' },
       ];
 
@@ -101,9 +104,9 @@ export class SampleDataSeeder implements OnApplicationBootstrap {
       // (or re-running tests against the same rows) always yields the same
       // photo instead of a new random one each time.
       const categoryImageKeywords: Record<string, string> = {
-        'Electronics': 'electronics,gadget',
-        'Clothing': 'fashion,apparel',
-        'Books': 'book,reading',
+        Electronics: 'electronics,gadget',
+        Clothing: 'fashion,apparel',
+        Books: 'book,reading',
         'Home & Garden': 'garden,homedecor',
         'Toys & Games': 'toys,boardgame',
       };
@@ -114,26 +117,111 @@ export class SampleDataSeeder implements OnApplicationBootstrap {
       };
 
       const productsData = [
-        { title: 'Smartphone X', price: 699.99, stock: 50, category: 'Electronics' },
-        { title: 'Wireless Headphones', price: 99.99, stock: 120, category: 'Electronics' },
-        { title: 'Smartwatch Pro', price: 249.99, stock: 30, category: 'Electronics' },
-        { title: 'Bluetooth Speaker', price: 59.99, stock: 80, category: 'Electronics' },
-        { title: 'Laptop Stand', price: 29.99, stock: 200, category: 'Electronics' },
-        { title: 'T-Shirt (Cotton)', price: 19.99, stock: 150, category: 'Clothing' },
-        { title: 'Jeans (Slim Fit)', price: 49.99, stock: 100, category: 'Clothing' },
-        { title: 'Jacket (Waterproof)', price: 89.99, stock: 45, category: 'Clothing' },
-        { title: 'Sneakers (Running)', price: 79.99, stock: 60, category: 'Clothing' },
+        {
+          title: 'Smartphone X',
+          price: 699.99,
+          stock: 50,
+          category: 'Electronics',
+        },
+        {
+          title: 'Wireless Headphones',
+          price: 99.99,
+          stock: 120,
+          category: 'Electronics',
+        },
+        {
+          title: 'Smartwatch Pro',
+          price: 249.99,
+          stock: 30,
+          category: 'Electronics',
+        },
+        {
+          title: 'Bluetooth Speaker',
+          price: 59.99,
+          stock: 80,
+          category: 'Electronics',
+        },
+        {
+          title: 'Laptop Stand',
+          price: 29.99,
+          stock: 200,
+          category: 'Electronics',
+        },
+        {
+          title: 'T-Shirt (Cotton)',
+          price: 19.99,
+          stock: 150,
+          category: 'Clothing',
+        },
+        {
+          title: 'Jeans (Slim Fit)',
+          price: 49.99,
+          stock: 100,
+          category: 'Clothing',
+        },
+        {
+          title: 'Jacket (Waterproof)',
+          price: 89.99,
+          stock: 45,
+          category: 'Clothing',
+        },
+        {
+          title: 'Sneakers (Running)',
+          price: 79.99,
+          stock: 60,
+          category: 'Clothing',
+        },
         { title: 'Sunglasses', price: 39.99, stock: 90, category: 'Clothing' },
         { title: 'Fiction Novel', price: 14.99, stock: 200, category: 'Books' },
         { title: 'Cookbook', price: 24.99, stock: 75, category: 'Books' },
-        { title: 'Science Textbook', price: 59.99, stock: 40, category: 'Books' },
-        { title: 'Children\'s Picture Book', price: 9.99, stock: 150, category: 'Books' },
-        { title: 'Gardening Tools Set', price: 39.99, stock: 35, category: 'Home & Garden' },
-        { title: 'Plant Pots (Set of 3)', price: 19.99, stock: 80, category: 'Home & Garden' },
-        { title: 'Outdoor String Lights', price: 29.99, stock: 60, category: 'Home & Garden' },
-        { title: 'Board Game', price: 34.99, stock: 50, category: 'Toys & Games' },
-        { title: 'Puzzle (1000 pieces)', price: 14.99, stock: 100, category: 'Toys & Games' },
-        { title: 'Action Figure', price: 24.99, stock: 70, category: 'Toys & Games' },
+        {
+          title: 'Science Textbook',
+          price: 59.99,
+          stock: 40,
+          category: 'Books',
+        },
+        {
+          title: "Children's Picture Book",
+          price: 9.99,
+          stock: 150,
+          category: 'Books',
+        },
+        {
+          title: 'Gardening Tools Set',
+          price: 39.99,
+          stock: 35,
+          category: 'Home & Garden',
+        },
+        {
+          title: 'Plant Pots (Set of 3)',
+          price: 19.99,
+          stock: 80,
+          category: 'Home & Garden',
+        },
+        {
+          title: 'Outdoor String Lights',
+          price: 29.99,
+          stock: 60,
+          category: 'Home & Garden',
+        },
+        {
+          title: 'Board Game',
+          price: 34.99,
+          stock: 50,
+          category: 'Toys & Games',
+        },
+        {
+          title: 'Puzzle (1000 pieces)',
+          price: 14.99,
+          stock: 100,
+          category: 'Toys & Games',
+        },
+        {
+          title: 'Action Figure',
+          price: 24.99,
+          stock: 70,
+          category: 'Toys & Games',
+        },
       ];
 
       const productsToInsert = productsData.map((p, index) => {

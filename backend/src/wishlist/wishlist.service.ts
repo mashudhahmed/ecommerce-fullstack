@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, ConflictException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+  Logger,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { WishlistItem } from './wishlist.entity';
@@ -14,7 +19,10 @@ export class WishlistService {
     private readonly wishlistRepository: Repository<WishlistItem>,
   ) {}
 
-  async addToWishlist(userId: number, productId: number): Promise<WishlistItem> {
+  async addToWishlist(
+    userId: number,
+    productId: number,
+  ): Promise<WishlistItem> {
     const existing = await this.wishlistRepository.findOne({
       where: {
         user: { id: userId },
@@ -32,7 +40,9 @@ export class WishlistService {
     });
 
     const saved = await this.wishlistRepository.save(item);
-    this.logger.log(`Product ${productId} added to wishlist for user ${userId}`);
+    this.logger.log(
+      `Product ${productId} added to wishlist for user ${userId}`,
+    );
     return saved;
   }
 
@@ -46,10 +56,16 @@ export class WishlistService {
       throw new NotFoundException('Item not found in wishlist');
     }
 
-    this.logger.log(`Product ${productId} removed from wishlist for user ${userId}`);
+    this.logger.log(
+      `Product ${productId} removed from wishlist for user ${userId}`,
+    );
   }
 
-  async getUserWishlist(userId: number, page: number = 1, limit: number = 20): Promise<any> {
+  async getUserWishlist(
+    userId: number,
+    page: number = 1,
+    limit: number = 20,
+  ): Promise<any> {
     const [items, total] = await this.wishlistRepository.findAndCount({
       where: { user: { id: userId } },
       relations: ['product'],
@@ -59,7 +75,7 @@ export class WishlistService {
     });
 
     return {
-      data: items.map(item => item.product),
+      data: items.map((item) => item.product),
       meta: {
         total,
         page,

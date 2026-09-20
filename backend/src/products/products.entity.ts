@@ -49,7 +49,9 @@ export class Product {
   isActive!: boolean;
 
   // ✅ Category Relation (Required)
-  @ManyToOne(() => Category, (category) => category.products, { nullable: false })
+  @ManyToOne(() => Category, (category) => category.products, {
+    nullable: false,
+  })
   @Expose()
   category!: Category;
 
@@ -102,7 +104,9 @@ export class Product {
   @Expose()
   images!: ProductImage[];
 
-  @OneToMany(() => ProductVariant, (variant) => variant.product, { cascade: true })
+  @OneToMany(() => ProductVariant, (variant) => variant.product, {
+    cascade: true,
+  })
   @Expose()
   variants!: ProductVariant[];
 
@@ -135,7 +139,9 @@ export class Product {
 
   getDiscountPercentage(): number | null {
     if (this.compareAtPrice && this.compareAtPrice > this.price) {
-      return Math.round(((this.compareAtPrice - this.price) / this.compareAtPrice) * 100);
+      return Math.round(
+        ((this.compareAtPrice - this.price) / this.compareAtPrice) * 100,
+      );
     }
     return null;
   }

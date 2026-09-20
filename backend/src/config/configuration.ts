@@ -2,6 +2,9 @@
 export default () => ({
   app: {
     frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3000',
+    backendUrl:
+      process.env.BACKEND_URL ||
+      `http://localhost:${process.env.PORT || '3001'}`,
   },
   port: parseInt(process.env.PORT || '3000', 10),
   database: {
@@ -29,7 +32,10 @@ export default () => ({
     adminEmails: process.env.ADMIN_NOTIFICATION_EMAILS,
   },
   cors: {
-    origin: process.env.CORS_ORIGIN?.split(',') || ['http://localhost:3000', 'http://localhost:3001'],
+    origin: process.env.CORS_ORIGIN?.split(',') || [
+      'http://localhost:3000',
+      'http://localhost:3001',
+    ],
   },
   // ✅ Add Cloudinary configuration
   cloudinary: {
@@ -42,5 +48,13 @@ export default () => ({
   upload: {
     directory: process.env.UPLOAD_DIRECTORY || './uploads',
     maxSize: parseInt(process.env.UPLOAD_MAX_SIZE || '5242880', 10),
+  },
+  // ✅ Google OAuth configuration
+  google: {
+    clientId: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    callbackUrl:
+      process.env.GOOGLE_CALLBACK_URL ||
+      'http://localhost:3001/api/v1/auth/google/callback',
   },
 });

@@ -16,16 +16,22 @@ export class ReviewAnalyticsService {
   async getProductReviewAnalytics(productId: number): Promise<{
     averageRating: number;
     totalReviews: number;
-    ratingDistribution: { 1: number; 2: number; 3: number; 4: number; 5: number };
+    ratingDistribution: {
+      1: number;
+      2: number;
+      3: number;
+      4: number;
+      5: number;
+    };
     sentimentScore: number;
     recentTrend: { date: string; rating: number }[];
   }> {
     // ✅ Fix: Use proper relation syntax
     const reviews = await this.reviewRepo.find({
-      where: { 
+      where: {
         product: { id: productId },
-        isApproved: true, 
-        isDeleted: false 
+        isApproved: true,
+        isDeleted: false,
       },
       order: { createdAt: 'ASC' },
     });
@@ -41,7 +47,7 @@ export class ReviewAnalyticsService {
 
     // Calculate recent trend (last 30 days)
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const recentReviews = reviews.filter(r => r.createdAt >= thirtyDaysAgo);
+    const recentReviews = reviews.filter((r) => r.createdAt >= thirtyDaysAgo);
     const dailyTrend = this.groupByDay(recentReviews);
 
     return {
@@ -57,10 +63,17 @@ export class ReviewAnalyticsService {
   async getProductReviewStats(productId: number): Promise<{
     averageRating: number;
     totalReviews: number;
-    ratingDistribution: { 1: number; 2: number; 3: number; 4: number; 5: number };
+    ratingDistribution: {
+      1: number;
+      2: number;
+      3: number;
+      4: number;
+      5: number;
+    };
   }> {
     const result = await this.reviewRepo
       .createQueryBuilder('review')
+      .leftJoin('review.product', 'product')
       .select('AVG(review.rating)', 'averageRating')
       .addSelect('COUNT(review.id)', 'totalReviews')
       .addSelect('COUNT(CASE WHEN review.rating = 5 THEN 1 END)', 'rating5')
@@ -68,7 +81,7 @@ export class ReviewAnalyticsService {
       .addSelect('COUNT(CASE WHEN review.rating = 3 THEN 1 END)', 'rating3')
       .addSelect('COUNT(CASE WHEN review.rating = 2 THEN 1 END)', 'rating2')
       .addSelect('COUNT(CASE WHEN review.rating = 1 THEN 1 END)', 'rating1')
-      .where('review.productId = :productId', { productId })
+      .where('product.id = :productId', { productId })
       .andWhere('review.isApproved = :isApproved', { isApproved: true })
       .andWhere('review.isDeleted = :isDeleted', { isDeleted: false })
       .getRawOne();
@@ -96,7 +109,8 @@ export class ReviewAnalyticsService {
     const query = this.reviewRepo
       .createQueryBuilder('review')
       .leftJoinAndSelect('review.user', 'user')
-      .where('review.productId = :productId', { productId })
+      .leftJoinAndSelect('review.product', 'product')
+      .where('product.id = :productId', { productId })
       .andWhere('review.isApproved = :isApproved', { isApproved: true })
       .andWhere('review.isDeleted = :isDeleted', { isDeleted: false });
 
@@ -133,10 +147,14 @@ export class ReviewAnalyticsService {
       .leftJoinAndSelect('review.product', 'product');
 
     if (filters?.isApproved !== undefined) {
-      query.andWhere('review.isApproved = :isApproved', { isApproved: filters.isApproved });
+      query.andWhere('review.isApproved = :isApproved', {
+        isApproved: filters.isApproved,
+      });
     }
     if (filters?.isDeleted !== undefined) {
-      query.andWhere('review.isDeleted = :isDeleted', { isDeleted: filters.isDeleted });
+      query.andWhere('review.isDeleted = :isDeleted', {
+        isDeleted: filters.isDeleted,
+      });
     }
     if (filters?.rating) {
       query.andWhere('review.rating = :rating', { rating: filters.rating });
@@ -179,7 +197,8 @@ export class ReviewAnalyticsService {
 
   private calculateSentiment(reviews: Review[]): number {
     if (reviews.length === 0) return 0;
-    const avgRating = reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length;
+    const avgRating =
+      reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length;
     // Normalize to -1 to 1 (1 = very positive, -1 = very negative)
     return (avgRating - 3) / 2;
   }
@@ -196,7 +215,8 @@ export class ReviewAnalyticsService {
 
     const percentageDistribution: Record<number, number> = {};
     for (let i = 1; i <= 5; i++) {
-      percentageDistribution[i] = total > 0 ? (stats.ratingDistribution[i] / total) * 100 : 0;
+      percentageDistribution[i] =
+        total > 0 ? (stats.ratingDistribution[i] / total) * 100 : 0;
     }
 
     return {
@@ -211,7 +231,12 @@ export class ReviewAnalyticsService {
   async getVendorReviewAnalytics(vendorId: number): Promise<{
     totalReviews: number;
     averageRating: number;
-    productStats: { productId: number; productName: string; averageRating: number; totalReviews: number }[];
+    productStats: {
+      productId: number;
+      productName: string;
+      averageRating: number;
+      totalReviews: number;
+    }[];
     recentReviews: Review[];
     ratingTrend: { date: string; averageRating: number; count: number }[];
   }> {
@@ -241,7 +266,10 @@ export class ReviewAnalyticsService {
     const averageRating = totalRating / reviews.length;
 
     // Group by product
-    const productMap = new Map<number, { sum: number; count: number; name: string }>();
+    const productMap = new Map<
+      number,
+      { sum: number; count: number; name: string }
+    >();
     for (const review of reviews) {
       const productId = review.product.id;
       if (!productMap.has(productId)) {
@@ -251,17 +279,19 @@ export class ReviewAnalyticsService {
           name: review.product.title,
         });
       }
-      const data = productMap.get(productId)!;
+      const data = productMap.get(productId);
       data.sum += review.rating;
       data.count++;
     }
 
-    const productStats = Array.from(productMap.entries()).map(([productId, data]) => ({
-      productId,
-      productName: data.name,
-      averageRating: data.sum / data.count,
-      totalReviews: data.count,
-    }));
+    const productStats = Array.from(productMap.entries()).map(
+      ([productId, data]) => ({
+        productId,
+        productName: data.name,
+        averageRating: data.sum / data.count,
+        totalReviews: data.count,
+      }),
+    );
 
     // Get recent reviews (last 10)
     const recentReviews = reviews
@@ -270,7 +300,9 @@ export class ReviewAnalyticsService {
 
     // Calculate rating trend (last 30 days)
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const recentReviewsForTrend = reviews.filter(r => r.createdAt >= thirtyDaysAgo);
+    const recentReviewsForTrend = reviews.filter(
+      (r) => r.createdAt >= thirtyDaysAgo,
+    );
     const ratingTrend = this.groupByDayForTrend(recentReviewsForTrend);
 
     return {
@@ -282,7 +314,9 @@ export class ReviewAnalyticsService {
     };
   }
 
-  private groupByDayForTrend(reviews: Review[]): { date: string; averageRating: number; count: number }[] {
+  private groupByDayForTrend(
+    reviews: Review[],
+  ): { date: string; averageRating: number; count: number }[] {
     const grouped: Record<string, { sum: number; count: number }> = {};
 
     for (const review of reviews) {

@@ -3,7 +3,10 @@ import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 
 import { NotificationService } from '../../notifications/notification.service';
-import { NotificationType, NotificationChannel } from '../../notifications/notification.entity';
+import {
+  NotificationType,
+  NotificationChannel,
+} from '../../notifications/notification.entity';
 import { MailerService } from '../../mailer/mailer.service';
 import { UserService } from '../../user/user.service';
 import { MetricsService } from '../../monitoring/metrics.service';
@@ -24,7 +27,9 @@ export class OrderEventsListener {
 
   @OnEvent(EventType.ORDER_CREATED)
   async handleOrderCreated(event: OrderEvent): Promise<void> {
-    this.logger.debug(`Handling ORDER_CREATED event for order ${event.orderId}`);
+    this.logger.debug(
+      `Handling ORDER_CREATED event for order ${event.orderId}`,
+    );
 
     try {
       const user = await this.userService.findByIdOrFail(event.userId);
@@ -44,16 +49,17 @@ export class OrderEventsListener {
         { orderId: event.orderId },
       );
 
-      this.eventsGateway.notifyUser(
-        event.userId.toString(),
-        'order_created',
-        { orderId: event.orderId },
-      );
+      this.eventsGateway.notifyUser(event.userId.toString(), 'order_created', {
+        orderId: event.orderId,
+      });
 
       this.metricsService.recordEmailSent('order_confirmation', 'success');
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this.logger.error(`Failed to handle ORDER_CREATED event: ${errorMessage}`);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(
+        `Failed to handle ORDER_CREATED event: ${errorMessage}`,
+      );
       this.metricsService.recordEmailSent('order_confirmation', 'failed');
     }
   }
@@ -88,14 +94,19 @@ export class OrderEventsListener {
         { orderId: event.orderId, status: event.status },
       );
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this.logger.error(`Failed to handle ORDER_STATUS_UPDATED event: ${errorMessage}`);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(
+        `Failed to handle ORDER_STATUS_UPDATED event: ${errorMessage}`,
+      );
     }
   }
 
   @OnEvent(EventType.ORDER_CANCELLED)
   async handleOrderCancelled(event: OrderEvent): Promise<void> {
-    this.logger.debug(`Handling ORDER_CANCELLED event for order ${event.orderId}`);
+    this.logger.debug(
+      `Handling ORDER_CANCELLED event for order ${event.orderId}`,
+    );
 
     try {
       const user = await this.userService.findByIdOrFail(event.userId);
@@ -115,8 +126,11 @@ export class OrderEventsListener {
         { orderId: event.orderId },
       );
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this.logger.error(`Failed to handle ORDER_CANCELLED event: ${errorMessage}`);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(
+        `Failed to handle ORDER_CANCELLED event: ${errorMessage}`,
+      );
     }
   }
 }

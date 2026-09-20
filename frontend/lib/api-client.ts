@@ -24,6 +24,8 @@ const AUTH_EXEMPT_PATHS = [
   '/auth/verify-reset-code',
   '/auth/reset-password',
   '/auth/2fa/verify',
+  '/auth/me',
+  '/users/me',
 ];
 
 function isAuthExempt(url?: string): boolean {

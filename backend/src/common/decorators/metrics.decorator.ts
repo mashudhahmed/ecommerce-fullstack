@@ -1,14 +1,21 @@
 // src/common/decorators/metrics.decorator.ts
 import { MetricsService } from '../../monitoring/metrics.service';
 
-export function TrackDbQuery(entity: string, operation: string): MethodDecorator {
-  return function (target: any, propertyKey: string | symbol, descriptor: PropertyDescriptor) {
+export function TrackDbQuery(
+  entity: string,
+  operation: string,
+): MethodDecorator {
+  return function (
+    target: any,
+    propertyKey: string | symbol,
+    descriptor: PropertyDescriptor,
+  ) {
     const originalMethod = descriptor.value;
 
     descriptor.value = async function (...args: any[]) {
       const startTime = Date.now();
-      const metricsService = (this as any).metricsService as MetricsService;
-      
+      const metricsService = this.metricsService as MetricsService;
+
       try {
         const result = await originalMethod.apply(this, args);
         if (metricsService) {

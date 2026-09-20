@@ -1,5 +1,14 @@
 // src/reviews/dto/create-review.dto.ts
-import { IsInt, IsString, Min, Max, IsOptional, IsArray, MinLength, MaxLength } from 'class-validator';
+import {
+  IsInt,
+  IsString,
+  Min,
+  Max,
+  IsOptional,
+  IsArray,
+  MinLength,
+  MaxLength,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateReviewDto {
@@ -20,7 +29,10 @@ export class CreateReviewDto {
   @MaxLength(100)
   title?: string;
 
-  @ApiProperty({ example: 'I really loved this product, highly recommended!', required: false })
+  @ApiProperty({
+    example: 'I really loved this product, highly recommended!',
+    required: false,
+  })
   @IsOptional()
   @IsString()
   @MinLength(10)

@@ -19,6 +19,10 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request>();
 
+    if (response.headersSent) {
+      return;
+    }
+
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
     let message = 'Internal server error';
     let error = 'Unknown error';
@@ -28,7 +32,10 @@ export class HttpExceptionFilter implements ExceptionFilter {
       status = HttpStatus.BAD_REQUEST;
       message = 'Database error';
       error = exception.message;
-      this.logger.error(`Database error: ${exception.message}`, exception.stack);
+      this.logger.error(
+        `Database error: ${exception.message}`,
+        exception.stack,
+      );
     } else if (exception instanceof HttpException) {
       status = exception.getStatus();
       const exceptionResponse = exception.getResponse() as any;

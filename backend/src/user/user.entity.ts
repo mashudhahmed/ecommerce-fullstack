@@ -87,6 +87,12 @@ export class User {
   @Expose()
   avatar?: string;
 
+  // ✅ Google OAuth ID for social sign-in
+  @Column({ nullable: true })
+  @Index()
+  @Expose()
+  googleId?: string;
+
   @Exclude()
   @Column({ type: 'varchar', length: 6, nullable: true })
   verificationCode: string | null = null;

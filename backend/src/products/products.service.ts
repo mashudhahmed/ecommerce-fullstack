@@ -44,13 +44,18 @@ export class ProductsService {
 
   @Trace('products.create')
   @QueryTimeout(10000)
-  async create(createProductDto: CreateProductDto, userId: number): Promise<Product> {
+  async create(
+    createProductDto: CreateProductDto,
+    userId: number,
+  ): Promise<Product> {
     const startTime = Date.now();
 
     const user = await this.userService.findByIdOrFail(userId);
 
     if (user.role === UserRole.USER) {
-      throw new ForbiddenException('Only vendors and admins can create products');
+      throw new ForbiddenException(
+        'Only vendors and admins can create products',
+      );
     }
 
     if (user.role === UserRole.VENDOR && !user.isVendorApproved) {
@@ -64,7 +69,7 @@ export class ProductsService {
 
     if (!category) {
       throw new BadRequestException(
-        `Category with ID ${createProductDto.categoryId} not found or inactive`
+        `Category with ID ${createProductDto.categoryId} not found or inactive`,
       );
     }
 
@@ -77,7 +82,9 @@ export class ProductsService {
     });
 
     const savedProduct = await this.productRepository.save(product);
-    this.logger.log(`Product created: ${savedProduct.title} by user ${userId} (Category: ${category.name})`);
+    this.logger.log(
+      `Product created: ${savedProduct.title} by user ${userId} (Category: ${category.name})`,
+    );
 
     this.metricsService.recordProductCreation(userId);
     const duration = (Date.now() - startTime) / 1000;
@@ -132,7 +139,10 @@ export class ProductsService {
 
   @Trace('products.findAllPaginated')
   @QueryTimeout(10000)
-  async findAllPaginated(page: number = 1, limit: number = 20): Promise<{
+  async findAllPaginated(
+    page: number = 1,
+    limit: number = 20,
+  ): Promise<{
     data: Product[];
     total: number;
     page: number;
@@ -147,8 +157,13 @@ export class ProductsService {
       limit: number;
       totalPages: number;
     }>(cacheKey);
-    
-    if (cached && typeof cached === 'object' && 'data' in cached && 'total' in cached) {
+
+    if (
+      cached &&
+      typeof cached === 'object' &&
+      'data' in cached &&
+      'total' in cached
+    ) {
       this.metricsService.recordCacheHit('products:list');
       return cached;
     }
@@ -410,14 +425,16 @@ export class ProductsService {
       });
       if (!category) {
         throw new BadRequestException(
-          `Category with ID ${updateProductDto.categoryId} not found or inactive`
+          `Category with ID ${updateProductDto.categoryId} not found or inactive`,
         );
       }
     }
 
     Object.assign(product, updateProductDto);
     const updatedProduct = await this.productRepository.save(product);
-    this.logger.log(`Product updated: ${updatedProduct.title} by user ${userId}`);
+    this.logger.log(
+      `Product updated: ${updatedProduct.title} by user ${userId}`,
+    );
 
     const duration = (Date.now() - startTime) / 1000;
     this.metricsService.recordDbQuery('update', 'products', duration);
@@ -508,7 +525,9 @@ export class ProductsService {
   @QueryTimeout(10000)
   async permanentlyDelete(id: number, userRole: UserRole): Promise<void> {
     if (![UserRole.ADMIN, UserRole.SUPER_ADMIN].includes(userRole)) {
-      throw new ForbiddenException('Only admins can permanently delete products');
+      throw new ForbiddenException(
+        'Only admins can permanently delete products',
+      );
     }
 
     const startTime = Date.now();
@@ -545,7 +564,7 @@ export class ProductsService {
     if (updates.length > MAX_BULK) {
       throw new BadRequestException(
         `Maximum ${MAX_BULK} products can be updated at once. ` +
-        `You provided ${updates.length}. Please split into smaller batches.`
+          `You provided ${updates.length}. Please split into smaller batches.`,
       );
     }
 
@@ -570,11 +589,15 @@ export class ProductsService {
       for (const update of updates) {
         const product = productMap.get(update.productId);
         if (!product) {
-          throw new NotFoundException(`Product with ID ${update.productId} not found or not yours`);
+          throw new NotFoundException(
+            `Product with ID ${update.productId} not found or not yours`,
+          );
         }
 
         if (update.stock < 0) {
-          throw new BadRequestException(`Stock cannot be negative for product ${product.title}`);
+          throw new BadRequestException(
+            `Stock cannot be negative for product ${product.title}`,
+          );
         }
 
         product.stock = update.stock;
@@ -616,7 +639,7 @@ export class ProductsService {
       lowStockCount: number;
       outOfStockCount: number;
     }>(cacheKey);
-    
+
     if (cached && typeof cached === 'object' && 'totalProducts' in cached) {
       this.metricsService.recordCacheHit('vendor:product:stats');
       return cached;
@@ -632,7 +655,8 @@ export class ProductsService {
     const result = {
       totalProducts: products.length,
       totalStock: products.reduce((sum, p) => sum + p.stock, 0),
-      lowStockCount: products.filter((p) => p.stock > 0 && p.stock <= 10).length,
+      lowStockCount: products.filter((p) => p.stock > 0 && p.stock <= 10)
+        .length,
       outOfStockCount: products.filter((p) => p.stock === 0).length,
     };
 
@@ -698,7 +722,9 @@ export class ProductsService {
     await this.cacheService.invalidatePattern('products:low-stock:*');
     await this.cacheService.invalidatePattern('search:*');
     await this.cacheService.invalidatePattern('products:category:*');
-    this.logger.debug(`Invalidated product caches${productId ? ` for product ${productId}` : ''}`);
+    this.logger.debug(
+      `Invalidated product caches${productId ? ` for product ${productId}` : ''}`,
+    );
   }
 
   @Trace('products.warmCache')
@@ -708,10 +734,16 @@ export class ProductsService {
 
     const products = await this.findAll();
     for (const product of products) {
-      await this.cacheService.set(`product:${product.id}`, product, this.CACHE_TTL);
+      await this.cacheService.set(
+        `product:${product.id}`,
+        product,
+        this.CACHE_TTL,
+      );
     }
 
     const duration = (Date.now() - startTime) / 1000;
-    this.logger.log(`Warmed cache for ${products.length} products in ${duration}s`);
+    this.logger.log(
+      `Warmed cache for ${products.length} products in ${duration}s`,
+    );
   }
 }

@@ -2,14 +2,20 @@
 import { Logger } from '@nestjs/common';
 
 export function LogMethod(): MethodDecorator {
-  return function (target: any, propertyKey: string | symbol, descriptor: PropertyDescriptor) {
+  return function (
+    target: any,
+    propertyKey: string | symbol,
+    descriptor: PropertyDescriptor,
+  ) {
     const originalMethod = descriptor.value;
-    const logger = new Logger(`${target.constructor.name}:${String(propertyKey)}`);
+    const logger = new Logger(
+      `${target.constructor.name}:${String(propertyKey)}`,
+    );
 
     descriptor.value = async function (...args: any[]) {
       const startTime = Date.now();
-      const requestId = (this as any).requestId || 'unknown';
-      
+      const requestId = this.requestId || 'unknown';
+
       logger.debug({
         type: 'method_entry',
         requestId,
@@ -21,7 +27,7 @@ export function LogMethod(): MethodDecorator {
       try {
         const result = await originalMethod.apply(this, args);
         const duration = Date.now() - startTime;
-        
+
         logger.debug({
           type: 'method_exit',
           requestId,
@@ -33,7 +39,8 @@ export function LogMethod(): MethodDecorator {
         return result;
       } catch (error: unknown) {
         const duration = Date.now() - startTime;
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        const errorMessage =
+          error instanceof Error ? error.message : 'Unknown error';
         logger.error({
           type: 'method_error',
           requestId,

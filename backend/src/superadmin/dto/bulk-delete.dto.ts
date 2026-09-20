@@ -4,9 +4,9 @@ import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 
 export class BulkDeleteDto {
-  @ApiProperty({ 
+  @ApiProperty({
     example: [1, 2, 3, 4, 5],
-    description: 'Array of user IDs to delete'
+    description: 'Array of user IDs to delete',
   })
   @IsArray()
   @IsNotEmpty()

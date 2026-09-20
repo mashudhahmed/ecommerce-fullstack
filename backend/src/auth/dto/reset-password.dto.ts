@@ -13,7 +13,8 @@ export class ResetPasswordDto {
   @MinLength(8)
   @MaxLength(72)
   @Matches(PASSWORD_REGEX, {
-    message: 'Password must contain uppercase, lowercase, number, and special character',
+    message:
+      'Password must contain uppercase, lowercase, number, and special character',
   })
   newPassword!: string;
 }

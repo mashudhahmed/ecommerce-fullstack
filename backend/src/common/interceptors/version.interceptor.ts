@@ -27,7 +27,9 @@ export class VersionInterceptor implements NestInterceptor {
 
     const acceptVersion = request.headers['accept-version'];
     if (!acceptVersion) {
-      throw new BadRequestException('API version header (Accept-Version) is required');
+      throw new BadRequestException(
+        'API version header (Accept-Version) is required',
+      );
     }
 
     if (acceptVersion !== requiredVersion) {

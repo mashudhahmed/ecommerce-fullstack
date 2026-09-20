@@ -85,21 +85,30 @@ export class ProductsController {
   }
 
   @ApiOperation({ summary: 'Get products in stock' })
-  @ApiResponse({ status: 200, description: 'Products in stock retrieved successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Products in stock retrieved successfully',
+  })
   @Get('in-stock')
   findInStock() {
     return this.productsService.findInStock();
   }
 
   @ApiOperation({ summary: 'Get products out of stock' })
-  @ApiResponse({ status: 200, description: 'Products out of stock retrieved successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Products out of stock retrieved successfully',
+  })
   @Get('out-of-stock')
   findOutOfStock() {
     return this.productsService.findOutOfStock();
   }
 
   @ApiOperation({ summary: 'Get low stock products' })
-  @ApiResponse({ status: 200, description: 'Low stock products retrieved successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Low stock products retrieved successfully',
+  })
   @Get('low-stock')
   findLowStock(@Query('threshold') threshold?: string) {
     return this.productsService.findLowStock(
@@ -133,11 +142,16 @@ export class ProductsController {
 
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get vendor products' })
-  @ApiResponse({ status: 200, description: 'Vendor products retrieved successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Vendor products retrieved successfully',
+  })
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.VENDOR, UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Get('vendor/my')
-  async getMyProducts(@Request() req: { user: { id: number; role: UserRole } }) {
+  async getMyProducts(
+    @Request() req: { user: { id: number; role: UserRole } },
+  ) {
     if (req.user.role === UserRole.VENDOR) {
       return this.productsService.findByVendor(req.user.id);
     }
@@ -146,11 +160,16 @@ export class ProductsController {
 
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get vendor product stats' })
-  @ApiResponse({ status: 200, description: 'Vendor product stats retrieved successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Vendor product stats retrieved successfully',
+  })
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.VENDOR, UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Get('vendor/stats')
-  async getVendorStats(@Request() req: { user: { id: number; role: UserRole } }) {
+  async getVendorStats(
+    @Request() req: { user: { id: number; role: UserRole } },
+  ) {
     if (req.user.role === UserRole.VENDOR) {
       return this.productsService.getVendorStats(req.user.id);
     }
@@ -158,7 +177,8 @@ export class ProductsController {
     return {
       totalProducts: allProducts.length,
       totalStock: allProducts.reduce((sum, p) => sum + p.stock, 0),
-      lowStockCount: allProducts.filter((p) => p.stock > 0 && p.stock <= 10).length,
+      lowStockCount: allProducts.filter((p) => p.stock > 0 && p.stock <= 10)
+        .length,
       outOfStockCount: allProducts.filter((p) => p.stock === 0).length,
     };
   }
@@ -177,14 +197,21 @@ export class ProductsController {
       properties: {
         title: { type: 'string', example: 'Smartphone X' },
         price: { type: 'number', example: 599.99 },
-        description: { type: 'string', example: 'Latest smartphone with amazing features' },
+        description: {
+          type: 'string',
+          example: 'Latest smartphone with amazing features',
+        },
         stock: { type: 'number', example: 50 },
         categoryId: { type: 'number', example: 1 },
         compareAtPrice: { type: 'number', example: 799.99 },
         sku: { type: 'string', example: 'SKU-12345' },
         isTrending: { type: 'boolean', example: false },
         isNew: { type: 'boolean', example: false },
-        image: { type: 'string', format: 'binary', description: 'Product image file' },
+        image: {
+          type: 'string',
+          format: 'binary',
+          description: 'Product image file',
+        },
       },
     },
   })
@@ -201,7 +228,9 @@ export class ProductsController {
 
     if (file) {
       try {
-        const upload = await this.filesService.uploadFile(file, { folder: 'products' });
+        const upload = await this.filesService.uploadFile(file, {
+          folder: 'products',
+        });
         imageUrl = upload.url;
       } catch (error: any) {
         throw new BadRequestException(`Image upload failed: ${error.message}`);
@@ -239,7 +268,11 @@ export class ProductsController {
         isActive: { type: 'boolean' },
         isTrending: { type: 'boolean' },
         isNew: { type: 'boolean' },
-        image: { type: 'string', format: 'binary', description: 'Product image file' },
+        image: {
+          type: 'string',
+          format: 'binary',
+          description: 'Product image file',
+        },
       },
     },
   })
@@ -257,7 +290,9 @@ export class ProductsController {
 
     if (file) {
       try {
-        const upload = await this.filesService.uploadFile(file, { folder: 'products' });
+        const upload = await this.filesService.uploadFile(file, {
+          folder: 'products',
+        });
         imageUrl = upload.url;
       } catch (error: any) {
         throw new BadRequestException(`Image upload failed: ${error.message}`);

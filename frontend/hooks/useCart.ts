@@ -244,16 +244,20 @@ export function useCart() {
     [isAuthenticated, storeRemoveItem, removeItemMutation, queryClient]
   );
 
-  const clearCart = useCallback(async () => {
+  const clearCart = useCallback(async (options?: { silent?: boolean }) => {
     storeClearCart();
-    toast.success('Cart cleared');
+    if (!options?.silent) {
+      toast.success('Cart cleared');
+    }
     if (isAuthenticated) {
       try {
         await clearCartMutation.mutateAsync();
       } catch (error: any) {
         if (error?.statusCode !== 404 && error?.response?.status !== 404) {
           queryClient.invalidateQueries({ queryKey: ['cart'] });
-          toast.error(error?.message || 'Failed to clear cart');
+          if (!options?.silent) {
+            toast.error(error?.message || 'Failed to clear cart');
+          }
         }
       }
     }

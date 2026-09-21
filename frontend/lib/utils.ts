@@ -13,13 +13,14 @@ export function cn(...inputs: ClassValue[]) {
 // FORMATTING FUNCTIONS
 // ============================================
 
-export function formatPrice(price: number): string {
+export function formatPrice(price: number | string | null | undefined): string {
+  const numericPrice = typeof price === 'number' ? price : Number(price) || 0;
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  }).format(price);
+  }).format(numericPrice);
 }
 
 export function formatDate(date: string | Date): string {

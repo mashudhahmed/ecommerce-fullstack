@@ -90,7 +90,7 @@ export default function VendorDashboardPage() {
       if (!isAuthenticated) {
         router.push('/login');
       } else if (user?.role !== 'vendor' && user?.role !== 'admin' && user?.role !== 'superadmin') {
-        router.push('/dashboard');
+        router.push('/');
       }
     }
   }, [authLoading, isAuthenticated, user, router]);

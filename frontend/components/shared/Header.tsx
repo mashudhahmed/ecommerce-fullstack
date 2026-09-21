@@ -9,11 +9,9 @@ import {
   ShoppingCart,
   User,
   LogOut,
-  Settings,
   Bell,
   Menu,
   X,
-  LayoutDashboard,
   Store,
   Shield,
   Users,
@@ -281,16 +279,6 @@ export function Header() {
   // ============================================================
   // HELPERS
   // ============================================================
-
-  const getDashboardLink = useCallback(() => {
-    if (!user) return '/dashboard';
-    switch (user.role) {
-      case 'superadmin': return '/superadmin';
-      case 'admin': return '/admin';
-      case 'vendor': return '/vendor/dashboard';
-      default: return '/dashboard';
-    }
-  }, [user]);
 
   const getRoleBadgeColor = useCallback((role: string) => {
     switch (role) {
@@ -716,53 +704,7 @@ export function Header() {
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
 
-                  <DropdownMenuItem asChild>
-                    <Link href={getDashboardLink()} className="flex cursor-pointer items-center gap-2">
-                      <LayoutDashboard className="h-4 w-4" />
-                      Dashboard
-                    </Link>
-                  </DropdownMenuItem>
-
-                  <DropdownMenuItem asChild>
-                    <Link href="/profile" className="flex cursor-pointer items-center gap-2">
-                      <User className="h-4 w-4" />
-                      Profile
-                    </Link>
-                  </DropdownMenuItem>
-
-                  <DropdownMenuItem asChild>
-                    <Link href="/wishlist" className="flex cursor-pointer items-center gap-2">
-                      <Heart className="h-4 w-4" />
-                      Wishlist
-                    </Link>
-                  </DropdownMenuItem>
-
-                  <DropdownMenuItem asChild>
-                    <Link href="/orders" className="flex cursor-pointer items-center gap-2">
-                      <ShoppingBag className="h-4 w-4" />
-                      Orders
-                    </Link>
-                  </DropdownMenuItem>
-
-                  {/* ✅ Role-gated links — only rendered for the matching role(s) */}
-                  {(user?.role === 'admin' || user?.role === 'superadmin') && (
-                    <DropdownMenuItem asChild>
-                      <Link href="/admin" className="flex cursor-pointer items-center gap-2">
-                        <Shield className="h-4 w-4" />
-                        Admin Panel
-                      </Link>
-                    </DropdownMenuItem>
-                  )}
-
-                  {user?.role === 'superadmin' && (
-                    <DropdownMenuItem asChild>
-                      <Link href="/superadmin" className="flex cursor-pointer items-center gap-2">
-                        <Users className="h-4 w-4" />
-                        Super Admin
-                      </Link>
-                    </DropdownMenuItem>
-                  )}
-
+                  {/* ✅ Vendor Management Panel */}
                   {user?.role === 'vendor' && (
                     <>
                       <DropdownMenuItem asChild>
@@ -777,17 +719,54 @@ export function Header() {
                           Manage Products
                         </Link>
                       </DropdownMenuItem>
+                      <DropdownMenuSeparator />
                     </>
                   )}
 
-                  <DropdownMenuSeparator />
+                  {/* ✅ Admin / Superadmin Management Panels */}
+                  {(user?.role === 'admin' || user?.role === 'superadmin') && (
+                    <>
+                      <DropdownMenuItem asChild>
+                        <Link href="/admin" className="flex cursor-pointer items-center gap-2">
+                          <Shield className="h-4 w-4" />
+                          Admin Panel
+                        </Link>
+                      </DropdownMenuItem>
+                      {user?.role === 'superadmin' && (
+                        <DropdownMenuItem asChild>
+                          <Link href="/superadmin" className="flex cursor-pointer items-center gap-2">
+                            <Users className="h-4 w-4" />
+                            Super Admin
+                          </Link>
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuSeparator />
+                    </>
+                  )}
 
+                  {/* ✅ Customer Account Navigation (Amazon-style: Profile, Orders, Wishlist) */}
                   <DropdownMenuItem asChild>
-                    <Link href="/settings" className="flex cursor-pointer items-center gap-2">
-                      <Settings className="h-4 w-4" />
-                      Settings
+                    <Link href="/profile" className="flex cursor-pointer items-center gap-2">
+                      <User className="h-4 w-4" />
+                      My Profile
                     </Link>
                   </DropdownMenuItem>
+
+                  <DropdownMenuItem asChild>
+                    <Link href="/orders" className="flex cursor-pointer items-center gap-2">
+                      <ShoppingBag className="h-4 w-4" />
+                      My Orders
+                    </Link>
+                  </DropdownMenuItem>
+
+                  <DropdownMenuItem asChild>
+                    <Link href="/wishlist" className="flex cursor-pointer items-center gap-2">
+                      <Heart className="h-4 w-4" />
+                      My Wishlist
+                    </Link>
+                  </DropdownMenuItem>
+
+                  <DropdownMenuSeparator />
 
                   <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-red-600">
                     <LogOut className="mr-2 h-4 w-4" />

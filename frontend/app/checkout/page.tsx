@@ -1,7 +1,7 @@
 // app/checkout/page.tsx
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -9,20 +9,24 @@ import { useCart } from '@/hooks/useCart';
 import { useOrders } from '@/hooks/useOrders';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatPrice } from '@/lib/utils';
-import { ArrowLeft, ShoppingBag, Loader2, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, ShoppingBag, Loader2, ShieldCheck, MapPin } from 'lucide-react';
 import { toast } from 'sonner';
 
 function CheckoutItemRow({ item }: { item: any }) {
   const [imageError, setImageError] = useState(false);
   const imageSrc = useMemo(() => {
-    if (!item.product.imageUrl || imageError) {
+    if (!item?.product?.imageUrl || imageError) {
       return '/placeholder-image.png';
     }
     return item.product.imageUrl;
-  }, [item.product.imageUrl, imageError]);
+  }, [item?.product?.imageUrl, imageError]);
+
+  if (!item?.product) return null;
 
   return (
     <div>
@@ -30,7 +34,7 @@ function CheckoutItemRow({ item }: { item: any }) {
         <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-muted/20">
           <Image
             src={imageSrc}
-            alt={item.product.title}
+            alt={item.product.title || 'Product'}
             fill
             className="object-cover"
             sizes="56px"
@@ -43,7 +47,9 @@ function CheckoutItemRow({ item }: { item: any }) {
             {formatPrice(item.product.price)} × {item.quantity}
           </p>
         </div>
-        <p className="font-bold tabular-nums">{formatPrice(item.subtotal)}</p>
+        <p className="font-bold tabular-nums">
+          {formatPrice((item.product.price || 0) * item.quantity)}
+        </p>
       </div>
       <Separator className="mt-4" />
     </div>
@@ -52,40 +58,67 @@ function CheckoutItemRow({ item }: { item: any }) {
 
 export default function CheckoutPage() {
   const router = useRouter();
-  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const { items, totalPrice, clearCart, isLoading: cartLoading } = useCart();
   const { createOrder, isCreatingOrder } = useOrders();
 
+  const [shippingAddress, setShippingAddress] = useState('');
+  const [isPlacing, setIsPlacing] = useState(false);
+  const isOrderPlacedRef = useRef(false);
+
+  // Redirect to login if not authenticated
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
       router.push('/login?redirect=/checkout');
     }
   }, [authLoading, isAuthenticated, router]);
 
+  // Redirect to cart if cart is empty (only if NOT currently placing an order)
   useEffect(() => {
-    if (!cartLoading && items.length === 0 && isAuthenticated) {
+    if (!cartLoading && items.length === 0 && isAuthenticated && !isOrderPlacedRef.current) {
       router.push('/cart');
     }
   }, [cartLoading, items.length, isAuthenticated, router]);
 
   const handlePlaceOrder = async () => {
-    try {
-      const orderItems = items.map((item) => ({
-        productId: item.product.id,
-        quantity: item.quantity,
+    if (items.length === 0 || isPlacing || isCreatingOrder) return;
+
+    // Filter only valid items with valid IDs
+    const validOrderItems = items
+      .filter((item) => item?.product?.id && item.quantity > 0)
+      .map((item) => ({
+        productId: Number(item.product.id),
+        quantity: Number(item.quantity),
       }));
 
-      await createOrder({ items: orderItems });
-      clearCart();
+    if (validOrderItems.length === 0) {
+      toast.error('No valid products in your cart to order.');
+      return;
+    }
+
+    setIsPlacing(true);
+    isOrderPlacedRef.current = true;
+
+    try {
+      await createOrder({
+        items: validOrderItems,
+        shippingAddress: shippingAddress.trim() || undefined,
+      });
+
+      // Clear cart silently so it doesn't trigger a separate "Cart cleared" toast
+      await clearCart({ silent: true });
       toast.success('Order placed successfully!');
-      router.push('/orders');
+
+      // Navigate straight to orders page
+      router.replace('/orders');
     } catch (error: any) {
-      if (error?.statusCode === 429) {
-        const retryAfter = error?.retryAfter || 60;
-        toast.error(`Too many orders. Please wait ${retryAfter} seconds.`);
-        return;
-      }
-      toast.error(error?.message || 'Failed to place order');
+      isOrderPlacedRef.current = false;
+      setIsPlacing(false);
+      const message =
+        error?.response?.data?.message ||
+        error?.message ||
+        'Failed to place order. Please try again.';
+      toast.error(message);
     }
   };
 
@@ -108,6 +141,21 @@ export default function CheckoutPage() {
     );
   }
 
+  // If order was just placed, render transition screen while redirecting
+  if (isOrderPlacedRef.current || isPlacing) {
+    return (
+      <div className="container mx-auto flex min-h-[60vh] flex-col items-center justify-center px-4 py-16 text-center">
+        <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-orange-100 text-orange-600">
+          <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
+        <h2 className="text-2xl font-bold">Placing your order…</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Confirming order items and preparing your receipt.
+        </p>
+      </div>
+    );
+  }
+
   if (items.length === 0) {
     return null;
   }
@@ -116,6 +164,7 @@ export default function CheckoutPage() {
   const shipping = subtotal > 50 ? 0 : 5.99;
   const tax = subtotal * 0.08;
   const total = subtotal + shipping + tax;
+  const isBusy = isPlacing || isCreatingOrder;
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -130,9 +179,36 @@ export default function CheckoutPage() {
       <h1 className="mb-8 text-3xl font-black tracking-tight">Checkout</h1>
 
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
-        {/* Order Items */}
-        <div className="lg:col-span-2">
-          <div className="rounded-2xl border border-border p-6">
+        {/* Left Column: Shipping Address & Order Items */}
+        <div className="space-y-6 lg:col-span-2">
+          {/* Shipping Address Card */}
+          <div className="rounded-2xl border border-border p-6 shadow-sm">
+            <h2 className="mb-4 flex items-center gap-2 text-lg font-bold tracking-tight">
+              <MapPin className="h-5 w-5 text-orange-600" />
+              Delivery Address
+            </h2>
+            <div className="space-y-3">
+              <div>
+                <Label htmlFor="shippingAddress" className="text-sm font-medium">
+                  Shipping Address
+                </Label>
+                <Input
+                  id="shippingAddress"
+                  placeholder="Street address, City, State, ZIP code"
+                  value={shippingAddress}
+                  onChange={(e) => setShippingAddress(e.target.value)}
+                  className="mt-1.5"
+                  disabled={isBusy}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Delivering to: <span className="font-medium text-foreground">{user?.name}</span> ({user?.email})
+              </p>
+            </div>
+          </div>
+
+          {/* Order Items Card */}
+          <div className="rounded-2xl border border-border p-6 shadow-sm">
             <h2 className="mb-5 flex items-center gap-2 text-lg font-bold tracking-tight">
               <ShoppingBag className="h-5 w-5 text-orange-600" />
               Order items ({items.length})
@@ -145,9 +221,9 @@ export default function CheckoutPage() {
           </div>
         </div>
 
-        {/* Order Summary */}
+        {/* Right Column: Order Summary */}
         <div className="lg:col-span-1">
-          <div className="sticky top-8 space-y-4 rounded-2xl border border-border p-6">
+          <div className="sticky top-24 space-y-4 rounded-2xl border border-border p-6 shadow-sm">
             <h2 className="text-lg font-bold tracking-tight">Order summary</h2>
 
             <div className="space-y-2.5 text-sm">
@@ -171,16 +247,16 @@ export default function CheckoutPage() {
 
             <div className="flex justify-between text-lg font-bold">
               <span>Total</span>
-              <span className="tabular-nums">{formatPrice(total)}</span>
+              <span className="tabular-nums text-orange-600">{formatPrice(total)}</span>
             </div>
 
             <Button
               className="w-full rounded-full bg-orange-600 text-white hover:bg-orange-700"
               size="lg"
               onClick={handlePlaceOrder}
-              disabled={isCreatingOrder}
+              disabled={isBusy}
             >
-              {isCreatingOrder ? (
+              {isBusy ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Placing order…
@@ -192,7 +268,7 @@ export default function CheckoutPage() {
 
             <p className="flex items-center justify-center gap-1.5 text-center text-xs text-muted-foreground">
               <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
-              By placing your order, you agree to our Terms of Service and Privacy Policy.
+              By placing your order, you agree to our Terms of Service.
             </p>
           </div>
         </div>

@@ -34,7 +34,7 @@ export default function SuperAdminDashboard() {
   useEffect(() => {
     if (!authLoading && isAuthenticated) {
       if (user?.role !== 'superadmin') {
-        router.push('/dashboard');
+        router.push('/');
       }
     }
     if (!authLoading && !isAuthenticated) {

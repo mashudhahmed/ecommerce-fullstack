@@ -98,7 +98,7 @@ export function UserRegistrationForm() {
 
   const handleGoogleRegister = () => {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1';
-    window.location.href = `${apiUrl}/auth/google?redirect=${encodeURIComponent('/dashboard')}`;
+    window.location.href = `${apiUrl}/auth/google?redirect=${encodeURIComponent('/')}`;
   };
 
   const [showPassword, setShowPassword] = useState(false);

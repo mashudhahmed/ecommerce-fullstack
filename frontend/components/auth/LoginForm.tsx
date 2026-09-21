@@ -194,6 +194,7 @@ export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const {
+    user,
     login,
     loginLoading,
     isAuthenticated,
@@ -217,7 +218,15 @@ export function LoginForm() {
   const [isOtpLoading, setIsOtpLoading] = useState(false);
   const handledParamsRef = useRef<string | null>(null);
 
-  const redirectUrl = searchParams.get('redirect') || '/dashboard';
+  const targetDestination = useMemo(() => {
+    const explicit = searchParams.get('redirect');
+    if (explicit) return explicit;
+    const currentRole = user?.role || storeState.user?.role;
+    if (currentRole === 'vendor') return '/vendor/dashboard';
+    if (currentRole === 'admin') return '/admin';
+    if (currentRole === 'superadmin') return '/superadmin';
+    return '/'; // Normal customer goes to home page (Amazon / Alibaba standard)
+  }, [searchParams, user?.role, storeState.user?.role]);
 
   // ============================================================
   // EFFECTS
@@ -225,15 +234,15 @@ export function LoginForm() {
 
   useEffect(() => {
     if (!isLoading && !loginSuccess && (isAuthenticated || storeState.isAuthenticated)) {
-      router.replace(redirectUrl);
+      router.replace(targetDestination);
     }
-  }, [isLoading, isAuthenticated, storeState.isAuthenticated, loginSuccess, redirectUrl, router]);
+  }, [isLoading, isAuthenticated, storeState.isAuthenticated, loginSuccess, targetDestination, router]);
 
   useEffect(() => {
     if (loginSuccess && (isAuthenticated || storeState.isAuthenticated)) {
-      window.location.href = redirectUrl;
+      window.location.href = targetDestination;
     }
-  }, [isAuthenticated, loginSuccess, redirectUrl, storeState.isAuthenticated]);
+  }, [isAuthenticated, loginSuccess, targetDestination, storeState.isAuthenticated]);
 
   useEffect(() => {
     const currentParams = searchParams.toString();
@@ -301,8 +310,16 @@ export function LoginForm() {
         localStorage.removeItem('remembered_email');
       }
 
+      const explicit = searchParams.get('redirect');
+      const userRole = response?.user?.role;
+      const destination = explicit || (
+        userRole === 'vendor' ? '/vendor/dashboard' :
+        userRole === 'admin' ? '/admin' :
+        userRole === 'superadmin' ? '/superadmin' : '/'
+      );
+
       setTimeout(() => {
-        window.location.href = redirectUrl;
+        window.location.href = destination;
       }, 500);
     } catch (error: any) {
       const isExpected = error instanceof AuthError &&
@@ -344,7 +361,7 @@ export function LoginForm() {
       setErrorMessage(message);
       toast.error(message);
     }
-  }, [login, form, redirectUrl, rememberMe, router]);
+  }, [login, form, searchParams, rememberMe, router]);
 
   const handleVerifyTwoFactor = useCallback(async () => {
     if (!twoFactorToken || twoFactorToken.length !== 6) {
@@ -367,8 +384,8 @@ export function LoginForm() {
   }, []);
 
   const handleGoogleLogin = useCallback(() => {
-    window.location.href = buildGoogleAuthUrl(redirectUrl);
-  }, [redirectUrl]);
+    window.location.href = buildGoogleAuthUrl(targetDestination);
+  }, [targetDestination]);
 
   // ============================================================
   // LOADING STATE

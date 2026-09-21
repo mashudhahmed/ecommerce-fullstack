@@ -51,12 +51,6 @@ export class OrdersWriteService {
         throw new NotFoundException('User not found');
       }
 
-      if (!user.isVerified) {
-        throw new BadRequestException(
-          'Please verify your email before placing orders',
-        );
-      }
-
       let total = 0;
       const orderItems: OrderItem[] = [];
 

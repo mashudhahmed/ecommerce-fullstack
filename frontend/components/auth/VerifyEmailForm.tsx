@@ -49,7 +49,7 @@ export function VerifyEmailForm() {
     try {
       await verifyEmail({ email, code: data.code });
       toast.success('Email verified successfully!');
-      router.push('/dashboard');
+      router.push('/');
     } catch (error: any) {
       toast.error(error?.response?.data?.message || 'Invalid verification code.');
     }

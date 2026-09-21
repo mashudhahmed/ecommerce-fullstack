@@ -101,9 +101,9 @@ export function middleware(request: NextRequest) {
   const accessToken = request.cookies.get('access_token')?.value;
   const isAuthenticated = !!accessToken;
 
-  // ✅ If authenticated and trying to access auth pages, redirect to dashboard
+  // ✅ If authenticated and trying to access auth pages, redirect to home
   if (isAuthenticated && isAuthRoute(pathname)) {
-    return NextResponse.redirect(new URL('/dashboard', request.url));
+    return NextResponse.redirect(new URL('/', request.url));
   }
 
   // ✅ If not authenticated and trying to access protected routes, redirect to login

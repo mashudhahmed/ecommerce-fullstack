@@ -78,7 +78,11 @@ async function bootstrap() {
       'Authorization',
       'Accept',
       'X-Requested-With',
+      'Origin',
+      'idempotency-key',
+      'Idempotency-Key',
     ],
+    exposedHeaders: ['idempotency-key', 'Idempotency-Key'],
     credentials: true,
     maxAge: 3600,
   });

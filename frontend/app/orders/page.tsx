@@ -94,10 +94,10 @@ export default function OrdersPage() {
     result.sort((a, b) => {
       const aVal = sortBy === 'createdAt' 
         ? new Date(a.createdAt).getTime() 
-        : a.total;
+        : Number(a.total) || 0;
       const bVal = sortBy === 'createdAt' 
         ? new Date(b.createdAt).getTime() 
-        : b.total;
+        : Number(b.total) || 0;
       return sortOrder === 'desc' ? bVal - aVal : aVal - bVal;
     });
     

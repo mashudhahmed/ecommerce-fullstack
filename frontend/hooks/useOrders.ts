@@ -37,8 +37,8 @@ export function useOrders() {
     },
     enabled: isAuthenticated && !authLoading,
     throwOnError: false,
-    initialData: [],
-    staleTime: 30 * 1000,
+    refetchOnMount: 'always',
+    staleTime: 5 * 1000,
   });
 
   // ============================================================
@@ -99,10 +99,16 @@ export function useOrders() {
       return orderService.createOrder({ ...data, idempotencyKey });
     },
     onSuccess: (data) => {
+      // Optimistically insert new order at front of cache
+      queryClient.setQueryData(['orders'], (old: any) => {
+        if (Array.isArray(old)) {
+          return [data, ...old.filter((o: any) => o.id !== data.id)];
+        }
+        return [data];
+      });
       queryClient.invalidateQueries({ queryKey: ['orders'] });
       queryClient.invalidateQueries({ queryKey: ['orders', 'summary'] });
       queryClient.invalidateQueries({ queryKey: ['cart'] });
-      toast.success(`Order #${data.id} created successfully!`);
     },
     onError: (error: any) => {
       if (error?.statusCode === 429) {
@@ -110,7 +116,11 @@ export function useOrders() {
         toast.error(`Too many orders. Please wait ${retryAfter} seconds.`);
         return;
       }
-      toast.error(error?.message || 'Failed to create order');
+      const message =
+        error?.response?.data?.message ||
+        error?.message ||
+        'Failed to create order';
+      toast.error(message);
     },
   });
 

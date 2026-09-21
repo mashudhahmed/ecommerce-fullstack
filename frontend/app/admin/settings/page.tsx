@@ -27,7 +27,7 @@ export default function AdminSettingsPage() {
       if (!isAuthenticated) {
         router.push('/login');
       } else if (user?.role !== 'admin' && user?.role !== 'superadmin') {
-        router.push('/dashboard');
+        router.push('/');
       }
     }
   }, [isAuthenticated, isLoading, user, router]);

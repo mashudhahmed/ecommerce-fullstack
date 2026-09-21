@@ -18,6 +18,8 @@ import {
   ChevronRight,
   Menu,
   X,
+  Globe,
+  ExternalLink,
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
@@ -183,6 +185,26 @@ export default function VendorLayout({
           })}
         </nav>
 
+        {/* Storefront Link */}
+        <div className="border-t p-2 space-y-1">
+          <Link
+            href="/"
+            className={cn(
+              'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors text-orange-600 hover:bg-orange-50 dark:text-orange-400 dark:hover:bg-orange-950/20',
+              isCollapsed && 'justify-center'
+            )}
+            title={isCollapsed ? 'View Storefront' : undefined}
+          >
+            <Globe className={cn('h-4 w-4 shrink-0', isCollapsed && 'h-5 w-5')} />
+            {!isCollapsed && (
+              <span className="flex items-center gap-1.5 flex-1 justify-between">
+                <span>View Storefront</span>
+                <ExternalLink className="h-3 w-3 text-muted-foreground" />
+              </span>
+            )}
+          </Link>
+        </div>
+
         {/* Footer - Logout */}
         <div className="border-t p-2">
           <button
@@ -201,19 +223,27 @@ export default function VendorLayout({
 
       {/* Main content */}
       <main className="flex-1 overflow-auto">
-        {/* Mobile menu toggle */}
-        <div className="lg:hidden flex items-center gap-4 p-4 border-b bg-background sticky top-0 z-30">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setIsMobileOpen(true)}
-          >
-            <Menu className="h-5 w-5" />
-          </Button>
-          <div className="flex items-center gap-2">
-            <Store className="h-5 w-5 text-orange-500" />
-            <h1 className="text-lg font-bold">Vendor Panel</h1>
+        {/* Mobile menu toggle & Quick Storefront */}
+        <div className="lg:hidden flex items-center justify-between p-4 border-b bg-background sticky top-0 z-30">
+          <div className="flex items-center gap-3">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setIsMobileOpen(true)}
+            >
+              <Menu className="h-5 w-5" />
+            </Button>
+            <div className="flex items-center gap-2">
+              <Store className="h-5 w-5 text-orange-500" />
+              <h1 className="text-lg font-bold">Vendor Panel</h1>
+            </div>
           </div>
+          <Button asChild variant="outline" size="sm" className="gap-1.5 text-xs">
+            <Link href="/">
+              <Globe className="h-3.5 w-3.5 text-orange-600" />
+              <span>Storefront</span>
+            </Link>
+          </Button>
         </div>
         <div className="p-4 md:p-8">
           {children}

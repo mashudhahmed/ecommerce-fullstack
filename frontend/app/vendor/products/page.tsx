@@ -22,8 +22,9 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
+import Link from 'next/link';
 import { formatPrice } from '@/lib/utils';
-import { Plus, Pencil, Trash2, Upload, FileUp } from 'lucide-react';
+import { Plus, Pencil, Trash2, Upload, FileUp, ExternalLink } from 'lucide-react';
 import { ProductForm } from '@/components/products/ProductForm';
 import { toast } from 'sonner';
 
@@ -164,12 +165,27 @@ export default function VendorProductsPage() {
                 </TableCell>
                 <TableCell className="text-right space-x-2">
                   <Button
+                    asChild
+                    variant="ghost"
+                    size="icon"
+                    title="View live on store"
+                  >
+                    <Link
+                      href={`/products/${product.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <ExternalLink className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+                    </Link>
+                  </Button>
+                  <Button
                     variant="outline"
                     size="icon"
                     onClick={() => {
                       setEditingProduct(product);
                       setDialogOpen(true);
                     }}
+                    title="Edit Product"
                   >
                     <Pencil className="h-4 w-4" />
                   </Button>

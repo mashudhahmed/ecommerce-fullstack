@@ -61,7 +61,8 @@ export const ProductCard = memo(function ProductCard({
 }: ProductCardProps) {
   const { addToCart, addToCartLoading } = useCart();
   const { addToWishlist, removeFromWishlist } = useWishlist();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
+  const isAdminOrSuperAdmin = user?.role === 'admin' || user?.role === 'superadmin';
   const router = useRouter();
   const [isHovered, setIsHovered] = useState(false);
   const [isWishlistLoading, setIsWishlistLoading] = useState(false);
@@ -205,28 +206,30 @@ export const ProductCard = memo(function ProductCard({
             )}
           </div>
 
-          {/* Wishlist (Love icon) — top-right, always accessible, tactile micro-interaction */}
-          <button
-            type="button"
-            onClick={handleWishlist}
-            disabled={isWishlistLoading}
-            aria-label={isInWishlist ? 'Remove from wishlist' : 'Add to wishlist'}
-            className={cn(
-              'absolute right-3 top-3 z-20 flex h-9 w-9 items-center justify-center rounded-full shadow-sm backdrop-blur-md transition-all duration-200 active:scale-75 hover:scale-110 disabled:opacity-60 cursor-pointer',
-              isInWishlist
-                ? 'bg-orange-50/95 text-orange-600 border border-orange-200 shadow-orange-500/10'
-                : 'bg-white/90 text-zinc-600 hover:text-orange-600 hover:bg-white border border-border/40'
-            )}
-          >
-            <Heart
+          {/* Wishlist (Love icon) — hidden for staff preview mode */}
+          {!isAdminOrSuperAdmin && (
+            <button
+              type="button"
+              onClick={handleWishlist}
+              disabled={isWishlistLoading}
+              aria-label={isInWishlist ? 'Remove from wishlist' : 'Add to wishlist'}
               className={cn(
-                'h-4 w-4 transition-transform duration-200',
+                'absolute right-3 top-3 z-20 flex h-9 w-9 items-center justify-center rounded-full shadow-sm backdrop-blur-md transition-all duration-200 active:scale-75 hover:scale-110 disabled:opacity-60 cursor-pointer',
                 isInWishlist
-                  ? 'fill-orange-600 text-orange-600 scale-105'
-                  : 'text-zinc-600 hover:text-orange-600'
+                  ? 'bg-orange-50/95 text-orange-600 border border-orange-200 shadow-orange-500/10'
+                  : 'bg-white/90 text-zinc-600 hover:text-orange-600 hover:bg-white border border-border/40'
               )}
-            />
-          </button>
+            >
+              <Heart
+                className={cn(
+                  'h-4 w-4 transition-transform duration-200',
+                  isInWishlist
+                    ? 'fill-orange-600 text-orange-600 scale-105'
+                    : 'text-zinc-600 hover:text-orange-600'
+                )}
+              />
+            </button>
+          )}
 
           {/* Quick actions — reveal on hover */}
           <div
@@ -235,25 +238,41 @@ export const ProductCard = memo(function ProductCard({
               isHovered ? 'translate-y-0 opacity-100 pointer-events-auto' : 'translate-y-3 opacity-0 pointer-events-none'
             )}
           >
-            <Button
-              size="sm"
-              className="h-9 gap-1.5 rounded-full bg-zinc-950 px-4 text-xs text-white shadow-lg hover:bg-zinc-800 cursor-pointer"
-              onClick={handleAddToCart}
-              disabled={isOutOfStock || addToCartLoading}
-            >
-              <ShoppingCart className="h-3.5 w-3.5" />
-              {isOutOfStock ? 'Out of stock' : addToCartLoading ? 'Adding…' : 'Add to cart'}
-            </Button>
-            <Button
-              size="icon"
-              variant="secondary"
-              className="h-9 w-9 rounded-full shadow-lg cursor-pointer"
-              asChild
-            >
-              <Link href={`/products/${product.id}`} aria-label={`Quick view ${product.title}`}>
-                <Eye className="h-4 w-4 text-muted-foreground" />
-              </Link>
-            </Button>
+            {isAdminOrSuperAdmin ? (
+              <Button
+                size="sm"
+                variant="secondary"
+                className="h-9 gap-1.5 rounded-full bg-zinc-900/90 text-white hover:bg-zinc-800 px-4 text-xs shadow-lg cursor-pointer backdrop-blur-sm"
+                asChild
+              >
+                <Link href={`/products/${product.id}`}>
+                  <Eye className="h-3.5 w-3.5" />
+                  View Details
+                </Link>
+              </Button>
+            ) : (
+              <>
+                <Button
+                  size="sm"
+                  className="h-9 gap-1.5 rounded-full bg-zinc-950 px-4 text-xs text-white shadow-lg hover:bg-zinc-800 cursor-pointer"
+                  onClick={handleAddToCart}
+                  disabled={isOutOfStock || addToCartLoading}
+                >
+                  <ShoppingCart className="h-3.5 w-3.5" />
+                  {isOutOfStock ? 'Out of stock' : addToCartLoading ? 'Adding…' : 'Add to cart'}
+                </Button>
+                <Button
+                  size="icon"
+                  variant="secondary"
+                  className="h-9 w-9 rounded-full shadow-lg cursor-pointer"
+                  asChild
+                >
+                  <Link href={`/products/${product.id}`} aria-label={`Quick view ${product.title}`}>
+                    <Eye className="h-4 w-4 text-muted-foreground" />
+                  </Link>
+                </Button>
+              </>
+            )}
           </div>
         </div>
 
@@ -280,16 +299,30 @@ export const ProductCard = memo(function ProductCard({
           </div>
         </CardContent>
 
-        {/* Footer — mobile-only add to cart (no hover on touch) */}
+        {/* Footer — mobile-only actions (no hover on touch) */}
         <CardFooter className="p-4 pt-0 lg:hidden">
-          <Button
-            className="w-full rounded-full text-sm cursor-pointer"
-            size="sm"
-            onClick={handleAddToCart}
-            disabled={isOutOfStock || addToCartLoading}
-          >
-            {isOutOfStock ? 'Out of stock' : addToCartLoading ? 'Adding…' : 'Add to cart'}
-          </Button>
+          {isAdminOrSuperAdmin ? (
+            <Button
+              variant="outline"
+              className="w-full rounded-full text-sm cursor-pointer"
+              size="sm"
+              asChild
+            >
+              <Link href={`/products/${product.id}`}>
+                <Eye className="h-3.5 w-3.5 mr-1.5" />
+                View Details
+              </Link>
+            </Button>
+          ) : (
+            <Button
+              className="w-full rounded-full text-sm cursor-pointer"
+              size="sm"
+              onClick={handleAddToCart}
+              disabled={isOutOfStock || addToCartLoading}
+            >
+              {isOutOfStock ? 'Out of stock' : addToCartLoading ? 'Adding…' : 'Add to cart'}
+            </Button>
+          )}
         </CardFooter>
       </Card>
     </div>

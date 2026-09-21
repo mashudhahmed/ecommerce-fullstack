@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 
 export default function LoginPage() {
   return (
-    <div className="relative flex min-h-[calc(100vh-200px)] items-center justify-center overflow-hidden py-12">
+    <div className="relative flex w-full items-center justify-center overflow-hidden">
       {/* Subtle brand backdrop — a soft radial glow behind the card
           instead of a flat background, no JS required so this stays
           a server component. */}
@@ -21,7 +21,7 @@ export default function LoginPage() {
         }}
         aria-hidden="true"
       />
-      <div className="w-full px-4">
+      <div className="w-full">
         <LoginForm />
       </div>
     </div>

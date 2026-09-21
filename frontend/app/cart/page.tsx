@@ -8,17 +8,58 @@ import { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { CartItem } from '@/components/cart/CartItem';
 import { formatPrice } from '@/lib/utils';
-import { ShoppingBag, Loader2, ShieldCheck } from 'lucide-react';
+import { ShoppingBag, Loader2, ShieldCheck, ShieldAlert, LayoutDashboard, ArrowLeft } from 'lucide-react';
+import Link from 'next/link';
 
 export default function CartPage() {
   const router = useRouter();
-  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const { items, totalPrice, totalItems, isLoading } = useCart();
+  const isAdminOrSuperAdmin = user?.role === 'admin' || user?.role === 'superadmin';
 
   if (authLoading || isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (isAdminOrSuperAdmin) {
+    const dashboardHref = user?.role === 'superadmin' ? '/superadmin' : '/admin';
+    return (
+      <div className="mx-auto max-w-md py-20 px-4 text-center">
+        <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-600 border border-amber-500/20">
+          <ShieldAlert className="h-8 w-8" />
+        </div>
+        <div className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-700 dark:text-amber-400 mb-3">
+          Administrative Account
+        </div>
+        <h2 className="text-2xl font-black tracking-tight">Staff Preview Mode</h2>
+        <p className="mt-2.5 text-sm text-muted-foreground leading-relaxed">
+          Consumer purchasing and personal shopping carts are disabled for administrative accounts. You can inspect store products in catalog mode or manage store inventory from the dashboard.
+        </p>
+        <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
+          <Button
+            className="w-full sm:w-auto rounded-full bg-zinc-950 text-white hover:bg-zinc-800 gap-2 cursor-pointer"
+            asChild
+          >
+            <Link href={dashboardHref}>
+              <LayoutDashboard className="h-4 w-4" />
+              Go to Dashboard
+            </Link>
+          </Button>
+          <Button
+            variant="outline"
+            className="w-full sm:w-auto rounded-full gap-2 cursor-pointer"
+            asChild
+          >
+            <Link href="/products">
+              <ArrowLeft className="h-4 w-4" />
+              Browse Catalog
+            </Link>
+          </Button>
+        </div>
       </div>
     );
   }

@@ -50,10 +50,19 @@ export class OrdersController {
   @UseGuards(JwtAuthGuard, UserRateLimitGuard) // ✅ Rate limiting added
   @Post()
   async create(
-    @Request() req: { user: { id: number } },
+    @Request() req: { user: { id: number; role?: UserRole } },
     @Body() createOrderDto: CreateOrderDto,
     @Headers('idempotency-key') idempotencyKey?: string, // ✅ Added
   ) {
+    if (
+      req.user.role === UserRole.ADMIN ||
+      req.user.role === UserRole.SUPER_ADMIN
+    ) {
+      throw new ForbiddenException(
+        'Administrative accounts cannot place consumer orders. Please sign in with a customer account to purchase.',
+      );
+    }
+
     if (idempotencyKey) {
       return this.ordersService.createWithIdempotency(
         req.user.id,

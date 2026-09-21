@@ -289,27 +289,34 @@ export function Header() {
     }
   }, []);
 
-  // ✅ Role-based nav — unchanged from before: guests get the base set,
-  // vendor/admin/superadmin each layer on their own panel link.
+  const isAdminOrSuperAdmin = user?.role === 'admin' || user?.role === 'superadmin';
+
+  // ✅ Role-based nav: staff accounts see management destinations, customers see shopping
   const getNavItems = useCallback(() => {
-    const items = [
+    if (user?.role === 'admin' || user?.role === 'superadmin') {
+      const staffItems = [
+        { href: '/products', label: 'Catalog', icon: ShoppingBag },
+        { href: '/admin/orders', label: 'Store Orders', icon: ShoppingCart },
+        { href: '/admin', label: 'Admin Panel', icon: Shield },
+      ];
+      if (user?.role === 'superadmin') {
+        staffItems.push({ href: '/superadmin', label: 'Super Admin', icon: Users });
+      }
+      return staffItems;
+    }
+
+    if (user?.role === 'vendor') {
+      return [
+        { href: '/products', label: 'Products', icon: ShoppingBag },
+        { href: '/vendor/orders', label: 'Store Orders', icon: ShoppingCart },
+        { href: '/vendor/dashboard', label: 'Vendor Panel', icon: Store },
+      ];
+    }
+
+    return [
       { href: '/products', label: 'Products', icon: ShoppingBag },
       { href: '/orders', label: 'Orders', icon: ShoppingCart },
     ];
-
-    if (user?.role === 'vendor') {
-      items.push({ href: '/vendor/dashboard', label: 'Vendor Panel', icon: Store });
-    }
-
-    if (user?.role === 'admin' || user?.role === 'superadmin') {
-      items.push({ href: '/admin', label: 'Admin Panel', icon: Shield });
-    }
-
-    if (user?.role === 'superadmin') {
-      items.push({ href: '/superadmin', label: 'Super Admin', icon: Users });
-    }
-
-    return items;
   }, [user]);
 
   // ============================================================
@@ -396,147 +403,159 @@ export function Header() {
               <Search className="h-5 w-5" />
             </Button>
 
-            {/* Wishlist (Love Icon) */}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="relative rounded-full"
-              asChild
-            >
-              <Link
-                href="/wishlist"
-                aria-label={`Wishlist${wishlistCount > 0 ? ` (${wishlistCount} items)` : ''}`}
-              >
-                <Heart className="h-5 w-5" />
-                {wishlistCount > 0 && (
-                  <span className="absolute -top-1 -right-1 flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-orange-600 px-1 text-[10px] font-semibold tabular-nums text-white">
-                    {wishlistCount}
-                  </span>
-                )}
-              </Link>
-            </Button>
-
-            {/* Cart — mini-cart preview popover */}
-            <Popover open={isCartOpen} onOpenChange={setIsCartOpen}>
-              <PopoverTrigger asChild>
+            {/* Staff Preview Mode Indicator (Admins & Superadmins) vs Customer Buying Controls (Wishlist & Cart) */}
+            {isAdminOrSuperAdmin ? (
+              <div className="flex items-center gap-2">
+                <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full bg-orange-500/10 px-3 py-1 text-xs font-semibold text-orange-600 dark:text-orange-400">
+                  <Shield className="h-3.5 w-3.5" />
+                  Staff Preview Mode
+                </span>
+                <Button asChild size="sm" className="gap-1.5 rounded-full bg-zinc-950 text-white hover:bg-zinc-800 text-xs">
+                  <Link href={user?.role === 'superadmin' ? '/superadmin' : '/admin'}>
+                    <Shield className="h-3.5 w-3.5 text-orange-500" />
+                    <span className="hidden md:inline">Dashboard</span>
+                  </Link>
+                </Button>
+              </div>
+            ) : (
+              <>
+                {/* Wishlist (Love Icon) */}
                 <Button
                   variant="ghost"
                   size="icon"
                   className="relative rounded-full"
-                  aria-label={`Shopping cart${totalItems > 0 ? ` (${totalItems} items)` : ''}`}
+                  asChild
                 >
-                  <ShoppingCart className="h-5 w-5" />
-                  {totalItems > 0 && (
-                    <span className="absolute -top-1 -right-1 flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-orange-600 px-1 text-[10px] font-semibold tabular-nums text-white">
-                      {totalItems}
-                    </span>
-                  )}
+                  <Link
+                    href="/wishlist"
+                    aria-label={`Wishlist${wishlistCount > 0 ? ` (${wishlistCount} items)` : ''}`}
+                  >
+                    <Heart className="h-5 w-5" />
+                    {wishlistCount > 0 && (
+                      <span className="absolute -top-1 -right-1 flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-orange-600 px-1 text-[10px] font-semibold tabular-nums text-white">
+                        {wishlistCount}
+                      </span>
+                    )}
+                  </Link>
                 </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-90 rounded-2xl p-0" align="end">
-                <div className="flex items-center justify-between border-b border-border p-4">
-                  <h4 className="text-sm font-semibold">
-                    Your cart {totalItems > 0 && <span className="text-muted-foreground">({totalItems})</span>}
-                  </h4>
-                </div>
 
-                {cartItems.length === 0 ? (
-                  <div className="p-8 text-center text-muted-foreground">
-                    <ShoppingCart className="mx-auto mb-2 h-8 w-8 opacity-40" />
-                    <p className="text-sm">Your cart is empty</p>
-                    <Link
-                      href="/products"
-                      className="mt-3 inline-block text-sm font-medium text-orange-600 hover:text-orange-700"
-                      onClick={() => setIsCartOpen(false)}
+                {/* Cart — mini-cart preview popover */}
+                <Popover open={isCartOpen} onOpenChange={setIsCartOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="relative rounded-full"
+                      aria-label={`Shopping cart${totalItems > 0 ? ` (${totalItems} items)` : ''}`}
                     >
-                      Browse products →
-                    </Link>
-                  </div>
-                ) : (
-                  <>
-                    <div className="max-h-80 divide-y divide-border overflow-y-auto">
-                      {cartItems.map((item) => (
-                        <div key={item.id} className="flex gap-3 p-3">
-                          <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-muted/30">
-                            <Image
-                              src={item.product.imageUrl || '/placeholder-image.png'}
-                              alt={item.product.title}
-                              fill
-                              className="object-cover"
-                              sizes="56px"
-                            />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <Link
-                              href={`/products/${item.product.id}`}
-                              className="line-clamp-1 text-sm font-medium hover:text-orange-600"
-                              onClick={() => setIsCartOpen(false)}
-                            >
-                              {item.product.title}
-                            </Link>
-                            <p className="mt-0.5 text-xs text-muted-foreground tabular-nums">
-                              {formatPrice(item.product.price)}
-                            </p>
-                            <div className="mt-1.5 flex items-center gap-2">
-                              <div className="flex items-center rounded-full border border-border">
-                                <button
-                                  type="button"
-                                  className="flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground hover:bg-muted disabled:opacity-40"
-                                  onClick={() => handleQuantityChange(item.product.id, item.quantity - 1)}
-                                  disabled={item.quantity <= 1}
-                                  aria-label="Decrease quantity"
-                                >
-                                  <Minus className="h-3 w-3" />
-                                </button>
-                                <span className="w-6 text-center text-xs font-semibold tabular-nums">
-                                  {item.quantity}
-                                </span>
-                                <button
-                                  type="button"
-                                  className="flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground hover:bg-muted disabled:opacity-40"
-                                  onClick={() => handleQuantityChange(item.product.id, item.quantity + 1)}
-                                  disabled={item.quantity >= item.product.stock}
-                                  aria-label="Increase quantity"
-                                >
-                                  <Plus className="h-3 w-3" />
-                                </button>
+                      <ShoppingCart className="h-5 w-5" />
+                      {totalItems > 0 && (
+                        <span className="absolute -top-1 -right-1 flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-orange-600 px-1 text-[10px] font-semibold tabular-nums text-white">
+                          {totalItems}
+                        </span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-90 rounded-2xl p-0" align="end">
+                    <div className="flex items-center justify-between border-b border-border p-4">
+                      <h4 className="text-sm font-semibold">
+                        Your cart {totalItems > 0 && <span className="text-muted-foreground">({totalItems})</span>}
+                      </h4>
+                    </div>
+
+                    {cartItems.length === 0 ? (
+                      <div className="p-8 text-center text-muted-foreground">
+                        <ShoppingCart className="mx-auto mb-2 h-8 w-8 opacity-40" />
+                        <p className="text-sm">Your cart is empty</p>
+                        <Link
+                          href="/products"
+                          className="mt-3 inline-block text-sm font-medium text-orange-600 hover:text-orange-700"
+                          onClick={() => setIsCartOpen(false)}
+                        >
+                          Continue shopping
+                        </Link>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="max-h-72 divide-y divide-border overflow-y-auto p-2">
+                          {cartItems.map((item) => (
+                            <div key={item.id} className="flex items-center gap-3 p-2">
+                              <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-muted/20">
+                                <Image
+                                  src={item.product.imageUrl || '/placeholder-image.png'}
+                                  alt={item.product.title}
+                                  fill
+                                  className="object-cover"
+                                  sizes="48px"
+                                />
                               </div>
-                              <button
-                                type="button"
-                                className="ml-auto text-muted-foreground transition-colors hover:text-red-600"
-                                onClick={() => handleRemoveItem(item.product.id)}
-                                aria-label={`Remove ${item.product.title} from cart`}
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-xs font-medium">{item.product.title}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {formatPrice(item.product.price)}
+                                </p>
+                                <div className="mt-1.5 flex items-center gap-2">
+                                  <div className="flex items-center rounded-full border border-border">
+                                    <button
+                                      type="button"
+                                      className="flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground hover:bg-muted disabled:opacity-40"
+                                      onClick={() => handleQuantityChange(item.product.id, item.quantity - 1)}
+                                      disabled={item.quantity <= 1}
+                                      aria-label="Decrease quantity"
+                                    >
+                                      <Minus className="h-3 w-3" />
+                                    </button>
+                                    <span className="w-6 text-center text-xs font-semibold tabular-nums">
+                                      {item.quantity}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      className="flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground hover:bg-muted disabled:opacity-40"
+                                      onClick={() => handleQuantityChange(item.product.id, item.quantity + 1)}
+                                      disabled={item.quantity >= item.product.stock}
+                                      aria-label="Increase quantity"
+                                    >
+                                      <Plus className="h-3 w-3" />
+                                    </button>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    className="ml-auto text-muted-foreground transition-colors hover:text-red-600"
+                                    onClick={() => handleRemoveItem(item.product.id)}
+                                    aria-label={`Remove ${item.product.title} from cart`}
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
+                              </div>
                             </div>
+                          ))}
+                        </div>
+
+                        <div className="space-y-3 border-t border-border p-4">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">Subtotal</span>
+                            <span className="font-bold tabular-nums">{formatPrice(totalPrice)}</span>
+                          </div>
+                          <div className="flex gap-2">
+                            <Link href="/cart" className="flex-1" onClick={() => setIsCartOpen(false)}>
+                              <Button variant="outline" className="w-full rounded-full">
+                                View cart
+                              </Button>
+                            </Link>
+                            <Link href="/checkout" className="flex-1" onClick={() => setIsCartOpen(false)}>
+                              <Button className="w-full rounded-full bg-zinc-950 text-white hover:bg-zinc-800">
+                                Checkout
+                              </Button>
+                            </Link>
                           </div>
                         </div>
-                      ))}
-                    </div>
-
-                    <div className="space-y-3 border-t border-border p-4">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Subtotal</span>
-                        <span className="font-bold tabular-nums">{formatPrice(totalPrice)}</span>
-                      </div>
-                      <div className="flex gap-2">
-                        <Link href="/cart" className="flex-1" onClick={() => setIsCartOpen(false)}>
-                          <Button variant="outline" className="w-full rounded-full">
-                            View cart
-                          </Button>
-                        </Link>
-                        <Link href="/checkout" className="flex-1" onClick={() => setIsCartOpen(false)}>
-                          <Button className="w-full rounded-full bg-zinc-950 text-white hover:bg-zinc-800">
-                            Checkout
-                          </Button>
-                        </Link>
-                      </div>
-                    </div>
-                  </>
-                )}
-              </PopoverContent>
-            </Popover>
+                      </>
+                    )}
+                  </PopoverContent>
+                </Popover>
+              </>
+            )}
 
             {/* Notifications */}
             {isAuthenticated && (
@@ -744,27 +763,64 @@ export function Header() {
                     </>
                   )}
 
-                  {/* ✅ Customer Account Navigation (Amazon-style: Profile, Orders, Wishlist) */}
-                  <DropdownMenuItem asChild>
-                    <Link href="/profile" className="flex cursor-pointer items-center gap-2">
-                      <User className="h-4 w-4" />
-                      My Profile
-                    </Link>
-                  </DropdownMenuItem>
+                  {/* ✅ Customer Account Navigation (Only shown for regular customers) */}
+                  {!isAdminOrSuperAdmin && (
+                    <>
+                      <DropdownMenuItem asChild>
+                        <Link href="/profile" className="flex cursor-pointer items-center gap-2">
+                          <User className="h-4 w-4" />
+                          My Profile
+                        </Link>
+                      </DropdownMenuItem>
 
-                  <DropdownMenuItem asChild>
-                    <Link href="/orders" className="flex cursor-pointer items-center gap-2">
-                      <ShoppingBag className="h-4 w-4" />
-                      My Orders
-                    </Link>
-                  </DropdownMenuItem>
+                      <DropdownMenuItem asChild>
+                        <Link href="/orders" className="flex cursor-pointer items-center gap-2">
+                          <ShoppingBag className="h-4 w-4" />
+                          My Orders
+                        </Link>
+                      </DropdownMenuItem>
 
-                  <DropdownMenuItem asChild>
-                    <Link href="/wishlist" className="flex cursor-pointer items-center gap-2">
-                      <Heart className="h-4 w-4" />
-                      My Wishlist
-                    </Link>
-                  </DropdownMenuItem>
+                      <DropdownMenuItem asChild>
+                        <Link href="/wishlist" className="flex cursor-pointer items-center gap-2">
+                          <Heart className="h-4 w-4" />
+                          My Wishlist
+                        </Link>
+                      </DropdownMenuItem>
+                    </>
+                  )}
+
+                  {/* ✅ Staff Management Navigation */}
+                  {isAdminOrSuperAdmin && (
+                    <>
+                      <DropdownMenuItem asChild>
+                        <Link href="/admin/products" className="flex cursor-pointer items-center gap-2">
+                          <Package className="h-4 w-4" />
+                          Manage Products
+                        </Link>
+                      </DropdownMenuItem>
+
+                      <DropdownMenuItem asChild>
+                        <Link href="/admin/orders" className="flex cursor-pointer items-center gap-2">
+                          <ShoppingCart className="h-4 w-4" />
+                          Manage Orders
+                        </Link>
+                      </DropdownMenuItem>
+
+                      <DropdownMenuItem asChild>
+                        <Link href="/admin/users" className="flex cursor-pointer items-center gap-2">
+                          <Users className="h-4 w-4" />
+                          User Directory
+                        </Link>
+                      </DropdownMenuItem>
+
+                      <DropdownMenuItem asChild>
+                        <Link href="/profile" className="flex cursor-pointer items-center gap-2">
+                          <User className="h-4 w-4" />
+                          Staff Profile
+                        </Link>
+                      </DropdownMenuItem>
+                    </>
+                  )}
 
                   <DropdownMenuSeparator />
 

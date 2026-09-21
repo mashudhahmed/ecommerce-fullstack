@@ -28,7 +28,10 @@ import {
   Truck,
   ChevronDown,
   ChevronUp,
+  ShieldAlert,
+  LayoutDashboard,
 } from 'lucide-react';
+import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -59,8 +62,9 @@ const STATUS_ICONS = {
 
 export default function OrdersPage() {
   const router = useRouter();
-  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const { orders, isLoading, refetch } = useOrders();
+  const isAdminOrSuperAdmin = user?.role === 'admin' || user?.role === 'superadmin';
   
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -177,6 +181,45 @@ export default function OrdersPage() {
   // EMPTY STATE
   // ============================================================
 
+  if (isAdminOrSuperAdmin && (!orders || orders.length === 0)) {
+    const dashboardHref = user?.role === 'superadmin' ? '/superadmin' : '/admin';
+    return (
+      <div className="mx-auto max-w-md py-20 px-4 text-center">
+        <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-600 border border-amber-500/20">
+          <ShieldAlert className="h-8 w-8" />
+        </div>
+        <div className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-700 dark:text-amber-400 mb-3">
+          Administrative Account
+        </div>
+        <h2 className="text-2xl font-black tracking-tight">Staff Account Notice</h2>
+        <p className="mt-2.5 text-sm text-muted-foreground leading-relaxed">
+          Administrative accounts do not place consumer orders. To inspect customer orders, tracking, and fulfillment across the platform, use the Store Orders management console.
+        </p>
+        <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
+          <Button
+            className="w-full sm:w-auto rounded-full bg-zinc-950 text-white hover:bg-zinc-800 gap-2 cursor-pointer"
+            asChild
+          >
+            <Link href="/admin/orders">
+              <Package className="h-4 w-4" />
+              Manage Store Orders
+            </Link>
+          </Button>
+          <Button
+            variant="outline"
+            className="w-full sm:w-auto rounded-full gap-2 cursor-pointer"
+            asChild
+          >
+            <Link href={dashboardHref}>
+              <LayoutDashboard className="h-4 w-4" />
+              Go to Dashboard
+            </Link>
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   if (!orders || orders.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
@@ -200,6 +243,24 @@ export default function OrdersPage() {
 
   return (
     <div className="space-y-6">
+      {/* Staff Preview Mode Banner */}
+      {isAdminOrSuperAdmin && (
+        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500/20 text-amber-600">
+              <ShieldAlert className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-amber-900 dark:text-amber-300">Staff Account Notice</p>
+              <p className="text-xs text-muted-foreground">You are viewing consumer order history. For platform-wide customer orders and shipment processing, use the Store Orders manager.</p>
+            </div>
+          </div>
+          <Button size="sm" className="rounded-full bg-zinc-950 text-white hover:bg-zinc-800 shrink-0 cursor-pointer" asChild>
+            <Link href="/admin/orders">Go to Store Orders</Link>
+          </Button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>

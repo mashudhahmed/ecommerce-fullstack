@@ -2,18 +2,21 @@
 
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
-import { ShoppingCart, Minus, Plus, Shield, Truck, RotateCcw } from 'lucide-react';
+import { ShoppingCart, Minus, Plus, Shield, Truck, RotateCcw, Package } from 'lucide-react';
+import Link from 'next/link';
 import { Product } from '@/types';
 import { Button } from '@/components/ui/button';
 import { formatPrice } from '@/lib/utils';
 import { useCart } from '@/hooks/useCart';
-import { toast } from 'sonner';
+import { useAuth } from '@/hooks/useAuth';
 
 interface ProductDetailProps {
   product: Product;
 }
 
 export function ProductDetail({ product }: ProductDetailProps) {
+  const { user } = useAuth();
+  const isAdminOrSuperAdmin = user?.role === 'admin' || user?.role === 'superadmin';
   const { addToCart, addToCartLoading } = useCart();
   const [quantity, setQuantity] = useState(1);
 
@@ -113,7 +116,32 @@ export function ProductDetail({ product }: ProductDetailProps) {
           <p className="leading-relaxed text-muted-foreground">{product.description}</p>
         </div>
 
-        {!isOutOfStock && (
+        {/* Staff Preview Mode Notice for Admins/Superadmins vs Customer Buying Controls */}
+        {isAdminOrSuperAdmin ? (
+          <div className="space-y-3 border-t border-border pt-6">
+            <div className="rounded-2xl border border-orange-200 bg-orange-50/60 p-4 dark:border-orange-950/40 dark:bg-orange-950/20">
+              <div className="flex items-start gap-3">
+                <Shield className="h-5 w-5 text-orange-600 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold text-foreground">
+                    Staff Preview Mode
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Consumer checkout is disabled for administrative accounts to protect analytics and order pipelines. You are previewing this listing in staff inspection mode.
+                  </p>
+                </div>
+              </div>
+              <div className="mt-4 flex items-center gap-2">
+                <Button asChild size="sm" variant="outline" className="gap-1.5 rounded-full text-xs">
+                  <Link href="/admin/products">
+                    <Package className="h-3.5 w-3.5 text-orange-600" />
+                    Manage in Admin
+                  </Link>
+                </Button>
+              </div>
+            </div>
+          </div>
+        ) : !isOutOfStock ? (
           <div className="space-y-4 border-t border-border pt-6">
             <div className="flex items-center gap-4">
               <div className="flex items-center rounded-full border border-border">
@@ -157,7 +185,7 @@ export function ProductDetail({ product }: ProductDetailProps) {
                 : 'Select a valid quantity'}
             </p>
           </div>
-        )}
+        ) : null}
 
         {/* Trust strip */}
         <div className="grid grid-cols-3 gap-3 border-t border-border pt-6 text-center">

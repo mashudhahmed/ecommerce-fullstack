@@ -18,6 +18,8 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
+  Globe,
+  ExternalLink,
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
@@ -200,6 +202,38 @@ export default function SuperAdminLayout({
           })}
         </nav>
 
+        {/* Quick Switchers & Storefront Link */}
+        <div className="border-t border-border p-3 space-y-1">
+          <Link
+            href="/admin"
+            className={cn(
+              'flex items-center gap-3 rounded-full px-3.5 py-2.5 text-sm font-medium transition-colors text-violet-600 hover:bg-violet-50 dark:text-violet-400 dark:hover:bg-violet-950/20',
+              isCollapsed && 'justify-center px-0'
+            )}
+            title={isCollapsed ? 'Admin Panel' : undefined}
+          >
+            <Shield className={cn('h-4 w-4 shrink-0', isCollapsed && 'h-5 w-5')} />
+            {!isCollapsed && <span>Admin Panel</span>}
+          </Link>
+
+          <Link
+            href="/"
+            className={cn(
+              'flex items-center gap-3 rounded-full px-3.5 py-2.5 text-sm font-medium transition-colors text-orange-600 hover:bg-orange-50 dark:text-orange-400 dark:hover:bg-orange-950/20',
+              isCollapsed && 'justify-center px-0'
+            )}
+            title={isCollapsed ? 'View Storefront' : undefined}
+          >
+            <Globe className={cn('h-4 w-4 shrink-0', isCollapsed && 'h-5 w-5')} />
+            {!isCollapsed && (
+              <span className="flex items-center gap-1.5 flex-1 justify-between">
+                <span>View Storefront</span>
+                <ExternalLink className="h-3 w-3 text-muted-foreground" />
+              </span>
+            )}
+          </Link>
+        </div>
+
         {/* Footer - Logout */}
         <div className="border-t border-border p-3">
           <button
@@ -218,23 +252,31 @@ export default function SuperAdminLayout({
 
       {/* Main content */}
       <main className="flex-1 overflow-auto">
-        {/* Mobile menu toggle */}
-        <div className="sticky top-0 z-30 flex items-center gap-4 border-b border-border bg-background/80 p-4 backdrop-blur-sm lg:hidden">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="rounded-full"
-            onClick={() => setIsMobileOpen(true)}
-            aria-label="Open menu"
-          >
-            <Menu className="h-5 w-5" />
-          </Button>
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-zinc-950">
-              <Shield className="h-4 w-4 text-orange-500" />
+        {/* Mobile menu toggle & Quick Storefront */}
+        <div className="sticky top-0 z-30 flex items-center justify-between border-b border-border bg-background/80 p-4 backdrop-blur-sm lg:hidden">
+          <div className="flex items-center gap-3">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="rounded-full"
+              onClick={() => setIsMobileOpen(true)}
+              aria-label="Open menu"
+            >
+              <Menu className="h-5 w-5" />
+            </Button>
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-zinc-950">
+                <Shield className="h-4 w-4 text-orange-500" />
+              </div>
+              <h1 className="text-lg font-black tracking-tight">Super Admin</h1>
             </div>
-            <h1 className="text-lg font-black tracking-tight">Super Admin</h1>
           </div>
+          <Button asChild variant="outline" size="sm" className="gap-1.5 text-xs">
+            <Link href="/">
+              <Globe className="h-3.5 w-3.5 text-orange-600" />
+              <span>Storefront</span>
+            </Link>
+          </Button>
         </div>
         <div className="p-4 md:p-8 lg:p-10">{children}</div>
       </main>

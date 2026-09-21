@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatPrice } from '@/lib/utils';
-import { ArrowLeft, ShoppingBag, Loader2, ShieldCheck, MapPin } from 'lucide-react';
+import { ArrowLeft, ShoppingBag, Loader2, ShieldCheck, ShieldAlert, LayoutDashboard, MapPin } from 'lucide-react';
 import { toast } from 'sonner';
 
 function CheckoutItemRow({ item }: { item: any }) {
@@ -62,6 +62,8 @@ export default function CheckoutPage() {
   const { items, totalPrice, clearCart, isLoading: cartLoading } = useCart();
   const { createOrder, isCreatingOrder } = useOrders();
 
+  const isAdminOrSuperAdmin = user?.role === 'admin' || user?.role === 'superadmin';
+
   const [shippingAddress, setShippingAddress] = useState('');
   const [isPlacing, setIsPlacing] = useState(false);
   const isOrderPlacedRef = useRef(false);
@@ -73,12 +75,12 @@ export default function CheckoutPage() {
     }
   }, [authLoading, isAuthenticated, router]);
 
-  // Redirect to cart if cart is empty (only if NOT currently placing an order)
+  // Redirect to cart if cart is empty (only if NOT currently placing an order and NOT admin)
   useEffect(() => {
-    if (!cartLoading && items.length === 0 && isAuthenticated && !isOrderPlacedRef.current) {
+    if (!cartLoading && items.length === 0 && isAuthenticated && !isOrderPlacedRef.current && !isAdminOrSuperAdmin) {
       router.push('/cart');
     }
-  }, [cartLoading, items.length, isAuthenticated, router]);
+  }, [cartLoading, items.length, isAuthenticated, isAdminOrSuperAdmin, router]);
 
   const handlePlaceOrder = async () => {
     if (items.length === 0 || isPlacing || isCreatingOrder) return;
@@ -136,6 +138,45 @@ export default function CheckoutPage() {
           <div className="lg:col-span-1">
             <Skeleton className="h-48 w-full rounded-2xl" />
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (isAdminOrSuperAdmin) {
+    const dashboardHref = user?.role === 'superadmin' ? '/superadmin' : '/admin';
+    return (
+      <div className="mx-auto max-w-md py-20 px-4 text-center">
+        <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-600 border border-amber-500/20">
+          <ShieldAlert className="h-8 w-8" />
+        </div>
+        <div className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-700 dark:text-amber-400 mb-3">
+          Administrative Account
+        </div>
+        <h2 className="text-2xl font-black tracking-tight">Checkout Disabled</h2>
+        <p className="mt-2.5 text-sm text-muted-foreground leading-relaxed">
+          Administrative and operational staff accounts cannot place consumer orders. Please test checkout using a customer account or manage store orders from the staff dashboard.
+        </p>
+        <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
+          <Button
+            className="w-full sm:w-auto rounded-full bg-zinc-950 text-white hover:bg-zinc-800 gap-2 cursor-pointer"
+            asChild
+          >
+            <Link href={dashboardHref}>
+              <LayoutDashboard className="h-4 w-4" />
+              Go to Dashboard
+            </Link>
+          </Button>
+          <Button
+            variant="outline"
+            className="w-full sm:w-auto rounded-full gap-2 cursor-pointer"
+            asChild
+          >
+            <Link href="/products">
+              <ArrowLeft className="h-4 w-4" />
+              Browse Catalog
+            </Link>
+          </Button>
         </div>
       </div>
     );

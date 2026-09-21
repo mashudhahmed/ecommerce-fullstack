@@ -408,7 +408,7 @@ export function LoginForm() {
 
   if (twoFactorRequired) {
     return (
-      <div className="mx-auto w-full max-w-md animate-fade-in-up">
+      <div className="mx-auto w-full max-w-[460px] animate-fade-in-up">
         <Card className="rounded-3xl border-border shadow-xl shadow-zinc-950/5">
           <CardHeader className="space-y-3 text-center">
             <div className="flex justify-center">
@@ -494,7 +494,7 @@ export function LoginForm() {
   const isDisabled = loginLoading || loginSuccess;
 
   return (
-    <div className="mx-auto w-full max-w-md animate-fade-in-up">
+    <div className="mx-auto w-full max-w-[460px] animate-fade-in-up">
       <Card className="rounded-3xl border-border shadow-xl shadow-zinc-950/5">
         <CardHeader className="space-y-1 text-center">
           <div className="mb-2 flex justify-center">

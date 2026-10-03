@@ -240,6 +240,23 @@ export interface OrderTimelineItem {
   createdAt: string;
 }
 
+export interface ChatMessage {
+  id: number;
+  sender: User;
+  recipient: User;
+  content: string;
+  orderId?: number;
+  productId?: number;
+  isRead: boolean;
+  createdAt: string;
+}
+
+export interface ChatThread {
+  partner: User;
+  lastMessage: ChatMessage;
+  unreadCount: number;
+}
+
 export interface Order {
   id: number;
   user: User;

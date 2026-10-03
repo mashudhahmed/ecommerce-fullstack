@@ -44,6 +44,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { MonitoringModule } from './monitoring/monitoring.module';
 import { EventsModule } from './events/events.module';
 import { ReturnsModule } from './returns/returns.module';
+import { ChatModule } from './chat/chat.module';
 
 @Module({
   imports: [
@@ -129,6 +130,7 @@ import { ReturnsModule } from './returns/returns.module';
     NotificationsModule,
     SearchModule,
     ReturnsModule,
+    ChatModule,
   ],
   controllers: [AppController],
   providers: [AppService, DatabaseSeederService, CleanupCron, SampleDataSeeder],

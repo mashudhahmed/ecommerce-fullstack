@@ -37,11 +37,13 @@ import {
   ExternalLink,
   Globe,
   RotateCcw,
+  MessageSquare,
 } from 'lucide-react';
 import { formatPrice, formatDate, formatDateTime, cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { returnService } from '@/services/return.service';
-import { ReturnReason, VendorOrder, OrderTimelineItem } from '@/types';
+import { ReturnReason, VendorOrder, OrderTimelineItem, User } from '@/types';
+import { VendorChatDrawer } from '@/components/chat/VendorChatDrawer';
 import {
   Dialog,
   DialogContent,
@@ -95,6 +97,9 @@ export default function OrderDetailPage() {
   const [returnReason, setReturnReason] = useState<ReturnReason>('defective');
   const [returnDescription, setReturnDescription] = useState('');
   const [isSubmittingReturn, setIsSubmittingReturn] = useState(false);
+
+  // Live Chat Drawer State
+  const [activeChatPartner, setActiveChatPartner] = useState<User | null>(null);
 
   const handleOpenReturnModal = (vo: VendorOrder) => {
     setSelectedPackageForReturn(vo);
@@ -516,8 +521,19 @@ export default function OrderDetailPage() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
                   <OrderStatusBadge status={vo.status as any} />
+                  {vo.vendor && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setActiveChatPartner(vo.vendor || null)}
+                      className="h-8 rounded-full text-xs gap-1 border-orange-500/30 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/20"
+                    >
+                      <MessageSquare className="h-3 w-3" />
+                      Chat with Seller
+                    </Button>
+                  )}
                   {vo.vendorId && (
                     <Link href={`/stores/${vo.vendorId}`}>
                       <Button variant="outline" size="sm" className="h-8 rounded-full text-xs gap-1">
@@ -881,6 +897,16 @@ export default function OrderDetailPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Live Seller Chat Drawer */}
+      {activeChatPartner && (
+        <VendorChatDrawer
+          partner={activeChatPartner}
+          orderId={order.id}
+          isOpen={Boolean(activeChatPartner)}
+          onClose={() => setActiveChatPartner(null)}
+        />
+      )}
     </div>
   );
 }

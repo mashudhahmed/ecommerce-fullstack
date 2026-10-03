@@ -37,9 +37,11 @@ import {
   Store,
   CheckCircle2,
   ChevronRight,
+  MessageSquare,
 } from 'lucide-react';
 import { formatPrice, cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { VendorChatDrawer } from '@/components/chat/VendorChatDrawer';
 
 // ============================================================
 // HELPERS
@@ -143,6 +145,7 @@ function ProductDetailPageContent({ id }: { id: number }) {
   );
   const [isWishlistLoading, setIsWishlistLoading] = useState(false);
   const [imageError, setImageError] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
 
   // ============================================================
   // FETCH PRODUCT - Optimized with staleTime
@@ -564,13 +567,26 @@ function ProductDetailPageContent({ id }: { id: number }) {
                   </div>
                 </div>
 
-                {product.owner?.id && (
-                  <Link href={`/stores/${product.owner.id}`}>
-                    <Button variant="outline" size="sm" className="h-8 rounded-full text-xs gap-1">
-                      Visit Store <ChevronRight className="h-3 w-3" />
+                <div className="flex items-center gap-2">
+                  {product.owner?.id && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setIsChatOpen(true)}
+                      className="h-8 rounded-full text-xs gap-1 border-orange-500/30 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/20"
+                    >
+                      <MessageSquare className="h-3 w-3" />
+                      Ask Seller
                     </Button>
-                  </Link>
-                )}
+                  )}
+                  {product.owner?.id && (
+                    <Link href={`/stores/${product.owner.id}`}>
+                      <Button variant="outline" size="sm" className="h-8 rounded-full text-xs gap-1">
+                        Visit Store <ChevronRight className="h-3 w-3" />
+                      </Button>
+                    </Link>
+                  )}
+                </div>
               </div>
 
               <div className="border-t border-border/60 pt-2.5 text-xs text-muted-foreground space-y-1.5">
@@ -678,6 +694,16 @@ function ProductDetailPageContent({ id }: { id: number }) {
         <div className="mt-16">
           <RelatedProducts currentProductId={product.id} categoryId={product.category?.id} />
         </div>
+
+        {/* Real-time Seller Inquiries Drawer */}
+        {isChatOpen && product.owner && (
+          <VendorChatDrawer
+            partner={product.owner}
+            productId={product.id}
+            isOpen={isChatOpen}
+            onClose={() => setIsChatOpen(false)}
+          />
+        )}
       </div>
     </ErrorBoundary>
   );

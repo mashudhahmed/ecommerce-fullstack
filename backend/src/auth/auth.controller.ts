@@ -67,10 +67,11 @@ export class AuthController {
   // COOKIE HELPERS
   // ============================================================
   private setAuthCookies(res: Response, tokens: any) {
+    const sameSite: 'none' | 'lax' = isProd ? 'none' : 'lax';
     const baseOpts = {
       httpOnly: true,
       secure: isProd,
-      sameSite: 'lax' as const,
+      sameSite,
       path: '/',
     };
 
@@ -87,8 +88,13 @@ export class AuthController {
   }
 
   private clearAuthCookies(res: Response) {
-    res.clearCookie(ACCESS_COOKIE, { path: '/' });
-    res.clearCookie(REFRESH_COOKIE, { path: REFRESH_COOKIE_PATH });
+    const sameSite: 'none' | 'lax' = isProd ? 'none' : 'lax';
+    const clearOpts = {
+      secure: isProd,
+      sameSite,
+    };
+    res.clearCookie(ACCESS_COOKIE, { ...clearOpts, path: '/' });
+    res.clearCookie(REFRESH_COOKIE, { ...clearOpts, path: REFRESH_COOKIE_PATH });
   }
 
   private requestMeta(req: Request) {
@@ -139,12 +145,12 @@ export class AuthController {
 
     const frontendUrl =
       this.configService.get<string>('app.frontendUrl') ||
-      'http://localhost:3002';
+      'https://snapcart-fullstack.vercel.app';
 
     const safeRedirect =
       redirect && redirect.startsWith('/') && !redirect.startsWith('//')
         ? redirect
-        : '/dashboard';
+        : '/';
 
     if (!isConfigured) {
       if (isProd) {
@@ -188,7 +194,7 @@ export class AuthController {
 
     const frontendUrl =
       this.configService.get<string>('app.frontendUrl') ||
-      'http://localhost:3002';
+      'https://snapcart-fullstack.vercel.app';
 
     const email = (body?.email || '').toLowerCase().trim();
     if (!email || !email.includes('@')) {
@@ -216,7 +222,7 @@ export class AuthController {
         body.redirect.startsWith('/') &&
         !body.redirect.startsWith('//')
           ? body.redirect
-          : '/dashboard';
+          : '/';
       return res.redirect(`${frontendUrl}${targetUrl}`);
     } catch (error: any) {
       return res.redirect(
@@ -245,7 +251,7 @@ export class AuthController {
   ) {
     const frontendUrl =
       this.configService.get<string>('app.frontendUrl') ||
-      'http://localhost:3002';
+      'https://snapcart-fullstack.vercel.app';
 
     if (oauthError) {
       const errParam =
@@ -309,7 +315,7 @@ export class AuthController {
             const targetUrl =
               state && state.startsWith('/') && !state.startsWith('//')
                 ? state
-                : '/dashboard';
+                : '/';
             return safeRedirect(`${frontendUrl}${targetUrl}`);
           } catch (error: any) {
             this.logger.error(

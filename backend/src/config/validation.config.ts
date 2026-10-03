@@ -5,8 +5,9 @@ export const validationSchema = Joi.object({
   NODE_ENV: Joi.string()
     .valid('development', 'production', 'test')
     .default('development'),
-  PORT: Joi.number().default(3000),
-  FRONTEND_URL: Joi.string().uri().default('http://localhost:3000'),
+  FRONTEND_URL: Joi.string()
+    .uri()
+    .default('https://snapcart-fullstack.vercel.app'),
 
   DATABASE_URL: Joi.string().optional(),
   DATABASE_SSL: Joi.boolean().optional(),

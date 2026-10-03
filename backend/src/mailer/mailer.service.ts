@@ -31,7 +31,8 @@ export class MailerService implements OnModuleInit {
     this.fromName = this.configService.get('email.fromName') || 'SnapCart';
     this.fromEmail = this.configService.get('email.user') || '';
     this.frontendUrl =
-      this.configService.get('app.frontendUrl') || 'http://localhost:3000';
+      this.configService.get('app.frontendUrl') ||
+      'https://snapcart-fullstack.vercel.app';
     this.adminUrl = `${this.frontendUrl}/admin`;
 
     // ✅ Production-ready: Initialize transporter with proper error handling

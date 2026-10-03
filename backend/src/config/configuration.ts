@@ -1,7 +1,8 @@
 // backend/src/config/configuration.ts
 export default () => ({
   app: {
-    frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3000',
+    frontendUrl:
+      process.env.FRONTEND_URL || 'https://snapcart-fullstack.vercel.app',
     backendUrl:
       process.env.BACKEND_URL ||
       `http://localhost:${process.env.PORT || '3001'}`,
@@ -42,8 +43,10 @@ export default () => ({
   },
   cors: {
     origin: process.env.CORS_ORIGIN?.split(',') || [
+      'https://snapcart-fullstack.vercel.app',
       'http://localhost:3000',
       'http://localhost:3001',
+      'http://localhost:3002',
     ],
   },
   // ✅ Add Cloudinary configuration

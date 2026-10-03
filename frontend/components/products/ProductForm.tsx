@@ -24,6 +24,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Progress } from '@/components/ui/progress';
 import { Upload, X, Plus, Minus } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { apiClient } from '@/lib/api-client';
 import { useCategories } from '@/hooks/useCategories';
 import {
   Select,
@@ -154,23 +155,16 @@ export function ProductForm({ product, onSuccess, onCancel }: ProductFormProps) 
         }, 100);
 
         try {
-          const res = await fetch('/api/v1/upload/single', {
-            method: 'POST',
-            body: formData,
+          const res = await apiClient.post('/files/upload', formData, {
             headers: {
-              Authorization: `Bearer ${localStorage.getItem('token')}`,
+              'Content-Type': 'multipart/form-data',
             },
           });
 
           clearInterval(interval);
           setUploadProgress(100);
 
-          if (!res.ok) {
-            throw new Error('Upload failed');
-          }
-
-          const data = await res.json();
-          imageUrl = data.data.url;
+          imageUrl = res.data?.data?.url || res.data?.url;
         } catch (uploadError) {
           clearInterval(interval);
           setUploadProgress(0);

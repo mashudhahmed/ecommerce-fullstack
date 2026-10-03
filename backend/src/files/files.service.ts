@@ -21,6 +21,7 @@ try {
 export class FilesService {
   private readonly logger = new Logger(FilesService.name);
   private readonly uploadDir: string;
+  private isCloudinaryConfigured = false;
 
   constructor(private configService: ConfigService) {
     this.uploadDir = configService.get('upload.directory') || './uploads';
@@ -29,15 +30,45 @@ export class FilesService {
     // Configure Cloudinary if available
     if (cloudinary) {
       try {
-        cloudinary.config({
-          cloud_name: this.configService.get('CLOUDINARY_CLOUD_NAME'),
-          api_key: this.configService.get('CLOUDINARY_API_KEY'),
-          api_secret: this.configService.get('CLOUDINARY_API_SECRET'),
-        });
-        this.logger.log('Cloudinary configured successfully');
+        const cloudinaryUrl =
+          this.configService.get<string>('cloudinary.url') ||
+          this.configService.get<string>('CLOUDINARY_URL');
+        const cloudName =
+          this.configService.get<string>('cloudinary.cloudName') ||
+          this.configService.get<string>('CLOUDINARY_CLOUD_NAME');
+        const apiKey =
+          this.configService.get<string>('cloudinary.apiKey') ||
+          this.configService.get<string>('CLOUDINARY_API_KEY');
+        const apiSecret =
+          this.configService.get<string>('cloudinary.apiSecret') ||
+          this.configService.get<string>('CLOUDINARY_API_SECRET');
+
+        if (cloudinaryUrl) {
+          cloudinary.config({
+            cloudinary_url: cloudinaryUrl,
+            secure: true,
+          });
+          this.isCloudinaryConfigured = true;
+          this.logger.log('Cloudinary initialized successfully via CLOUDINARY_URL');
+        } else if (cloudName && apiKey && apiSecret) {
+          cloudinary.config({
+            cloud_name: cloudName,
+            api_key: apiKey,
+            api_secret: apiSecret,
+            secure: true,
+          });
+          this.isCloudinaryConfigured = true;
+          this.logger.log(`Cloudinary initialized successfully for cloud: ${cloudName}`);
+        } else {
+          this.isCloudinaryConfigured = false;
+          this.logger.log(
+            'Cloudinary credentials not provided; falling back to local file storage',
+          );
+        }
       } catch (error: any) {
+        this.isCloudinaryConfigured = false;
         this.logger.warn(
-          'Cloudinary configuration failed, using local storage',
+          `Cloudinary configuration failed: ${error.message}, using local storage`,
         );
       }
     }
@@ -59,10 +90,12 @@ export class FilesService {
     file: MulterFile,
     options: { folder?: string; useCloudinary?: boolean } = {},
   ): Promise<{ url: string; filename: string; publicId?: string }> {
-    const { folder = 'products', useCloudinary = true } = options;
+    const defaultFolder =
+      this.configService.get<string>('cloudinary.folder') || 'snapcart/products';
+    const { folder = defaultFolder, useCloudinary = true } = options;
 
-    // Try Cloudinary first if available
-    if (useCloudinary && cloudinary && streamifier) {
+    // Try Cloudinary first if available and configured
+    if (useCloudinary && cloudinary && streamifier && this.isCloudinaryConfigured) {
       try {
         return await this.uploadToCloudinary(file, folder);
       } catch (error: any) {
@@ -145,7 +178,7 @@ export class FilesService {
 
   async deleteFile(filename: string, publicId?: string): Promise<void> {
     // Delete from Cloudinary if publicId provided
-    if (publicId && cloudinary) {
+    if (publicId && cloudinary && this.isCloudinaryConfigured) {
       try {
         await new Promise((resolve, reject) => {
           cloudinary.uploader.destroy(publicId, (error: any, result: any) => {

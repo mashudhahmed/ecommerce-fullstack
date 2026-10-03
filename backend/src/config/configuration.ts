@@ -8,11 +8,19 @@ export default () => ({
   },
   port: parseInt(process.env.PORT || '3000', 10),
   database: {
+    url: process.env.DATABASE_URL,
     host: process.env.DATABASE_HOST || 'localhost',
     port: parseInt(process.env.DATABASE_PORT || '5434', 10),
     username: process.env.DATABASE_USER || 'postgres',
     password: process.env.DATABASE_PASSWORD || '',
     database: process.env.DATABASE_NAME || 'ecommerce_db',
+    ssl:
+      process.env.DATABASE_SSL === 'true' ||
+      Boolean(
+        process.env.DATABASE_URL &&
+          (process.env.DATABASE_URL.includes('sslmode=require') ||
+            process.env.DATABASE_URL.includes('neon.tech')),
+      ),
   },
   jwt: {
     secret: process.env.JWT_SECRET,
@@ -42,6 +50,7 @@ export default () => ({
     cloudName: process.env.CLOUDINARY_CLOUD_NAME,
     apiKey: process.env.CLOUDINARY_API_KEY,
     apiSecret: process.env.CLOUDINARY_API_SECRET,
+    url: process.env.CLOUDINARY_URL,
     folder: process.env.CLOUDINARY_FOLDER || 'snapcart/products',
   },
   // ✅ Add upload configuration

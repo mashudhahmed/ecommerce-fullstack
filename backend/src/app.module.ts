@@ -78,29 +78,45 @@ import { ChatModule } from './chat/chat.module';
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
-      useFactory: (configService: ConfigService) => ({
-        type: 'postgres',
-        host: configService.get('database.host'),
-        port: configService.get('database.port'),
-        username: configService.get('database.username'),
-        password: configService.get('database.password'),
-        database: configService.get('database.database'),
-        autoLoadEntities: true,
-        entities: [Category],
-        synchronize: false,
-        logging: process.env.NODE_ENV === 'development',
-        ssl: configService.get('database.ssl') || false,
-        extra: {
-          max: configService.get('database.maxConnections', 20),
-          idleTimeoutMillis: configService.get('database.idleTimeout', 30000),
-          connectionTimeoutMillis: configService.get(
-            'database.connectionTimeout',
-            2000,
-          ),
-        },
-        retryAttempts: 5,
-        retryDelay: 3000,
-      }),
+      useFactory: (configService: ConfigService) => {
+        const dbUrl = configService.get<string>('database.url');
+        const isSsl = configService.get<boolean>('database.ssl');
+
+        const baseConfig: any = {
+          type: 'postgres',
+          autoLoadEntities: true,
+          entities: [Category],
+          synchronize: false,
+          logging: process.env.NODE_ENV === 'development',
+          ssl: isSsl ? { rejectUnauthorized: false } : false,
+          extra: {
+            max: configService.get('database.maxConnections', 20),
+            idleTimeoutMillis: configService.get('database.idleTimeout', 30000),
+            connectionTimeoutMillis: configService.get(
+              'database.connectionTimeout',
+              2000,
+            ),
+          },
+          retryAttempts: 5,
+          retryDelay: 3000,
+        };
+
+        if (dbUrl) {
+          return {
+            ...baseConfig,
+            url: dbUrl,
+          };
+        }
+
+        return {
+          ...baseConfig,
+          host: configService.get('database.host'),
+          port: configService.get('database.port'),
+          username: configService.get('database.username'),
+          password: configService.get('database.password'),
+          database: configService.get('database.database'),
+        };
+      },
       inject: [ConfigService],
     }),
     TypeOrmModule.forFeature([User, Category, Product]),

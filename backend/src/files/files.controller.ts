@@ -39,6 +39,10 @@ export class FilesController {
       throw new BadRequestException('No file uploaded');
     }
     const result = await this.filesService.uploadFile(file);
-    return { url: result.url, filename: result.filename };
+    return {
+      url: result.url,
+      filename: result.filename,
+      publicId: result.publicId,
+    };
   }
 }

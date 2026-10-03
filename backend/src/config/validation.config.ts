@@ -8,11 +8,13 @@ export const validationSchema = Joi.object({
   PORT: Joi.number().default(3000),
   FRONTEND_URL: Joi.string().uri().default('http://localhost:3000'),
 
-  DATABASE_HOST: Joi.string().required(),
-  DATABASE_PORT: Joi.number().default(5434),
-  DATABASE_USER: Joi.string().required(),
-  DATABASE_PASSWORD: Joi.string().required(),
-  DATABASE_NAME: Joi.string().required(),
+  DATABASE_URL: Joi.string().optional(),
+  DATABASE_SSL: Joi.boolean().optional(),
+  DATABASE_HOST: Joi.string().optional().default('localhost'),
+  DATABASE_PORT: Joi.number().optional().default(5434),
+  DATABASE_USER: Joi.string().optional().default('postgres'),
+  DATABASE_PASSWORD: Joi.string().optional().allow('').default(''),
+  DATABASE_NAME: Joi.string().optional().default('ecommerce_db'),
 
   JWT_SECRET: Joi.string().min(32).required(),
   JWT_EXPIRES_IN: Joi.string().default('7d'),
@@ -30,7 +32,8 @@ export const validationSchema = Joi.object({
 
   CORS_ORIGIN: Joi.string().optional(),
 
-  // ✅ Add Cloudinary validation (optional)
+  // ✅ Cloudinary validation
+  CLOUDINARY_URL: Joi.string().optional(),
   CLOUDINARY_CLOUD_NAME: Joi.string().optional(),
   CLOUDINARY_API_KEY: Joi.string().optional(),
   CLOUDINARY_API_SECRET: Joi.string().optional(),

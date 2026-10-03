@@ -71,11 +71,10 @@ export class OrdersService {
       >();
 
       for (const item of createOrderDto.items) {
-        // Concurrency-safe pessimistic write lock on the product
+        // Concurrency-safe pessimistic write lock on the product row
         const product = await queryRunner.manager
           .createQueryBuilder(Product, 'product')
           .setLock('pessimistic_write')
-          .leftJoinAndSelect('product.owner', 'owner')
           .where('product.id = :id AND product.isActive = true', {
             id: item.productId,
           })
@@ -96,9 +95,9 @@ export class OrdersService {
         const itemTotal = Number(product.price) * item.quantity;
         total += itemTotal;
 
-        // Determine vendor (defaults to vendor owner, or fallback platform admin ID 1)
-        const vendorId = product.owner?.id || 1;
-        const vendorUser = product.owner || ({ id: vendorId } as User);
+        // Determine vendor (defaults to product.ownerId, or fallback platform admin ID 1)
+        const vendorId = product.ownerId || 1;
+        const vendorUser = { id: vendorId } as User;
 
         if (!vendorGroups.has(vendorId)) {
           vendorGroups.set(vendorId, {

@@ -21,6 +21,7 @@ import {
   Globe,
   ExternalLink,
   Wallet,
+  RotateCcw,
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
@@ -35,6 +36,7 @@ const navItems = [
   { href: '/vendor/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/vendor/products', label: 'Products', icon: Package },
   { href: '/vendor/orders', label: 'Orders & Fulfillment', icon: ShoppingBag },
+  { href: '/vendor/returns', label: 'Returns & Refunds', icon: RotateCcw },
   { href: '/vendor/finances', label: 'Finances & Payouts', icon: Wallet },
   { href: '/vendor/analytics', label: 'Analytics', icon: BarChart3 },
   { href: '/vendor/profile', label: 'Profile', icon: User },

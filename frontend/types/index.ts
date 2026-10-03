@@ -1038,6 +1038,73 @@ export interface TwoFactorStatus {
 }
 
 // ============================================================
+// RETURN & REFUND TYPES
+// ============================================================
+
+export interface ReturnItem {
+  productId: number;
+  productName: string;
+  quantity: number;
+  price: number;
+}
+
+export interface ReturnRequest {
+  id: number;
+  orderId: number;
+  userId: number;
+  vendorOrderId?: number;
+  vendorId?: number;
+  reason: ReturnReason;
+  description: string;
+  images?: string[];
+  items: ReturnItem[];
+  status: ReturnStatus;
+  refundAmount?: number;
+  refundTransactionId?: string;
+  adminNotes?: string;
+  rejectionReason?: string;
+  approvedAt?: string;
+  refundedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+  vendorOrder?: VendorOrder;
+  vendor?: User;
+  order?: Order;
+  user?: User;
+}
+
+export interface CreateReturnData {
+  orderId: number;
+  vendorOrderId?: number;
+  reason: ReturnReason;
+  description: string;
+  items: ReturnItem[];
+  images?: string[];
+}
+
+export interface ProcessReturnData {
+  action: 'approve' | 'reject';
+  rejectionReason?: string;
+  adminNotes?: string;
+}
+
+// ============================================================
+// NOTIFICATION TYPES
+// ============================================================
+
+export interface InAppNotification {
+  id: number;
+  userId: number;
+  type: string;
+  channel: string;
+  title: string;
+  content: string;
+  data?: Record<string, any>;
+  read: boolean;
+  createdAt: string;
+}
+
+// ============================================================
 // EXPORT ALL
 // ============================================================
 

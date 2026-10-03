@@ -36,9 +36,20 @@ import {
   Store,
   ExternalLink,
   Globe,
+  RotateCcw,
 } from 'lucide-react';
 import { formatPrice, formatDate, formatDateTime, cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { returnService } from '@/services/return.service';
+import { ReturnReason, VendorOrder } from '@/types';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
 
 // ============================================================
 // ORDER STATUS CONFIG
@@ -72,6 +83,54 @@ export default function OrderDetailPage() {
 
   const [isPrinting, setIsPrinting] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
+
+  // Return / Refund Modal State
+  const [isReturnModalOpen, setIsReturnModalOpen] = useState(false);
+  const [selectedPackageForReturn, setSelectedPackageForReturn] = useState<VendorOrder | null>(null);
+  const [returnReason, setReturnReason] = useState<ReturnReason>('defective');
+  const [returnDescription, setReturnDescription] = useState('');
+  const [isSubmittingReturn, setIsSubmittingReturn] = useState(false);
+
+  const handleOpenReturnModal = (vo: VendorOrder) => {
+    setSelectedPackageForReturn(vo);
+    setReturnReason('defective');
+    setReturnDescription('');
+    setIsReturnModalOpen(true);
+  };
+
+  const handleSubmitReturn = async () => {
+    if (!selectedPackageForReturn) return;
+    if (!returnDescription.trim()) {
+      toast.error('Please describe the reason for your return');
+      return;
+    }
+
+    try {
+      setIsSubmittingReturn(true);
+      const itemsToReturn = (selectedPackageForReturn.items || []).map((item) => ({
+        productId: item.product?.id || (item as any).productId || 0,
+        productName: item.product?.title || 'Product',
+        quantity: item.quantity,
+        price: Number(item.price),
+      }));
+
+      await returnService.createReturn({
+        orderId,
+        vendorOrderId: selectedPackageForReturn.id,
+        reason: returnReason,
+        description: returnDescription,
+        items: itemsToReturn,
+      });
+
+      toast.success('Return request submitted! The seller has been notified.');
+      setIsReturnModalOpen(false);
+      refetch();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to submit return request');
+    } finally {
+      setIsSubmittingReturn(false);
+    }
+  };
 
   // ============================================================
   // FETCH ORDER
@@ -473,9 +532,24 @@ export default function OrderDetailPage() {
                   ))}
                 </div>
 
-                <div className="flex justify-end pt-2 text-sm border-t border-border/40">
-                  <span className="text-muted-foreground mr-3">Package Subtotal:</span>
-                  <span className="font-bold">{formatPrice(vo.subtotal)}</span>
+                <div className="flex justify-between items-center pt-2 text-sm border-t border-border/40">
+                  <div>
+                    {vo.status === 'delivered' && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleOpenReturnModal(vo)}
+                        className="text-xs text-orange-600 border-orange-500/30 hover:bg-orange-50 dark:hover:bg-orange-950/20 gap-1.5 h-8 rounded-lg"
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" />
+                        Request Return / Refund
+                      </Button>
+                    )}
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground mr-3">Package Subtotal:</span>
+                    <span className="font-bold">{formatPrice(vo.subtotal)}</span>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -611,6 +685,73 @@ export default function OrderDetailPage() {
           </Button>
         </CardContent>
       </Card>
+
+      {/* Return Request Modal */}
+      <Dialog open={isReturnModalOpen} onOpenChange={setIsReturnModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <RotateCcw className="h-5 w-5 text-orange-600" />
+              Request Return or Replacement
+            </DialogTitle>
+            <DialogDescription>
+              Submit a return request for package #{selectedPackageForReturn?.id} (Sold by{' '}
+              {selectedPackageForReturn?.vendor?.name || 'Seller'}). The merchant will review and authorize your refund.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1.5">
+                Reason for Return
+              </label>
+              <select
+                value={returnReason}
+                onChange={(e) => setReturnReason(e.target.value as ReturnReason)}
+                className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="defective">Defective / Doesn&apos;t work properly</option>
+                <option value="damaged">Damaged during shipping</option>
+                <option value="wrong_item">Received wrong item</option>
+                <option value="not_as_described">Item not as described</option>
+                <option value="change_of_mind">No longer needed / Change of mind</option>
+                <option value="other">Other issue</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1.5">
+                Details & Description
+              </label>
+              <textarea
+                value={returnDescription}
+                onChange={(e) => setReturnDescription(e.target.value)}
+                placeholder="Explain the problem in detail (e.g., exact defect, condition of the package)..."
+                rows={3}
+                className="w-full rounded-lg border border-input bg-background p-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none"
+              />
+            </div>
+
+            <div className="rounded-lg bg-muted/40 p-3 text-xs text-muted-foreground">
+              <p className="font-semibold text-foreground mb-1">Standard Marketplace Return Policy:</p>
+              <p>Approved returns are restocked and refunded directly to your payment source. You will be provided shipping instructions upon seller approval.</p>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setIsReturnModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSubmitReturn}
+              disabled={isSubmittingReturn}
+              className="bg-orange-600 hover:bg-orange-700 text-white"
+            >
+              {isSubmittingReturn ? 'Submitting...' : 'Submit Return Request'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

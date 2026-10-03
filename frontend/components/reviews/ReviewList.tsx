@@ -1,14 +1,16 @@
 // components/reviews/ReviewList.tsx
 'use client';
 
+import Image from 'next/image';
 import { useReviews } from '@/hooks/useReviews';
 import { formatDate } from '@/lib/utils';
 import { StarRating } from '@/components/ui/star-rating';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getInitials } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ThumbsUp, Flag } from 'lucide-react';
+import { ThumbsUp, Flag, CheckCircle2 } from 'lucide-react';
 
 interface ReviewListProps {
   productId: number;
@@ -90,17 +92,38 @@ export function ReviewList({ productId }: ReviewListProps) {
                   <AvatarFallback>{getInitials(review.user.name)}</AvatarFallback>
                 </Avatar>
                 <div>
-                  <p className="font-semibold">{review.user.name}</p>
-                  <p className="text-sm text-muted-foreground">{formatDate(review.createdAt)}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="font-semibold text-sm">{review.user.name}</p>
+                    {review.metadata?.verifiedPurchase && (
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] text-emerald-600 border-emerald-500/30 bg-emerald-50 dark:bg-emerald-950/20 py-0 h-4 gap-1"
+                      >
+                        <CheckCircle2 className="h-2.5 w-2.5" />
+                        Verified Purchase
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">{formatDate(review.createdAt)}</p>
                 </div>
               </div>
               <StarRating value={review.rating} readonly size="sm" />
             </div>
 
             {review.title && (
-              <h4 className="font-semibold">{review.title}</h4>
+              <h4 className="font-semibold text-sm">{review.title}</h4>
             )}
-            <p className="text-sm">{review.comment}</p>
+            <p className="text-sm leading-relaxed">{review.comment}</p>
+
+            {review.images && review.images.length > 0 && (
+              <div className="flex gap-2 pt-1 overflow-x-auto">
+                {review.images.map((img, idx) => (
+                  <div key={idx} className="relative h-16 w-16 rounded-md overflow-hidden border shrink-0 bg-muted/20">
+                    <Image src={img} alt="Customer photo" fill className="object-cover" />
+                  </div>
+                ))}
+              </div>
+            )}
 
             <div className="flex items-center gap-4 pt-2">
               <Button

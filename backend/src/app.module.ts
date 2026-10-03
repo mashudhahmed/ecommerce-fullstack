@@ -43,6 +43,7 @@ import { WishlistModule } from './wishlist/wishlist.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { MonitoringModule } from './monitoring/monitoring.module';
 import { EventsModule } from './events/events.module';
+import { ReturnsModule } from './returns/returns.module';
 
 @Module({
   imports: [
@@ -127,6 +128,7 @@ import { EventsModule } from './events/events.module';
     WishlistModule,
     NotificationsModule,
     SearchModule,
+    ReturnsModule,
   ],
   controllers: [AppController],
   providers: [AppService, DatabaseSeederService, CleanupCron, SampleDataSeeder],

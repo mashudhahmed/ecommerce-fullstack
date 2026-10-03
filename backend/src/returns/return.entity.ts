@@ -10,6 +10,7 @@ import {
 import { Expose } from 'class-transformer';
 import { Order } from '../orders/order.entity';
 import { User } from '../user/user.entity';
+import { VendorOrder } from '../orders/vendor-order.entity';
 
 export enum ReturnStatus {
   PENDING = 'pending',
@@ -40,9 +41,33 @@ export class Return {
   @Expose()
   order!: Order;
 
+  @Column({ nullable: true })
+  @Expose()
+  orderId?: number;
+
+  @ManyToOne(() => VendorOrder, { nullable: true, onDelete: 'SET NULL' })
+  @Expose()
+  vendorOrder?: VendorOrder;
+
+  @Column({ nullable: true })
+  @Expose()
+  vendorOrderId?: number;
+
+  @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' })
+  @Expose()
+  vendor?: User;
+
+  @Column({ nullable: true })
+  @Expose()
+  vendorId?: number;
+
   @ManyToOne(() => User)
   @Expose()
   user!: User;
+
+  @Column({ nullable: true })
+  @Expose()
+  userId?: number;
 
   @Column({ type: 'jsonb' })
   @Expose()

@@ -37,11 +37,11 @@ export default function NotificationsPage() {
     }
   };
 
-  const markAsRead = async (id: string) => {
+  const markAsRead = async (id: string | number) => {
     try {
       await notificationService.markAsRead(id);
       setNotifications(prev =>
-        prev.map(n => n.id === id ? { ...n, read: true } : n)
+        prev.map(n => String(n.id) === String(id) ? { ...n, read: true } : n)
       );
     } catch (error) {
       toast.error('Failed to mark as read');
@@ -58,10 +58,10 @@ export default function NotificationsPage() {
     }
   };
 
-  const deleteNotification = async (id: string) => {
+  const deleteNotification = async (id: string | number) => {
     try {
       await notificationService.deleteNotification(id);
-      setNotifications(prev => prev.filter(n => n.id !== id));
+      setNotifications(prev => prev.filter(n => String(n.id) !== String(id)));
       toast.success('Notification deleted');
     } catch (error) {
       toast.error('Failed to delete notification');

@@ -41,7 +41,7 @@ import {
 import { formatPrice, formatDate, formatDateTime, cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { returnService } from '@/services/return.service';
-import { ReturnReason, VendorOrder } from '@/types';
+import { ReturnReason, VendorOrder, OrderTimelineItem } from '@/types';
 import {
   Dialog,
   DialogContent,
@@ -83,6 +83,11 @@ export default function OrderDetailPage() {
 
   const [isPrinting, setIsPrinting] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
+
+  // Cancellation Modal State
+  const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState('Found a better price elsewhere');
+  const [cancelNotes, setCancelNotes] = useState('');
 
   // Return / Refund Modal State
   const [isReturnModalOpen, setIsReturnModalOpen] = useState(false);
@@ -133,7 +138,7 @@ export default function OrderDetailPage() {
   };
 
   // ============================================================
-  // FETCH ORDER
+  // FETCH ORDER & AUDIT TIMELINE
   // ============================================================
 
   const { data: order, isLoading, error, refetch } = useQuery({
@@ -142,6 +147,14 @@ export default function OrderDetailPage() {
     enabled: !isNaN(orderId) && isAuthenticated,
     retry: 1,
     staleTime: 5 * 60 * 1000,
+  });
+
+  const { data: auditTimeline } = useQuery<OrderTimelineItem[]>({
+    queryKey: ['order', orderId, 'timeline'],
+    queryFn: () => orderService.getOrderTimeline(orderId),
+    enabled: !isNaN(orderId) && isAuthenticated,
+    retry: 1,
+    staleTime: 60 * 1000,
   });
 
   // ============================================================
@@ -158,11 +171,20 @@ export default function OrderDetailPage() {
   // HANDLERS
   // ============================================================
 
-  const handleCancel = async () => {
-    if (!confirm('Are you sure you want to cancel this order?')) return;
+  const handleOpenCancelModal = () => {
+    setCancelReason('Found a better price elsewhere');
+    setCancelNotes('');
+    setIsCancelModalOpen(true);
+  };
+
+  const handleConfirmCancel = async () => {
     try {
-      await cancelOrder(orderId);
-      toast.success('Order cancelled successfully');
+      const fullReason = cancelNotes.trim()
+        ? `${cancelReason}: ${cancelNotes.trim()}`
+        : cancelReason;
+      await cancelOrder(orderId, fullReason);
+      toast.success('Order cancelled successfully. Any locked funds will be refunded.');
+      setIsCancelModalOpen(false);
       refetch();
     } catch (error: any) {
       toast.error(error?.message || 'Failed to cancel order');
@@ -330,8 +352,9 @@ export default function OrderDetailPage() {
                   <Button
                     variant="destructive"
                     size="sm"
-                    onClick={handleCancel}
+                    onClick={handleOpenCancelModal}
                     disabled={isCancellingOrder}
+                    className="rounded-full shadow-sm"
                   >
                     <XCircle className="h-4 w-4 mr-2" />
                     Cancel Order
@@ -356,65 +379,105 @@ export default function OrderDetailPage() {
         </Card>
       </div>
 
-      {/* Order Timeline */}
+      {/* Cancellation Notice Banner */}
+      {isCancelled && (
+        <Card className="border-red-500/30 bg-red-500/5 overflow-hidden">
+          <CardContent className="p-5 flex items-start gap-4">
+            <div className="p-2.5 rounded-xl bg-red-500/10 text-red-600 shrink-0">
+              <XCircle className="h-6 w-6" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="font-bold text-red-900 dark:text-red-300 text-base">This order was cancelled</h3>
+              <p className="text-sm text-red-800 dark:text-red-200">
+                {order.cancellationReason || 'Cancelled upon customer request.'}
+              </p>
+              <p className="text-xs text-muted-foreground pt-1">
+                Any reserved stock has been restocked and payment charges refunded.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Order Timeline with Live Milestones & Detailed Tracking History */}
       {!isCancelled && (
         <Card className="print:border-none print:shadow-none">
           <CardHeader>
-            <CardTitle className="text-base font-medium">Order Timeline</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base font-medium flex items-center gap-2">
+                <Truck className="h-4 w-4 text-orange-500" />
+                Amazon-Style Package Journey Tracker
+              </CardTitle>
+              <span className="text-xs text-muted-foreground">Live real-time updates</span>
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="relative">
-              <div className="absolute left-5 top-0 h-full w-0.5 bg-muted" />
-              {STATUS_STEPS.map((step, index) => {
-                const Icon = step.icon;
-                const isActive = index <= currentStep;
-                const isCurrent = index === currentStep;
+            {/* Horizontal Step Tracker */}
+            <div className="relative mb-6">
+              <div className="hidden sm:block absolute top-5 left-10 right-10 h-1 bg-muted -z-0" />
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 relative z-10">
+                {STATUS_STEPS.map((step, index) => {
+                  const Icon = step.icon;
+                  const isActive = index <= currentStep;
+                  const isCurrent = index === currentStep;
 
-                return (
-                  <div key={step.status} className="relative flex items-start gap-4 pb-8 last:pb-0">
-                    <div className={cn(
-                      "relative z-10 h-10 w-10 rounded-full flex items-center justify-center border-2 transition-all",
-                      isActive ? step.color : "bg-muted border-muted-foreground/20",
-                      isCurrent && "ring-4 ring-primary/20"
-                    )}>
-                      <Icon className={cn(
-                        "h-5 w-5",
-                        isActive ? "text-white" : "text-muted-foreground"
-                      )} />
-                    </div>
-                    <div className="flex-1 pt-1">
-                      <div className="flex items-center gap-2">
-                        <p className={cn(
-                          "font-medium",
-                          isActive ? "text-foreground" : "text-muted-foreground"
-                        )}>
-                          {step.label}
-                        </p>
-                        {isCurrent && (
-                          <Badge variant="default" className="text-xs bg-primary">
-                            Current
-                          </Badge>
-                        )}
-                        {isActive && !isCurrent && (
-                          <Badge variant="outline" className="text-xs border-green-500 text-green-600">
-                            <CheckCircle className="h-3 w-3 mr-1" />
-                            Completed
-                          </Badge>
-                        )}
+                  return (
+                    <div key={step.status} className="flex flex-col items-center text-center">
+                      <div className={cn(
+                        "h-10 w-10 rounded-full flex items-center justify-center border-2 transition-all shadow-sm",
+                        isActive ? `${step.color} text-white` : "bg-card border-muted text-muted-foreground",
+                        isCurrent && "ring-4 ring-orange-500/20 scale-110"
+                      )}>
+                        <Icon className="h-4 w-4" />
                       </div>
+                      <p className={cn(
+                        "font-semibold text-xs mt-2",
+                        isActive ? "text-foreground" : "text-muted-foreground"
+                      )}>
+                        {step.label}
+                      </p>
                       {isCurrent && (
-                        <p className="text-sm text-muted-foreground mt-0.5">
-                          {order.status === 'pending' ? 'Your order has been placed and is waiting for processing.' :
-                           order.status === 'processing' ? 'Your order is being prepared for shipping.' :
-                           order.status === 'shipped' ? 'Your order is on its way!' :
-                           'Your order has been delivered. Thank you for shopping with us!'}
-                        </p>
+                        <span className="text-[10px] font-medium text-orange-600 bg-orange-50 dark:bg-orange-950/40 px-2 py-0.5 rounded-full mt-0.5">
+                          In Progress
+                        </span>
                       )}
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
+
+            {/* Audit Tracking Trail (If Available) */}
+            {auditTimeline && auditTimeline.length > 0 && (
+              <div className="border-t border-border/60 pt-4 mt-4">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+                  Activity & Dispatch Logs
+                </h4>
+                <div className="space-y-3">
+                  {auditTimeline.map((item) => (
+                    <div key={item.id} className="flex items-start gap-3 text-xs">
+                      <div className="h-2 w-2 rounded-full bg-orange-500 mt-1.5 shrink-0" />
+                      <div className="flex-1">
+                        <p className="font-medium text-foreground">{item.action}</p>
+                        {item.metadata?.carrierName && (
+                          <p className="text-muted-foreground text-[11px]">
+                            Carrier: {item.metadata.carrierName} • Tracking: {item.metadata.trackingNumber}
+                          </p>
+                        )}
+                        {item.metadata?.reason && (
+                          <p className="text-muted-foreground text-[11px]">
+                            Reason: {item.metadata.reason}
+                          </p>
+                        )}
+                      </div>
+                      <span className="text-muted-foreground tabular-nums shrink-0 text-[11px]">
+                        {formatDateTime(item.createdAt)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
@@ -748,6 +811,72 @@ export default function OrderDetailPage() {
               className="bg-orange-600 hover:bg-orange-700 text-white"
             >
               {isSubmittingReturn ? 'Submitting...' : 'Submit Return Request'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Customer Order Cancellation Modal */}
+      <Dialog open={isCancelModalOpen} onOpenChange={setIsCancelModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <XCircle className="h-5 w-5" />
+              Cancel Order #{order.id}
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to cancel this order? Any payments will be immediately refunded and reserved seller stock will be restored.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1.5">
+                Reason for Cancellation *
+              </label>
+              <select
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="Found a better price elsewhere">Found a better price elsewhere</option>
+                <option value="Ordered by mistake">Ordered by mistake</option>
+                <option value="Delivery time is too long">Delivery time is too long</option>
+                <option value="Need to change shipping address">Need to change shipping address</option>
+                <option value="Change of mind">Change of mind / No longer needed</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1.5">
+                Additional Comments (Optional)
+              </label>
+              <textarea
+                value={cancelNotes}
+                onChange={(e) => setCancelNotes(e.target.value)}
+                placeholder="Give more details if needed..."
+                rows={2}
+                className="w-full rounded-lg border border-input bg-background p-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none"
+              />
+            </div>
+
+            <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-3 text-xs text-amber-900 dark:text-amber-200">
+              <p className="font-semibold mb-0.5">Note regarding fulfilled packages:</p>
+              <p>Once cancelled, sellers will not pack or ship these items. This action cannot be reversed.</p>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setIsCancelModalOpen(false)}>
+              Keep Order
+            </Button>
+            <Button
+              onClick={handleConfirmCancel}
+              disabled={isCancellingOrder}
+              className="bg-red-600 hover:bg-red-700 text-white font-medium"
+            >
+              {isCancellingOrder ? 'Cancelling...' : 'Confirm Cancellation'}
             </Button>
           </DialogFooter>
         </DialogContent>

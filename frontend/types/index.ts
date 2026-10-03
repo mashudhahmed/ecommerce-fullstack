@@ -231,6 +231,15 @@ export interface VendorOrder {
   updatedAt: string;
 }
 
+export interface OrderTimelineItem {
+  id: number;
+  orderId: number;
+  user?: User;
+  action: string;
+  metadata?: Record<string, any>;
+  createdAt: string;
+}
+
 export interface Order {
   id: number;
   user: User;

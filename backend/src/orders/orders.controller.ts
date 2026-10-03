@@ -340,9 +340,10 @@ export class OrdersController {
   @HttpCode(HttpStatus.OK)
   async cancelOrder(
     @Param('id', ParseIntPipe) id: number,
+    @Body('reason') reason: string,
     @Request() req: { user: { id: number; role: UserRole } },
   ) {
-    return this.ordersService.cancelOrder(id, req.user.id, req.user.role);
+    return this.ordersService.cancelOrder(id, req.user.id, req.user.role, reason);
   }
 
   // ============================================================

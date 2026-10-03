@@ -128,7 +128,8 @@ export function useOrders() {
   // CANCEL ORDER
   // ============================================================
   const cancelOrderMutation = useMutation({
-    mutationFn: orderService.cancelOrder,
+    mutationFn: ({ id, reason }: { id: number; reason?: string }) =>
+      orderService.cancelOrder(id, reason),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['orders'] });
       queryClient.invalidateQueries({ queryKey: ['orders', 'summary'] });
@@ -138,6 +139,10 @@ export function useOrders() {
       toast.error(error?.message || 'Failed to cancel order');
     },
   });
+
+  const cancelOrder = async (id: number, reason?: string) => {
+    return cancelOrderMutation.mutateAsync({ id, reason });
+  };
 
   // ============================================================
   // GET ORDER BY ID (lazy)
@@ -160,7 +165,7 @@ export function useOrders() {
     orderSummary,
     createOrder: createOrderMutation.mutateAsync,
     isCreatingOrder: createOrderMutation.isPending,
-    cancelOrder: cancelOrderMutation.mutateAsync,
+    cancelOrder,
     isCancellingOrder: cancelOrderMutation.isPending,
     getOrder,
   };

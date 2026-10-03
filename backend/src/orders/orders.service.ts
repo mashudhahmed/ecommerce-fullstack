@@ -571,6 +571,7 @@ export class OrdersService {
     id: number,
     userId: number,
     userRole: UserRole,
+    reason?: string,
   ): Promise<Order> {
     const order = await this.findOne(id);
 
@@ -607,6 +608,7 @@ export class OrdersService {
 
       order.status = OrderStatus.CANCELLED;
       order.cancelledAt = new Date();
+      order.cancellationReason = reason || 'Order cancelled by customer';
       order.cancelledBy = { id: userId } as User;
       const cancelledOrder = await queryRunner.manager.save(order);
 
@@ -630,7 +632,7 @@ export class OrdersService {
         }
         so.status = VendorOrderStatus.CANCELLED;
         so.cancelledAt = new Date();
-        so.cancellationReason = 'Order cancelled by customer/admin';
+        so.cancellationReason = reason || 'Order cancelled by customer/admin';
         await queryRunner.manager.save(VendorOrder, so);
       }
 
@@ -639,7 +641,7 @@ export class OrdersService {
       timeline.orderId = cancelledOrder.id;
       timeline.user = { id: userId } as User;
       timeline.action = 'Order Cancelled';
-      timeline.metadata = { cancelledByUserId: userId, userRole };
+      timeline.metadata = { cancelledByUserId: userId, userRole, reason: reason || 'Customer request' };
       await queryRunner.manager.save(timeline);
 
       await queryRunner.commitTransaction();

@@ -1,6 +1,6 @@
 // services/order.service.ts
 import { apiClient, unwrapData } from '@/lib/api-client';
-import { Order, VendorOrder } from '@/types';
+import { Order, VendorOrder, OrderTimelineItem } from '@/types';
 
 export interface CreateOrderData {
   items: {
@@ -75,9 +75,17 @@ export const orderService = {
   // ============================================================
   // CANCEL ORDER
   // ============================================================
-  async cancelOrder(id: number): Promise<Order> {
-    const response = await apiClient.patch(`/orders/${id}/cancel`);
+  async cancelOrder(id: number, reason?: string): Promise<Order> {
+    const response = await apiClient.patch(`/orders/${id}/cancel`, { reason });
     return unwrapData<Order>(response.data);
+  },
+
+  // ============================================================
+  // GET ORDER TIMELINE
+  // ============================================================
+  async getOrderTimeline(id: number): Promise<OrderTimelineItem[]> {
+    const response = await apiClient.get(`/orders/${id}/timeline`);
+    return unwrapData<OrderTimelineItem[]>(response.data);
   },
 
   // ============================================================

@@ -73,15 +73,14 @@ export class ProductsController {
     const pageNum = page ? parseInt(page, 10) : 1;
     const limitNum = limit ? Math.min(parseInt(limit, 10), 100) : 20;
 
-    if (search && search.length > 0) {
-      return this.productsService.searchProducts(search, limitNum);
-    }
-
-    if (categoryId) {
-      return this.productsService.findByCategory(parseInt(categoryId, 10));
-    }
-
-    return this.productsService.findAllPaginated(pageNum, limitNum);
+    return this.productsService.findAllPaginated(pageNum, limitNum, {
+      search,
+      categoryId: categoryId ? parseInt(categoryId, 10) : undefined,
+      minPrice: minPrice ? parseFloat(minPrice) : undefined,
+      maxPrice: maxPrice ? parseFloat(maxPrice) : undefined,
+      inStock: inStock === 'true',
+      sortBy,
+    });
   }
 
   @ApiOperation({ summary: 'Get products in stock' })

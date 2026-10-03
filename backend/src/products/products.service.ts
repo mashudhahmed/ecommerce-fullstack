@@ -142,6 +142,14 @@ export class ProductsService {
   async findAllPaginated(
     page: number = 1,
     limit: number = 20,
+    filters?: {
+      search?: string;
+      categoryId?: number;
+      minPrice?: number;
+      maxPrice?: number;
+      inStock?: boolean;
+      sortBy?: string;
+    },
   ): Promise<{
     data: Product[];
     total: number;
@@ -149,37 +157,59 @@ export class ProductsService {
     limit: number;
     totalPages: number;
   }> {
-    const cacheKey = `products:list:${page}:${limit}`;
-    const cached = await this.cacheService.get<{
-      data: Product[];
-      total: number;
-      page: number;
-      limit: number;
-      totalPages: number;
-    }>(cacheKey);
-
-    if (
-      cached &&
-      typeof cached === 'object' &&
-      'data' in cached &&
-      'total' in cached
-    ) {
-      this.metricsService.recordCacheHit('products:list');
-      return cached;
-    }
-
-    this.metricsService.recordCacheMiss('products:list');
     const startTime = Date.now();
-
     const skip = (page - 1) * limit;
 
-    const [data, total] = await this.productRepository.findAndCount({
-      where: { isActive: true },
-      relations: ['owner', 'category', 'images'],
-      order: { createdAt: 'DESC' },
-      skip,
-      take: limit,
-    });
+    const qb = this.productRepository
+      .createQueryBuilder('product')
+      .leftJoinAndSelect('product.owner', 'owner')
+      .leftJoinAndSelect('product.category', 'category')
+      .leftJoinAndSelect('product.images', 'images')
+      .where('product.isActive = true');
+
+    if (filters?.search && filters.search.trim().length > 0) {
+      qb.andWhere(
+        '(product.title ILIKE :search OR product.description ILIKE :search)',
+        { search: `%${filters.search.trim()}%` },
+      );
+    }
+
+    if (filters?.categoryId) {
+      qb.andWhere('product.categoryId = :categoryId', {
+        categoryId: filters.categoryId,
+      });
+    }
+
+    if (filters?.minPrice !== undefined && !isNaN(filters.minPrice)) {
+      qb.andWhere('product.price >= :minPrice', { minPrice: filters.minPrice });
+    }
+
+    if (filters?.maxPrice !== undefined && !isNaN(filters.maxPrice)) {
+      qb.andWhere('product.price <= :maxPrice', { maxPrice: filters.maxPrice });
+    }
+
+    if (filters?.inStock === true) {
+      qb.andWhere('product.stock > 0');
+    }
+
+    // Sort options
+    switch (filters?.sortBy) {
+      case 'price_asc':
+        qb.orderBy('product.price', 'ASC');
+        break;
+      case 'price_desc':
+        qb.orderBy('product.price', 'DESC');
+        break;
+      case 'rating':
+        qb.orderBy('product.averageRating', 'DESC');
+        break;
+      case 'newest':
+      default:
+        qb.orderBy('product.createdAt', 'DESC');
+        break;
+    }
+
+    const [data, total] = await qb.skip(skip).take(limit).getManyAndCount();
 
     const result = {
       data,
@@ -192,7 +222,6 @@ export class ProductsService {
     const duration = (Date.now() - startTime) / 1000;
     this.metricsService.recordDbQuery('findAndCount', 'products', duration);
 
-    await this.cacheService.set(cacheKey, result, this.CACHE_TTL);
     return result;
   }
 

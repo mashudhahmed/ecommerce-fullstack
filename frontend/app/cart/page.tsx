@@ -28,6 +28,34 @@ export default function CartPage() {
   const { items, totalPrice, totalItems, isLoading } = useCart();
   const isAdminOrSuperAdmin = user?.role === 'admin' || user?.role === 'superadmin';
 
+  // Group items by vendor into multi-vendor packages
+  const packages = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        sellerName: string;
+        sellerId?: number;
+        items: typeof items;
+      }
+    >();
+
+    items?.forEach((item) => {
+      const sellerId = item.product?.owner?.id;
+      const key = sellerId ? String(sellerId) : 'official';
+      const sellerName =
+        item.product?.owner?.vendorBusinessName ||
+        item.product?.owner?.name ||
+        'SnapCart Official Store';
+
+      if (!map.has(key)) {
+        map.set(key, { sellerName, sellerId, items: [] });
+      }
+      map.get(key)!.items.push(item);
+    });
+
+    return Array.from(map.values());
+  }, [items]);
+
   if (authLoading || isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
@@ -94,34 +122,6 @@ export default function CartPage() {
       </div>
     );
   }
-
-  // Group items by vendor into multi-vendor packages
-  const packages = useMemo(() => {
-    const map = new Map<
-      string,
-      {
-        sellerName: string;
-        sellerId?: number;
-        items: typeof items;
-      }
-    >();
-
-    items.forEach((item) => {
-      const sellerId = item.product?.owner?.id;
-      const key = sellerId ? String(sellerId) : 'official';
-      const sellerName =
-        item.product?.owner?.vendorBusinessName ||
-        item.product?.owner?.name ||
-        'SnapCart Official Store';
-
-      if (!map.has(key)) {
-        map.set(key, { sellerName, sellerId, items: [] });
-      }
-      map.get(key)!.items.push(item);
-    });
-
-    return Array.from(map.values());
-  }, [items]);
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-7xl">

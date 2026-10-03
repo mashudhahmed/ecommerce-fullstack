@@ -131,7 +131,7 @@ async function bootstrap() {
 
   // Start server
   const port = Number(process.env.PORT) || 3001;
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0');
 
   logger.log(`Server running at http://localhost:${port}`);
   logger.log(`API: http://localhost:${port}/${apiPrefix}/${apiVersion}`);

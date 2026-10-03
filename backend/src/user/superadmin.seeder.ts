@@ -97,8 +97,11 @@ export class SuperAdminSeeder implements OnApplicationBootstrap {
       }
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown error';
-      this.logger.error('❌ Failed to seed SuperAdmin', errorMessage);
-      throw error;
+      this.logger.error(`❌ Failed to seed SuperAdmin: ${errorMessage}`);
+      if (process.env.NODE_ENV !== 'production') {
+        throw error;
+      }
+      return null;
     }
   }
 }

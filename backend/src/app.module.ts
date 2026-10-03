@@ -86,7 +86,7 @@ import { ChatModule } from './chat/chat.module';
           type: 'postgres',
           autoLoadEntities: true,
           entities: [Category],
-          synchronize: false,
+          synchronize: configService.get<boolean>('database.synchronize', true),
           logging: process.env.NODE_ENV === 'development',
           ssl: isSsl ? { rejectUnauthorized: false } : false,
           extra: {

@@ -10,6 +10,7 @@ export const validationSchema = Joi.object({
 
   DATABASE_URL: Joi.string().optional(),
   DATABASE_SSL: Joi.boolean().optional(),
+  DB_SYNCHRONIZE: Joi.boolean().optional(),
   DATABASE_HOST: Joi.string().optional().default('localhost'),
   DATABASE_PORT: Joi.number().optional().default(5434),
   DATABASE_USER: Joi.string().optional().default('postgres'),

@@ -14,6 +14,7 @@ export default () => ({
     username: process.env.DATABASE_USER || 'postgres',
     password: process.env.DATABASE_PASSWORD || '',
     database: process.env.DATABASE_NAME || 'ecommerce_db',
+    synchronize: process.env.DB_SYNCHRONIZE !== 'false',
     ssl:
       process.env.DATABASE_SSL === 'true' ||
       Boolean(

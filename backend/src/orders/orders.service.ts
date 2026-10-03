@@ -19,6 +19,10 @@ import { EventsGateway } from '../events/events.gateway';
 import { IdempotencyService } from './idempotency.service';
 import { PaginationDto } from '../common/dto/pagination.dto';
 
+import { VendorOrder, VendorOrderStatus, VendorPayoutStatus } from './vendor-order.entity';
+import { UpdateVendorOrderDto } from './dto/update-vendor-order.dto';
+import { VendorWallet } from '../vendor/vendor-wallet.entity';
+
 @Injectable()
 export class OrdersService {
   private readonly logger = new Logger(OrdersService.name);
@@ -28,6 +32,10 @@ export class OrdersService {
     private readonly orderRepository: Repository<Order>,
     @InjectRepository(OrderItem)
     private readonly orderItemRepository: Repository<OrderItem>,
+    @InjectRepository(VendorOrder)
+    private readonly vendorOrderRepository: Repository<VendorOrder>,
+    @InjectRepository(VendorWallet)
+    private readonly vendorWalletRepository: Repository<VendorWallet>,
     @InjectRepository(OrderTimeline)
     private readonly timelineRepository: Repository<OrderTimeline>,
     @InjectRepository(Product)
@@ -53,12 +61,25 @@ export class OrdersService {
       }
 
       let total = 0;
-      const orderItems: OrderItem[] = [];
+      const vendorGroups = new Map<
+        number,
+        {
+          vendor: User;
+          items: { product: Product; quantity: number; price: number }[];
+          subtotal: number;
+        }
+      >();
 
       for (const item of createOrderDto.items) {
-        const product = await queryRunner.manager.findOne(Product, {
-          where: { id: item.productId, isActive: true },
-        });
+        // Concurrency-safe pessimistic write lock on the product
+        const product = await queryRunner.manager
+          .createQueryBuilder(Product, 'product')
+          .setLock('pessimistic_write')
+          .leftJoinAndSelect('product.owner', 'owner')
+          .where('product.id = :id AND product.isActive = true', {
+            id: item.productId,
+          })
+          .getOne();
 
         if (!product) {
           throw new NotFoundException(
@@ -75,12 +96,25 @@ export class OrdersService {
         const itemTotal = Number(product.price) * item.quantity;
         total += itemTotal;
 
-        const orderItem = new OrderItem();
-        orderItem.product = product;
-        orderItem.quantity = item.quantity;
-        orderItem.price = Number(product.price);
+        // Determine vendor (defaults to vendor owner, or fallback platform admin ID 1)
+        const vendorId = product.owner?.id || 1;
+        const vendorUser = product.owner || ({ id: vendorId } as User);
 
-        orderItems.push(orderItem);
+        if (!vendorGroups.has(vendorId)) {
+          vendorGroups.set(vendorId, {
+            vendor: vendorUser,
+            items: [],
+            subtotal: 0,
+          });
+        }
+
+        const group = vendorGroups.get(vendorId)!;
+        group.items.push({
+          product,
+          quantity: item.quantity,
+          price: Number(product.price),
+        });
+        group.subtotal += itemTotal;
 
         product.stock -= item.quantity;
         await queryRunner.manager.save(product);
@@ -95,10 +129,70 @@ export class OrdersService {
       }
 
       const savedOrder = await queryRunner.manager.save(order);
+      const commissionRate = 10; // Standard 10% platform commission
 
-      for (const item of orderItems) {
-        item.order = savedOrder;
-        await queryRunner.manager.save(item);
+      // Create individual Vendor Sub-Orders (packages) per vendor
+      for (const [vendorId, group] of vendorGroups.entries()) {
+        const vendorSubtotal = Math.round(group.subtotal * 100) / 100;
+        const commissionAmount =
+          Math.round(vendorSubtotal * (commissionRate / 100) * 100) / 100;
+        const vendorEarnings =
+          Math.round((vendorSubtotal - commissionAmount) * 100) / 100;
+
+        const vendorOrder = new VendorOrder();
+        vendorOrder.order = savedOrder;
+        vendorOrder.orderId = savedOrder.id;
+        vendorOrder.vendorId = vendorId;
+        vendorOrder.vendor = group.vendor;
+        vendorOrder.status = VendorOrderStatus.PENDING;
+        vendorOrder.subtotal = vendorSubtotal;
+        vendorOrder.shippingFee = 0;
+        vendorOrder.commissionRate = commissionRate;
+        vendorOrder.commissionAmount = commissionAmount;
+        vendorOrder.vendorEarnings = vendorEarnings;
+        vendorOrder.payoutStatus = VendorPayoutStatus.ESCROW;
+
+        const savedVendorOrder = await queryRunner.manager.save(
+          VendorOrder,
+          vendorOrder,
+        );
+
+        for (const it of group.items) {
+          const orderItem = new OrderItem();
+          orderItem.order = savedOrder;
+          orderItem.vendorOrder = savedVendorOrder;
+          orderItem.vendorOrderId = savedVendorOrder.id;
+          orderItem.product = it.product;
+          orderItem.quantity = it.quantity;
+          orderItem.price = it.price;
+
+          await queryRunner.manager.save(OrderItem, orderItem);
+        }
+
+        // Update or create vendor wallet escrow balance
+        let wallet = await queryRunner.manager.findOne(VendorWallet, {
+          where: { vendorId },
+        });
+        if (!wallet) {
+          wallet = queryRunner.manager.create(VendorWallet, {
+            vendorId,
+            availableBalance: 0,
+            escrowBalance: vendorEarnings,
+            totalEarned: 0,
+            totalWithdrawn: 0,
+          });
+        } else {
+          wallet.escrowBalance = Number(wallet.escrowBalance) + vendorEarnings;
+        }
+        await queryRunner.manager.save(VendorWallet, wallet);
+
+        // Notify vendor via real-time event
+        this.eventsGateway.notifyUser(vendorId.toString(), 'new_vendor_order', {
+          orderId: savedOrder.id,
+          vendorOrderId: savedVendorOrder.id,
+          subtotal: vendorSubtotal,
+          itemCount: group.items.length,
+        });
       }
 
       const timeline = new OrderTimeline();
@@ -108,7 +202,7 @@ export class OrdersService {
       timeline.action = 'Order Placed';
       timeline.metadata = {
         total: savedOrder.total,
-        itemCount: orderItems.length,
+        packagesCount: vendorGroups.size,
         shippingAddress: savedOrder.shippingAddress,
       };
       await queryRunner.manager.save(timeline);
@@ -185,7 +279,16 @@ export class OrdersService {
   async findOne(id: number): Promise<Order> {
     const order = await this.orderRepository.findOne({
       where: { id },
-      relations: ['user', 'items', 'items.product', 'items.product.owner'],
+      relations: [
+        'user',
+        'items',
+        'items.product',
+        'items.product.owner',
+        'vendorOrders',
+        'vendorOrders.vendor',
+        'vendorOrders.items',
+        'vendorOrders.items.product',
+      ],
     });
 
     if (!order) {
@@ -198,7 +301,14 @@ export class OrdersService {
   async findByUser(userId: number): Promise<Order[]> {
     return this.orderRepository.find({
       where: { user: { id: userId } },
-      relations: ['items', 'items.product'],
+      relations: [
+        'items',
+        'items.product',
+        'vendorOrders',
+        'vendorOrders.vendor',
+        'vendorOrders.items',
+        'vendorOrders.items.product',
+      ],
       order: { createdAt: 'DESC' },
     });
   }
@@ -210,6 +320,7 @@ export class OrdersService {
       .leftJoinAndSelect('items.product', 'product')
       .leftJoinAndSelect('product.owner', 'owner')
       .leftJoinAndSelect('order.user', 'user')
+      .leftJoinAndSelect('order.vendorOrders', 'vendorOrders')
       .where('owner.id = :vendorId', { vendorId })
       .orderBy('order.createdAt', 'DESC')
       .getMany();
@@ -218,6 +329,202 @@ export class OrdersService {
       ...order,
       items: order.items.filter((item) => item.product.owner?.id === vendorId),
     }));
+  }
+
+  async getVendorSubOrders(
+    vendorId: number,
+    options?: { page?: number; limit?: number; status?: VendorOrderStatus },
+  ): Promise<{
+    data: VendorOrder[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  }> {
+    const page = options?.page || 1;
+    const limit = options?.limit || 20;
+    const skip = (page - 1) * limit;
+
+    const query = this.vendorOrderRepository
+      .createQueryBuilder('vo')
+      .leftJoinAndSelect('vo.order', 'order')
+      .leftJoinAndSelect('order.user', 'user')
+      .leftJoinAndSelect('vo.items', 'items')
+      .leftJoinAndSelect('items.product', 'product')
+      .where('vo.vendorId = :vendorId', { vendorId });
+
+    if (options?.status) {
+      query.andWhere('vo.status = :status', { status: options.status });
+    }
+
+    query.orderBy('vo.createdAt', 'DESC').skip(skip).take(limit);
+
+    const [data, total] = await query.getManyAndCount();
+
+    return {
+      data,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  async getVendorSubOrderDetail(
+    vendorOrderId: number,
+    userId: number,
+    userRole: UserRole,
+  ): Promise<VendorOrder> {
+    const vo = await this.vendorOrderRepository.findOne({
+      where: { id: vendorOrderId },
+      relations: [
+        'order',
+        'order.user',
+        'vendor',
+        'items',
+        'items.product',
+      ],
+    });
+
+    if (!vo) {
+      throw new NotFoundException(`Vendor sub-order ${vendorOrderId} not found`);
+    }
+
+    const isAdmin = [UserRole.ADMIN, UserRole.SUPER_ADMIN].includes(userRole);
+    if (!isAdmin && vo.vendorId !== userId) {
+      throw new ForbiddenException('Access denied to this vendor sub-order');
+    }
+
+    return vo;
+  }
+
+  async updateVendorSubOrderStatus(
+    vendorOrderId: number,
+    vendorId: number,
+    userRole: UserRole,
+    dto: UpdateVendorOrderDto,
+  ): Promise<VendorOrder> {
+    const vo = await this.vendorOrderRepository.findOne({
+      where: { id: vendorOrderId },
+      relations: ['order', 'order.user', 'vendor'],
+    });
+
+    if (!vo) {
+      throw new NotFoundException(`Vendor sub-order ${vendorOrderId} not found`);
+    }
+
+    const isAdmin = [UserRole.ADMIN, UserRole.SUPER_ADMIN].includes(userRole);
+    if (!isAdmin && vo.vendorId !== vendorId) {
+      throw new ForbiddenException("You cannot update another seller's sub-order");
+    }
+
+    vo.status = dto.status;
+    if (dto.carrierName) vo.carrierName = dto.carrierName;
+    if (dto.trackingNumber) vo.trackingNumber = dto.trackingNumber;
+    if (dto.trackingUrl) vo.trackingUrl = dto.trackingUrl;
+    if (dto.notes) vo.notes = dto.notes;
+
+    if (dto.status === VendorOrderStatus.SHIPPED) {
+      vo.shippedAt = new Date();
+    } else if (dto.status === VendorOrderStatus.DELIVERED) {
+      vo.deliveredAt = new Date();
+
+      // Release funds from Escrow into Vendor Available Balance
+      if (vo.payoutStatus === VendorPayoutStatus.ESCROW) {
+        vo.payoutStatus = VendorPayoutStatus.READY;
+
+        let wallet = await this.vendorWalletRepository.findOne({
+          where: { vendorId: vo.vendorId },
+        });
+        if (wallet) {
+          wallet.escrowBalance = Math.max(
+            0,
+            Number(wallet.escrowBalance) - Number(vo.vendorEarnings),
+          );
+          wallet.availableBalance =
+            Number(wallet.availableBalance) + Number(vo.vendorEarnings);
+          wallet.totalEarned =
+            Number(wallet.totalEarned) + Number(vo.vendorEarnings);
+          await this.vendorWalletRepository.save(wallet);
+        }
+      }
+    }
+
+    const savedVo = await this.vendorOrderRepository.save(vo);
+
+    // Sync parent order status based on all child vendor orders
+    const allSiblingSubOrders = await this.vendorOrderRepository.find({
+      where: { orderId: vo.orderId },
+    });
+
+    const allDelivered = allSiblingSubOrders.every(
+      (s) => s.status === VendorOrderStatus.DELIVERED,
+    );
+    const anyShipped = allSiblingSubOrders.some(
+      (s) =>
+        s.status === VendorOrderStatus.SHIPPED ||
+        s.status === VendorOrderStatus.DELIVERED,
+    );
+    const allCancelled = allSiblingSubOrders.every(
+      (s) => s.status === VendorOrderStatus.CANCELLED,
+    );
+
+    let newParentStatus = vo.order.status;
+    if (allDelivered) {
+      newParentStatus = OrderStatus.DELIVERED;
+    } else if (allCancelled) {
+      newParentStatus = OrderStatus.CANCELLED;
+    } else if (anyShipped) {
+      const allShippedOrDelivered = allSiblingSubOrders.every(
+        (s) =>
+          s.status === VendorOrderStatus.SHIPPED ||
+          s.status === VendorOrderStatus.DELIVERED,
+      );
+      newParentStatus = allShippedOrDelivered
+        ? OrderStatus.SHIPPED
+        : OrderStatus.PARTIALLY_SHIPPED;
+    } else if (
+      allSiblingSubOrders.some((s) => s.status === VendorOrderStatus.PROCESSING)
+    ) {
+      newParentStatus = OrderStatus.PROCESSING;
+    }
+
+    if (newParentStatus !== vo.order.status) {
+      vo.order.status = newParentStatus;
+      await this.orderRepository.save(vo.order);
+    }
+
+    // Record timeline entry
+    const timeline = this.timelineRepository.create({
+      order: vo.order,
+      orderId: vo.order.id,
+      user: { id: vendorId } as User,
+      action: `Package #${vo.id} status updated to ${dto.status}`,
+      metadata: {
+        vendorOrderId: vo.id,
+        status: dto.status,
+        carrierName: dto.carrierName,
+        trackingNumber: dto.trackingNumber,
+      },
+    });
+    await this.timelineRepository.save(timeline);
+
+    // Real-time notification to the customer
+    if (vo.order?.user?.id) {
+      this.eventsGateway.notifyUser(
+        vo.order.user.id.toString(),
+        'vendor_order_status_updated',
+        {
+          orderId: vo.order.id,
+          vendorOrderId: vo.id,
+          status: dto.status,
+          carrierName: dto.carrierName,
+          trackingNumber: dto.trackingNumber,
+        },
+      );
+    }
+
+    return savedVo;
   }
 
   async updateStatus(
@@ -303,6 +610,30 @@ export class OrdersService {
       order.cancelledAt = new Date();
       order.cancelledBy = { id: userId } as User;
       const cancelledOrder = await queryRunner.manager.save(order);
+
+      // Cancel all child vendor orders and reverse escrow balances
+      const subOrders = await queryRunner.manager.find(VendorOrder, {
+        where: { orderId: order.id },
+      });
+      for (const so of subOrders) {
+        if (so.payoutStatus === VendorPayoutStatus.ESCROW) {
+          so.payoutStatus = VendorPayoutStatus.REFUNDED;
+          let wallet = await queryRunner.manager.findOne(VendorWallet, {
+            where: { vendorId: so.vendorId },
+          });
+          if (wallet) {
+            wallet.escrowBalance = Math.max(
+              0,
+              Number(wallet.escrowBalance) - Number(so.vendorEarnings),
+            );
+            await queryRunner.manager.save(VendorWallet, wallet);
+          }
+        }
+        so.status = VendorOrderStatus.CANCELLED;
+        so.cancelledAt = new Date();
+        so.cancellationReason = 'Order cancelled by customer/admin';
+        await queryRunner.manager.save(VendorOrder, so);
+      }
 
       const timeline = new OrderTimeline();
       timeline.order = cancelledOrder;

@@ -4,11 +4,22 @@
 import { useCart } from '@/hooks/useCart';
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { CartItem } from '@/components/cart/CartItem';
 import { formatPrice } from '@/lib/utils';
-import { ShoppingBag, Loader2, ShieldCheck, ShieldAlert, LayoutDashboard, ArrowLeft } from 'lucide-react';
+import {
+  ShoppingBag,
+  Loader2,
+  ShieldCheck,
+  ShieldAlert,
+  LayoutDashboard,
+  ArrowLeft,
+  Store,
+  Package,
+  Truck,
+  ChevronRight,
+} from 'lucide-react';
 import Link from 'next/link';
 
 export default function CartPage() {
@@ -84,13 +95,92 @@ export default function CartPage() {
     );
   }
 
+  // Group items by vendor into multi-vendor packages
+  const packages = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        sellerName: string;
+        sellerId?: number;
+        items: typeof items;
+      }
+    >();
+
+    items.forEach((item) => {
+      const sellerId = item.product?.owner?.id;
+      const key = sellerId ? String(sellerId) : 'official';
+      const sellerName =
+        item.product?.owner?.vendorBusinessName ||
+        item.product?.owner?.name ||
+        'SnapCart Official Store';
+
+      if (!map.has(key)) {
+        map.set(key, { sellerName, sellerId, items: [] });
+      }
+      map.get(key)!.items.push(item);
+    });
+
+    return Array.from(map.values());
+  }, [items]);
+
   return (
-    <div className="container mx-auto px-4 py-8">
-      <h1 className="mb-8 text-3xl font-black tracking-tight">Shopping cart</h1>
+    <div className="container mx-auto px-4 py-8 max-w-7xl">
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h1 className="text-3xl font-black tracking-tight">Shopping Cart</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            {totalItems} {totalItems === 1 ? 'item' : 'items'} across {packages.length}{' '}
+            {packages.length === 1 ? 'seller package' : 'seller packages'}
+          </p>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
-        <div className="space-y-3 lg:col-span-2">
-          {items.map((item) => (
-            <CartItem key={item.id} item={item} />
+        <div className="space-y-6 lg:col-span-2">
+          {packages.map((pkg, idx) => (
+            <div
+              key={pkg.sellerId || idx}
+              className="rounded-2xl border border-border/80 bg-card p-5 shadow-sm space-y-4"
+            >
+              {/* Package Header */}
+              <div className="flex items-center justify-between border-b border-border/60 pb-3 flex-wrap gap-2">
+                <div className="flex items-center gap-2.5">
+                  <div className="h-8 w-8 rounded-lg bg-orange-500/10 text-orange-600 flex items-center justify-center font-bold">
+                    <Store className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                        Package {idx + 1} of {packages.length}
+                      </span>
+                      <span className="text-muted-foreground">•</span>
+                      <span className="text-sm font-bold text-foreground">
+                        Sold by {pkg.sellerName}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-0.5">
+                      <Truck className="h-3 w-3 text-emerald-600" />
+                      <span>Free Standard Delivery • Est. 2–4 Business Days</span>
+                    </div>
+                  </div>
+                </div>
+
+                {pkg.sellerId && (
+                  <Link href={`/stores/${pkg.sellerId}`}>
+                    <Button variant="ghost" size="sm" className="h-7 text-xs rounded-full gap-1">
+                      Store <ChevronRight className="h-3 w-3" />
+                    </Button>
+                  </Link>
+                )}
+              </div>
+
+              {/* Items in this Package */}
+              <div className="space-y-3">
+                {pkg.items.map((item) => (
+                  <CartItem key={item.id} item={item} />
+                ))}
+              </div>
+            </div>
           ))}
         </div>
 

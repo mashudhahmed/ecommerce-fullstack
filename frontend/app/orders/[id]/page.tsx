@@ -33,6 +33,9 @@ import {
   AlertCircle,
   RefreshCw,
   Share2,
+  Store,
+  ExternalLink,
+  Globe,
 } from 'lucide-react';
 import { formatPrice, formatDate, formatDateTime, cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -357,72 +360,191 @@ export default function OrderDetailPage() {
         </Card>
       )}
 
-      {/* Order Items */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-base font-medium">Order Items</CardTitle>
-          <span className="text-sm text-muted-foreground">
-            {order.items.length} items
-          </span>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {order.items.map((item, index) => (
-            <div key={item.id} className="flex items-center gap-4 py-3 border-b last:border-0">
-              {/* Product Image */}
-              <div className="relative h-16 w-16 shrink-0 rounded-lg bg-muted/30 overflow-hidden">
-                {item.product.imageUrl ? (
-                  <Image
-                    src={item.product.imageUrl}
-                    alt={item.product.title}
-                    fill
-                    className="object-cover"
-                  />
-                ) : (
-                  <div className="h-full w-full flex items-center justify-center">
-                    <Package className="h-6 w-6 text-muted-foreground" />
+      {/* Multi-Vendor Packages Section */}
+      {order.vendorOrders && order.vendorOrders.length > 0 ? (
+        <div className="space-y-6">
+          <div>
+            <h2 className="text-xl font-bold tracking-tight">Fulfillment Packages</h2>
+            <p className="text-sm text-muted-foreground">
+              Your order is being fulfilled across {order.vendorOrders.length}{' '}
+              {order.vendorOrders.length === 1 ? 'seller package' : 'seller packages'}
+            </p>
+          </div>
+
+          {order.vendorOrders.map((vo, idx) => (
+            <Card key={vo.id} className="overflow-hidden border-border/80 shadow-sm">
+              <CardHeader className="bg-muted/30 border-b border-border/60 py-4 px-6 flex flex-row items-center justify-between flex-wrap gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="h-9 w-9 rounded-xl bg-orange-500/10 text-orange-600 flex items-center justify-center font-bold">
+                    <Store className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                        Package {idx + 1} of {order.vendorOrders?.length}
+                      </span>
+                      <span className="text-muted-foreground">•</span>
+                      <span className="text-sm font-bold text-foreground">
+                        Sold by {vo.vendor?.vendorBusinessName || vo.vendor?.name || 'Seller'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Package ID #{vo.id}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <OrderStatusBadge status={vo.status as any} />
+                  {vo.vendorId && (
+                    <Link href={`/stores/${vo.vendorId}`}>
+                      <Button variant="outline" size="sm" className="h-8 rounded-full text-xs gap-1">
+                        Visit Store <ExternalLink className="h-3 w-3" />
+                      </Button>
+                    </Link>
+                  )}
+                </div>
+              </CardHeader>
+
+              <CardContent className="p-6 space-y-5">
+                {/* Tracking & Courier Info */}
+                {(vo.carrierName || vo.trackingNumber) && (
+                  <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-4 flex items-center justify-between flex-wrap gap-3 text-xs">
+                    <div className="flex items-center gap-2.5">
+                      <Truck className="h-4 w-4 text-blue-600" />
+                      <div>
+                        <span className="text-muted-foreground">Courier: </span>
+                        <strong className="text-foreground font-semibold">{vo.carrierName || 'Standard Express'}</strong>
+                        {vo.trackingNumber && (
+                          <span className="ml-3 text-muted-foreground">
+                            Tracking Code: <code className="font-mono font-bold text-foreground">{vo.trackingNumber}</code>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {vo.trackingUrl && (
+                      <a
+                        href={vo.trackingUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 font-semibold text-blue-600 hover:underline"
+                      >
+                        Track Shipment <ExternalLink className="h-3 w-3" />
+                      </a>
+                    )}
                   </div>
                 )}
-              </div>
 
-              {/* Product Info */}
-              <div className="flex-1 min-w-0">
-                <Link
-                  href={`/products/${item.product.id}`}
-                  className="font-medium hover:text-primary transition-colors line-clamp-1"
-                >
-                  {item.product.title}
-                </Link>
-                <p className="text-sm text-muted-foreground">
-                  Quantity: {item.quantity} × {formatPrice(item.price)}
-                </p>
-              </div>
+                {/* Package Items */}
+                <div className="space-y-3">
+                  {(vo.items || []).map((item) => (
+                    <div key={item.id} className="flex items-center gap-4 py-2 border-b last:border-0">
+                      <div className="relative h-14 w-14 shrink-0 rounded-lg bg-muted/30 overflow-hidden">
+                        {item.product?.imageUrl ? (
+                          <Image
+                            src={item.product.imageUrl}
+                            alt={item.product.title || 'Product'}
+                            fill
+                            className="object-cover"
+                          />
+                        ) : (
+                          <div className="h-full w-full flex items-center justify-center">
+                            <Package className="h-5 w-5 text-muted-foreground" />
+                          </div>
+                        )}
+                      </div>
 
-              {/* Subtotal */}
-              <div className="text-right shrink-0">
-                <p className="font-semibold">{formatPrice(item.price * item.quantity)}</p>
-              </div>
-            </div>
+                      <div className="flex-1 min-w-0">
+                        <Link
+                          href={`/products/${item.product?.id}`}
+                          className="font-medium hover:text-primary transition-colors line-clamp-1"
+                        >
+                          {item.product?.title}
+                        </Link>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Qty: {item.quantity} × {formatPrice(item.price)}
+                        </p>
+                      </div>
+
+                      <div className="text-right shrink-0">
+                        <p className="font-semibold text-sm">{formatPrice(item.price * item.quantity)}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex justify-end pt-2 text-sm border-t border-border/40">
+                  <span className="text-muted-foreground mr-3">Package Subtotal:</span>
+                  <span className="font-bold">{formatPrice(vo.subtotal)}</span>
+                </div>
+              </CardContent>
+            </Card>
           ))}
+        </div>
+      ) : (
+        /* Legacy fallback items card */
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-base font-medium">Order Items</CardTitle>
+            <span className="text-sm text-muted-foreground">
+              {order.items.length} items
+            </span>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {order.items.map((item) => (
+              <div key={item.id} className="flex items-center gap-4 py-3 border-b last:border-0">
+                <div className="relative h-16 w-16 shrink-0 rounded-lg bg-muted/30 overflow-hidden">
+                  {item.product.imageUrl ? (
+                    <Image
+                      src={item.product.imageUrl}
+                      alt={item.product.title}
+                      fill
+                      className="object-cover"
+                    />
+                  ) : (
+                    <div className="h-full w-full flex items-center justify-center">
+                      <Package className="h-6 w-6 text-muted-foreground" />
+                    </div>
+                  )}
+                </div>
 
-          {/* Order Summary */}
-          <Separator className="my-4" />
+                <div className="flex-1 min-w-0">
+                  <Link
+                    href={`/products/${item.product.id}`}
+                    className="font-medium hover:text-primary transition-colors line-clamp-1"
+                  >
+                    {item.product.title}
+                  </Link>
+                  <p className="text-sm text-muted-foreground">
+                    Quantity: {item.quantity} × {formatPrice(item.price)}
+                  </p>
+                </div>
+
+                <div className="text-right shrink-0">
+                  <p className="font-semibold">{formatPrice(item.price * item.quantity)}</p>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Summary Card */}
+      <Card>
+        <CardContent className="p-6">
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Subtotal</span>
+              <span className="text-muted-foreground">Items Total</span>
               <span>{formatPrice(order.total)}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Shipping</span>
-              <span>Free</span>
+              <span className="text-emerald-600 font-medium">Free</span>
             </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Tax</span>
-              <span>{formatPrice(0)}</span>
-            </div>
-            <Separator />
+            <Separator className="my-2" />
             <div className="flex justify-between font-bold text-lg">
-              <span>Total</span>
-              <span>{formatPrice(order.total)}</span>
+              <span>Grand Total</span>
+              <span className="text-orange-600">{formatPrice(order.total)}</span>
             </div>
           </div>
         </CardContent>

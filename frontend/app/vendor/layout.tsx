@@ -20,6 +20,7 @@ import {
   X,
   Globe,
   ExternalLink,
+  Wallet,
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
@@ -33,7 +34,8 @@ import { toast } from 'sonner';
 const navItems = [
   { href: '/vendor/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/vendor/products', label: 'Products', icon: Package },
-  { href: '/vendor/orders', label: 'Orders', icon: ShoppingBag },
+  { href: '/vendor/orders', label: 'Orders & Fulfillment', icon: ShoppingBag },
+  { href: '/vendor/finances', label: 'Finances & Payouts', icon: Wallet },
   { href: '/vendor/analytics', label: 'Analytics', icon: BarChart3 },
   { href: '/vendor/profile', label: 'Profile', icon: User },
   { href: '/vendor/settings', label: 'Settings', icon: Settings },

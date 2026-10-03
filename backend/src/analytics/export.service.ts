@@ -98,9 +98,9 @@ export class ExportService {
   ): Promise<{ buffer: Buffer; filename: string; contentType: string }> {
     return new Promise((resolve, reject) => {
       try {
-        // Import PDFDocument properly
-        const PDFDocumentModule = PDFDocument as any;
-        const doc = new PDFDocumentModule({
+        // Import PDFDocument properly supporting both ES and CJS module formats
+        const PDFDoc = (PDFDocument as any).default || PDFDocument;
+        const doc = new PDFDoc({
           margin: 50,
           size: 'A4',
           layout: 'landscape',

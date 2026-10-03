@@ -294,15 +294,11 @@ export function Header() {
   // ✅ Role-based nav: staff accounts see management destinations, customers see shopping
   const getNavItems = useCallback(() => {
     if (user?.role === 'admin' || user?.role === 'superadmin') {
-      const staffItems = [
+      return [
         { href: '/products', label: 'Catalog', icon: ShoppingBag },
         { href: '/admin/orders', label: 'Store Orders', icon: ShoppingCart },
-        { href: '/admin', label: 'Admin Panel', icon: Shield },
+        { href: '/admin', label: 'Admin Dashboard', icon: Shield },
       ];
-      if (user?.role === 'superadmin') {
-        staffItems.push({ href: '/superadmin', label: 'Super Admin', icon: Users });
-      }
-      return staffItems;
     }
 
     if (user?.role === 'vendor') {
@@ -411,7 +407,7 @@ export function Header() {
                   Staff Preview Mode
                 </span>
                 <Button asChild size="sm" className="gap-1.5 rounded-full bg-zinc-950 text-white hover:bg-zinc-800 text-xs">
-                  <Link href={user?.role === 'superadmin' ? '/superadmin' : '/admin'}>
+                  <Link href="/admin">
                     <Shield className="h-3.5 w-3.5 text-orange-500" />
                     <span className="hidden md:inline">Dashboard</span>
                   </Link>
@@ -747,18 +743,10 @@ export function Header() {
                     <>
                       <DropdownMenuItem asChild>
                         <Link href="/admin" className="flex cursor-pointer items-center gap-2">
-                          <Shield className="h-4 w-4" />
-                          Admin Panel
+                          <Shield className="h-4 w-4 text-orange-500" />
+                          Admin Console
                         </Link>
                       </DropdownMenuItem>
-                      {user?.role === 'superadmin' && (
-                        <DropdownMenuItem asChild>
-                          <Link href="/superadmin" className="flex cursor-pointer items-center gap-2">
-                            <Users className="h-4 w-4" />
-                            Super Admin
-                          </Link>
-                        </DropdownMenuItem>
-                      )}
                       <DropdownMenuSeparator />
                     </>
                   )}

@@ -40,7 +40,19 @@ export function useExport() {
       exportService.downloadBlob(blob, filename);
       toast.success(`${type} exported successfully`);
     } catch (error: any) {
-      toast.error(error?.message || `Failed to export ${type}`);
+      let message = error?.message;
+      if (error?.response?.data instanceof Blob) {
+        try {
+          const text = await error.response.data.text();
+          const json = JSON.parse(text);
+          if (json?.message) message = json.message;
+        } catch {
+          // fallback to error.message
+        }
+      } else if (error?.response?.data?.message) {
+        message = error.response.data.message;
+      }
+      toast.error(message || `Failed to export ${type}`);
       throw error;
     } finally {
       setLoading(false);

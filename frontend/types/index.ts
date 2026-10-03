@@ -180,14 +180,61 @@ export interface OrderItem {
   product: Product;
   quantity: number;
   price: number;
+  vendorOrderId?: number;
 }
 
-export type OrderStatus = 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
+export type OrderStatus =
+  | 'pending'
+  | 'confirmed'
+  | 'processing'
+  | 'partially_shipped'
+  | 'shipped'
+  | 'delivered'
+  | 'cancelled';
+
+export type VendorOrderStatus =
+  | 'pending'
+  | 'confirmed'
+  | 'processing'
+  | 'shipped'
+  | 'delivered'
+  | 'cancelled'
+  | 'returned';
+
+export type VendorPayoutStatus = 'escrow' | 'ready' | 'paid' | 'refunded';
+
+export interface VendorOrder {
+  id: number;
+  orderId: number;
+  order?: Order;
+  vendorId: number;
+  vendor?: User;
+  items: OrderItem[];
+  status: VendorOrderStatus;
+  subtotal: number;
+  shippingFee: number;
+  commissionRate: number;
+  commissionAmount: number;
+  vendorEarnings: number;
+  carrierName?: string;
+  trackingNumber?: string;
+  trackingUrl?: string;
+  estimatedDeliveryDate?: string;
+  shippedAt?: string;
+  deliveredAt?: string;
+  cancelledAt?: string;
+  cancellationReason?: string;
+  payoutStatus: VendorPayoutStatus;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export interface Order {
   id: number;
   user: User;
   items: OrderItem[];
+  vendorOrders?: VendorOrder[];
   total: number;
   status: OrderStatus;
   shippingAddress?: string;
@@ -196,6 +243,47 @@ export interface Order {
   cancelledBy?: User;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface VendorWallet {
+  id: number;
+  vendorId: number;
+  availableBalance: number;
+  escrowBalance: number;
+  totalEarned: number;
+  totalWithdrawn: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type PayoutStatus = 'pending' | 'approved' | 'completed' | 'rejected';
+
+export interface VendorPayout {
+  id: number;
+  vendorId: number;
+  vendor?: User;
+  amount: number;
+  status: PayoutStatus;
+  paymentMethod: string;
+  accountDetails: string;
+  adminNotes?: string;
+  transactionReference?: string;
+  processedAt?: string;
+  processedBy?: User;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RequestPayoutData {
+  amount: number;
+  paymentMethod: string;
+  accountDetails: string;
+}
+
+export interface ProcessPayoutData {
+  action: 'approve' | 'reject';
+  transactionReference?: string;
+  adminNotes?: string;
 }
 
 export interface CreateOrderData {

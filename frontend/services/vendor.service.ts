@@ -1,6 +1,16 @@
 // services/vendor.service.ts
 import { apiClient } from '@/lib/api-client';
-import { Product, Order, ApiResponse, PaginatedResponse } from '@/types';
+import {
+  Product,
+  Order,
+  ApiResponse,
+  PaginatedResponse,
+  VendorWallet,
+  VendorPayout,
+  VendorOrder,
+  RequestPayoutData,
+  ProcessPayoutData,
+} from '@/types';
 
 export interface VendorStats {
   totalProducts: number;
@@ -79,6 +89,40 @@ export const vendorService = {
 
   async updateProfile(profileData: any): Promise<any> {
     const { data } = await apiClient.put<ApiResponse<any>>('/vendors/profile', profileData);
+    return data.data;
+  },
+
+  // Wallet & Payouts
+  async getWallet(): Promise<{ wallet: VendorWallet; recentPayouts: VendorPayout[]; recentOrders: VendorOrder[] }> {
+    const { data } = await apiClient.get<ApiResponse<{ wallet: VendorWallet; recentPayouts: VendorPayout[]; recentOrders: VendorOrder[] }>>('/vendors/wallet');
+    return data.data;
+  },
+
+  async requestPayout(payoutData: RequestPayoutData): Promise<VendorPayout> {
+    const { data } = await apiClient.post<ApiResponse<VendorPayout>>('/vendors/payouts/request', payoutData);
+    return data.data;
+  },
+
+  async getPayouts(): Promise<VendorPayout[]> {
+    const { data } = await apiClient.get<ApiResponse<VendorPayout[]>>('/vendors/payouts');
+    return data.data;
+  },
+
+  // Admin Payouts
+  async getAdminPayouts(status?: string): Promise<VendorPayout[]> {
+    const url = status ? `/vendors/admin/payouts?status=${status}` : '/vendors/admin/payouts';
+    const { data } = await apiClient.get<ApiResponse<VendorPayout[]>>(url);
+    return data.data;
+  },
+
+  async processAdminPayout(id: number, processData: ProcessPayoutData): Promise<VendorPayout> {
+    const { data } = await apiClient.patch<ApiResponse<VendorPayout>>(`/vendors/admin/payouts/${id}`, processData);
+    return data.data;
+  },
+
+  // Public Vendor Storefront
+  async getPublicVendor(id: number): Promise<any> {
+    const { data } = await apiClient.get<ApiResponse<any>>(`/vendors/public/${id}`);
     return data.data;
   },
 };

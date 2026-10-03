@@ -13,6 +13,7 @@ import {
   HttpStatus,
   ForbiddenException,
   Headers, // ✅ Added
+  Query,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -27,6 +28,8 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { OrderStatus } from './order.entity';
+import { VendorOrderStatus } from './vendor-order.entity';
+import { UpdateVendorOrderDto } from './dto/update-vendor-order.dto';
 import { UserRole } from '../user/user.entity';
 import { UserRateLimitGuard } from '../common/guards/user-rate-limit.guard'; // ✅ Added
 
@@ -174,6 +177,83 @@ export class OrdersController {
   @Get('admin/stats')
   async getAdminStats() {
     return this.ordersService.getAdminStats();
+  }
+
+  // ============================================================
+  // GET VENDOR SUB-ORDERS (Vendor - Only gets their own packages)
+  // ============================================================
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get sub-orders assigned to the authenticated vendor',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Vendor sub-orders retrieved successfully',
+  })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.VENDOR, UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Get('vendor/sub-orders')
+  async getVendorSubOrders(
+    @Request() req: { user: { id: number; role: UserRole } },
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('status') status?: VendorOrderStatus,
+  ) {
+    return this.ordersService.getVendorSubOrders(req.user.id, {
+      page: page ? parseInt(page, 10) : 1,
+      limit: limit ? parseInt(limit, 10) : 20,
+      status,
+    });
+  }
+
+  // ============================================================
+  // GET VENDOR SUB-ORDER DETAIL
+  // ============================================================
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get details of a specific vendor sub-order' })
+  @ApiResponse({
+    status: 200,
+    description: 'Vendor sub-order retrieved successfully',
+  })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.VENDOR, UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Get('vendor/sub-orders/:id')
+  async getVendorSubOrderDetail(
+    @Param('id', ParseIntPipe) id: number,
+    @Request() req: { user: { id: number; role: UserRole } },
+  ) {
+    return this.ordersService.getVendorSubOrderDetail(
+      id,
+      req.user.id,
+      req.user.role,
+    );
+  }
+
+  // ============================================================
+  // UPDATE VENDOR SUB-ORDER STATUS (Vendor package dispatch & tracking)
+  // ============================================================
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Update fulfillment status & tracking for a vendor sub-order',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Vendor sub-order status updated successfully',
+  })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.VENDOR, UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Patch('vendor/sub-orders/:id/status')
+  async updateVendorSubOrderStatus(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateVendorOrderDto,
+    @Request() req: { user: { id: number; role: UserRole } },
+  ) {
+    return this.ordersService.updateVendorSubOrderStatus(
+      id,
+      req.user.id,
+      req.user.role,
+      dto,
+    );
   }
 
   // ============================================================

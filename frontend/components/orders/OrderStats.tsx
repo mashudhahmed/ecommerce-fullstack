@@ -8,11 +8,14 @@ import { ORDER_STATUS_CONFIG, ORDER_STATUS_LIST } from '@/lib/order-status';
 interface OrderStatsProps {
   stats: {
     total: number;
-    pending: number;
-    processing: number;
-    shipped: number;
-    delivered: number;
-    cancelled: number;
+    pending?: number;
+    confirmed?: number;
+    processing?: number;
+    partially_shipped?: number;
+    shipped?: number;
+    delivered?: number;
+    cancelled?: number;
+    [key: string]: number | undefined;
   };
 }
 

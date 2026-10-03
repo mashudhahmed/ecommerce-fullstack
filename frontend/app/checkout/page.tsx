@@ -14,7 +14,17 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatPrice } from '@/lib/utils';
-import { ArrowLeft, ShoppingBag, Loader2, ShieldCheck, ShieldAlert, LayoutDashboard, MapPin } from 'lucide-react';
+import {
+  ArrowLeft,
+  ShoppingBag,
+  Loader2,
+  ShieldCheck,
+  ShieldAlert,
+  LayoutDashboard,
+  MapPin,
+  Store,
+  Truck,
+} from 'lucide-react';
 import { toast } from 'sonner';
 
 function CheckoutItemRow({ item }: { item: any }) {
@@ -207,6 +217,34 @@ export default function CheckoutPage() {
   const total = subtotal + shipping + tax;
   const isBusy = isPlacing || isCreatingOrder;
 
+  // Group items by vendor into multi-vendor packages
+  const packages = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        sellerName: string;
+        sellerId?: number;
+        items: typeof items;
+      }
+    >();
+
+    items.forEach((item) => {
+      const sellerId = item.product?.owner?.id;
+      const key = sellerId ? String(sellerId) : 'official';
+      const sellerName =
+        item.product?.owner?.vendorBusinessName ||
+        item.product?.owner?.name ||
+        'SnapCart Official Store';
+
+      if (!map.has(key)) {
+        map.set(key, { sellerName, sellerId, items: [] });
+      }
+      map.get(key)!.items.push(item);
+    });
+
+    return Array.from(map.values());
+  }, [items]);
+
   return (
     <div className="container mx-auto px-4 py-8">
       <Link
@@ -248,15 +286,46 @@ export default function CheckoutPage() {
             </div>
           </div>
 
-          {/* Order Items Card */}
-          <div className="rounded-2xl border border-border p-6 shadow-sm">
-            <h2 className="mb-5 flex items-center gap-2 text-lg font-bold tracking-tight">
-              <ShoppingBag className="h-5 w-5 text-orange-600" />
-              Order items ({items.length})
-            </h2>
+          {/* Order Packages Card */}
+          <div className="rounded-2xl border border-border p-6 shadow-sm space-y-5">
+            <div>
+              <h2 className="flex items-center gap-2 text-lg font-bold tracking-tight">
+                <ShoppingBag className="h-5 w-5 text-orange-600" />
+                Review Packages ({packages.length} {packages.length === 1 ? 'Package' : 'Packages'})
+              </h2>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Items grouped by seller for separate fulfillment and dispatch
+              </p>
+            </div>
+
             <div className="space-y-4">
-              {items.map((item) => (
-                <CheckoutItemRow key={item.id} item={item} />
+              {packages.map((pkg, idx) => (
+                <div
+                  key={pkg.sellerId || idx}
+                  className="rounded-xl border border-border/70 bg-muted/20 p-4 space-y-3"
+                >
+                  <div className="flex items-center justify-between border-b border-border/50 pb-2">
+                    <div className="flex items-center gap-2">
+                      <Store className="h-4 w-4 text-orange-600" />
+                      <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                        Package {idx + 1}:
+                      </span>
+                      <span className="text-sm font-bold text-foreground">
+                        Sold by {pkg.sellerName}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+                      <Truck className="h-3 w-3" />
+                      <span>Free Delivery</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3 pt-1">
+                    {pkg.items.map((item) => (
+                      <CheckoutItemRow key={item.id} item={item} />
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
           </div>

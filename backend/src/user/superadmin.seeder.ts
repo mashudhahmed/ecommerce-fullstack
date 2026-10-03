@@ -70,6 +70,25 @@ export class SuperAdminSeeder implements OnApplicationBootstrap {
       this.logger.log(`🔑 Password: ${password}`);
       this.logger.log('⚠️  Please change the default password immediately!');
 
+      // Seed a standard operational admin for testing role separation
+      const staffEmail = 'staff-admin@example.com';
+      const existingStaff = await this.userRepository.findOne({
+        where: { email: staffEmail },
+      });
+      if (!existingStaff) {
+        const staffHashedPassword = await bcrypt.hash('Admin@123456', 12);
+        const staffAdmin = this.userRepository.create({
+          name: 'Store Administrator',
+          email: staffEmail,
+          password: staffHashedPassword,
+          role: UserRole.ADMIN,
+          isVerified: true,
+          isVendorApproved: false,
+        });
+        await this.userRepository.save(staffAdmin);
+        this.logger.log(`🎉 Seeded Operational Admin: ${staffEmail} / Admin@123456`);
+      }
+
       return savedAdmin;
     } catch (error) {
       if (error instanceof Error && 'code' in error && error.code === '23505') {

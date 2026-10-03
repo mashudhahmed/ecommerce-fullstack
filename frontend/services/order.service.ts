@@ -1,6 +1,6 @@
 // services/order.service.ts
 import { apiClient, unwrapData } from '@/lib/api-client';
-import { Order } from '@/types';
+import { Order, VendorOrder } from '@/types';
 
 export interface CreateOrderData {
   items: {
@@ -207,5 +207,52 @@ export const orderService = {
   async updateOrderStatus(id: number, status: string): Promise<Order> {
     const response = await apiClient.patch(`/orders/${id}/status`, { status });
     return unwrapData<Order>(response.data);
+  },
+
+  // ============================================================
+  // VENDOR: SUB-ORDERS (PACKAGES)
+  // ============================================================
+  async getVendorSubOrders(params?: {
+    page?: number;
+    limit?: number;
+    status?: string;
+  }): Promise<{
+    data: VendorOrder[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  }> {
+    const query = new URLSearchParams();
+    if (params?.page) query.append('page', String(params.page));
+    if (params?.limit) query.append('limit', String(params.limit));
+    if (params?.status) query.append('status', params.status);
+
+    const response = await apiClient.get(
+      `/orders/vendor/sub-orders?${query.toString()}`,
+    );
+    return unwrapData(response.data);
+  },
+
+  async getVendorSubOrderDetail(id: number): Promise<VendorOrder> {
+    const response = await apiClient.get(`/orders/vendor/sub-orders/${id}`);
+    return unwrapData<VendorOrder>(response.data);
+  },
+
+  async updateVendorSubOrderStatus(
+    id: number,
+    data: {
+      status: string;
+      carrierName?: string;
+      trackingNumber?: string;
+      trackingUrl?: string;
+      notes?: string;
+    },
+  ): Promise<VendorOrder> {
+    const response = await apiClient.patch(
+      `/orders/vendor/sub-orders/${id}/status`,
+      data,
+    );
+    return unwrapData<VendorOrder>(response.data);
   },
 };

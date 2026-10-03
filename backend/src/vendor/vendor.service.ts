@@ -12,6 +12,11 @@ import { User, UserRole } from '../user/user.entity';
 import { Product } from '../products/products.entity';
 import { Order } from '../orders/order.entity';
 import { OrderItem } from '../orders/order-item.entity';
+import { VendorWallet } from './vendor-wallet.entity';
+import { VendorPayout, PayoutStatus } from './vendor-payout.entity';
+import { VendorOrder } from '../orders/vendor-order.entity';
+import { RequestPayoutDto } from './dto/request-payout.dto';
+import { ProcessPayoutDto } from './dto/process-payout.dto';
 import { UserService } from '../user/user.service';
 import { CacheService } from '../common/cache/cache.service';
 import { MetricsService } from '../monitoring/metrics.service';
@@ -92,6 +97,12 @@ export class VendorService {
     private readonly orderRepository: Repository<Order>,
     @InjectRepository(OrderItem)
     private readonly orderItemRepository: Repository<OrderItem>,
+    @InjectRepository(VendorWallet)
+    private readonly walletRepository: Repository<VendorWallet>,
+    @InjectRepository(VendorPayout)
+    private readonly payoutRepository: Repository<VendorPayout>,
+    @InjectRepository(VendorOrder)
+    private readonly vendorOrderRepository: Repository<VendorOrder>,
     private readonly userService: UserService,
     private readonly dataSource: DataSource,
     private readonly cacheService: CacheService,
@@ -1225,5 +1236,144 @@ export class VendorService {
     return Object.values(productStats)
       .sort((a, b) => b.revenue - a.revenue)
       .slice(0, limit);
+  }
+
+  // ============================================================
+  // VENDOR WALLET & ESCROW LEDGER
+  // ============================================================
+  async getOrCreateWallet(vendorId: number): Promise<VendorWallet> {
+    let wallet = await this.walletRepository.findOne({ where: { vendorId } });
+    if (!wallet) {
+      wallet = this.walletRepository.create({
+        vendorId,
+        availableBalance: 0,
+        escrowBalance: 0,
+        totalEarned: 0,
+        totalWithdrawn: 0,
+      });
+      wallet = await this.walletRepository.save(wallet);
+    }
+    return wallet;
+  }
+
+  async getWalletOverview(vendorId: number): Promise<{
+    wallet: VendorWallet;
+    recentPayouts: VendorPayout[];
+    recentOrders: VendorOrder[];
+  }> {
+    const wallet = await this.getOrCreateWallet(vendorId);
+    const recentPayouts = await this.payoutRepository.find({
+      where: { vendorId },
+      order: { createdAt: 'DESC' },
+      take: 10,
+    });
+    const recentOrders = await this.vendorOrderRepository.find({
+      where: { vendorId },
+      relations: ['order', 'items', 'items.product'],
+      order: { createdAt: 'DESC' },
+      take: 10,
+    });
+
+    return { wallet, recentPayouts, recentOrders };
+  }
+
+  async requestPayout(
+    vendorId: number,
+    dto: RequestPayoutDto,
+  ): Promise<VendorPayout> {
+    const wallet = await this.getOrCreateWallet(vendorId);
+
+    if (Number(wallet.availableBalance) < Number(dto.amount)) {
+      throw new BadRequestException(
+        `Insufficient available balance. You have $${Number(wallet.availableBalance).toFixed(2)} available.`,
+      );
+    }
+
+    // Deduct available balance
+    wallet.availableBalance = Number(wallet.availableBalance) - Number(dto.amount);
+    await this.walletRepository.save(wallet);
+
+    const payout = this.payoutRepository.create({
+      vendorId,
+      amount: dto.amount,
+      paymentMethod: dto.paymentMethod,
+      accountDetails: dto.accountDetails,
+      status: PayoutStatus.PENDING,
+    });
+
+    const savedPayout = await this.payoutRepository.save(payout);
+
+    this.logger.log(
+      `Vendor ${vendorId} requested payout of $${dto.amount} (Payout #${savedPayout.id})`,
+    );
+
+    return savedPayout;
+  }
+
+  async getVendorPayouts(vendorId: number): Promise<VendorPayout[]> {
+    return this.payoutRepository.find({
+      where: { vendorId },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  // ============================================================
+  // ADMIN PAYOUT SETTLEMENT
+  // ============================================================
+  async getAllPayoutRequests(status?: PayoutStatus): Promise<VendorPayout[]> {
+    const where: any = {};
+    if (status) where.status = status;
+    return this.payoutRepository.find({
+      where,
+      relations: ['vendor', 'processedBy'],
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  async processPayout(
+    payoutId: number,
+    adminId: number,
+    dto: ProcessPayoutDto,
+  ): Promise<VendorPayout> {
+    const payout = await this.payoutRepository.findOne({
+      where: { id: payoutId },
+      relations: ['vendor'],
+    });
+
+    if (!payout) {
+      throw new NotFoundException(`Payout #${payoutId} not found`);
+    }
+
+    if (payout.status !== PayoutStatus.PENDING) {
+      throw new BadRequestException(
+        `Payout #${payoutId} has already been processed with status ${payout.status}`,
+      );
+    }
+
+    const wallet = await this.getOrCreateWallet(payout.vendorId);
+
+    if (dto.action === 'approve') {
+      payout.status = PayoutStatus.COMPLETED;
+      payout.transactionReference = dto.transactionReference || undefined;
+      payout.adminNotes = dto.adminNotes || undefined;
+      payout.processedAt = new Date();
+      payout.processedBy = { id: adminId } as User;
+
+      wallet.totalWithdrawn =
+        Number(wallet.totalWithdrawn) + Number(payout.amount);
+      await this.walletRepository.save(wallet);
+    } else {
+      payout.status = PayoutStatus.REJECTED;
+      payout.adminNotes = dto.adminNotes || 'Payout request rejected';
+      payout.processedAt = new Date();
+      payout.processedBy = { id: adminId } as User;
+
+      // Refund deducted amount back to available balance
+      wallet.availableBalance =
+        Number(wallet.availableBalance) + Number(payout.amount);
+      await this.walletRepository.save(wallet);
+    }
+
+    return this.payoutRepository.save(payout);
   }
 }

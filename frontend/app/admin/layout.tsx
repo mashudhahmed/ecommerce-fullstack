@@ -22,22 +22,32 @@ import {
   ChevronRight,
   Shield,
   Globe,
+  BarChart3,
+  SlidersHorizontal,
   ExternalLink,
+  DollarSign,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
 // ============================================================
-// NAVIGATION ITEMS
+// NAVIGATION ITEMS (RBAC-DRIVEN)
 // ============================================================
 
-const navItems = [
-  { href: '/admin', label: 'Dashboard', icon: LayoutDashboard },
+const storeNavItems = [
+  { href: '/admin', label: 'Dashboard', icon: LayoutDashboard, exact: true },
   { href: '/admin/products', label: 'Products', icon: Package },
   { href: '/admin/orders', label: 'Orders', icon: ShoppingBag },
-  { href: '/admin/users', label: 'Users', icon: Users },
+  { href: '/admin/users', label: 'Customers', icon: Users },
   { href: '/admin/vendors', label: 'Vendors', icon: Store },
+  { href: '/admin/payouts', label: 'Vendor Payouts', icon: DollarSign },
   { href: '/admin/reports', label: 'Reports', icon: FileSpreadsheet },
-  { href: '/admin/settings', label: 'Settings', icon: Settings },
+  { href: '/admin/settings', label: 'Store Settings', icon: Settings },
+];
+
+const governanceNavItems = [
+  { href: '/admin/admins', label: 'Admin Team', icon: Shield },
+  { href: '/admin/statistics', label: 'Platform Stats', icon: BarChart3 },
+  { href: '/admin/platform-settings', label: 'Platform Config', icon: SlidersHorizontal },
 ];
 
 // ============================================================
@@ -127,23 +137,30 @@ export default function AdminLayout({
           {!isCollapsed && (
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <Shield className="h-5 w-5 text-orange-500" />
-                <h2 className="font-bold text-lg truncate">
-                  {isSuperAdmin ? 'Super Admin' : 'Admin Panel'}
+                <Shield className={cn('h-5 w-5', isSuperAdmin ? 'text-violet-600' : 'text-orange-500')} />
+                <h2 className="font-bold text-base tracking-tight truncate">
+                  SnapCart Admin
                 </h2>
               </div>
-              <p className="text-sm text-muted-foreground truncate">
-                {user?.name || user?.email}
-              </p>
+              <div className="flex items-center gap-1.5 mt-1">
+                <span className={cn(
+                  'rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider',
+                  isSuperAdmin 
+                    ? 'bg-violet-100 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300'
+                    : 'bg-orange-100 text-orange-700 dark:bg-orange-950/50 dark:text-orange-300'
+                )}>
+                  {isSuperAdmin ? 'Super Admin' : 'Administrator'}
+                </span>
+              </div>
             </div>
           )}
           {isCollapsed && (
-            <Shield className="h-6 w-6 text-orange-500" />
+            <Shield className={cn('h-6 w-6', isSuperAdmin ? 'text-violet-600' : 'text-orange-500')} />
           )}
           <Button
             variant="ghost"
             size="icon"
-            className="hidden lg:flex"
+            className="hidden lg:flex cursor-pointer"
             onClick={toggleSidebar}
           >
             {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
@@ -151,7 +168,7 @@ export default function AdminLayout({
           <Button
             variant="ghost"
             size="icon"
-            className="lg:hidden"
+            className="lg:hidden cursor-pointer"
             onClick={() => setIsMobileOpen(false)}
           >
             <X className="h-4 w-4" />
@@ -159,52 +176,99 @@ export default function AdminLayout({
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = pathname === item.href || pathname?.startsWith(item.href + '/');
-            
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={() => setIsMobileOpen(false)}
-                className={cn(
-                  'flex items-center gap-3 px-3 py-2 rounded-lg transition-colors',
-                  isCollapsed && 'justify-center',
-                  isActive 
-                    ? 'bg-orange-50 text-orange-600 dark:bg-orange-950/20 dark:text-orange-400' 
-                    : 'hover:bg-muted hover:text-foreground'
-                )}
-                title={isCollapsed ? item.label : undefined}
-              >
-                <Icon className={cn(
-                  'h-4 w-4 shrink-0',
-                  isCollapsed && 'h-5 w-5',
-                  isActive && 'text-orange-500'
-                )} />
-                {!isCollapsed && <span>{item.label}</span>}
-              </Link>
-            );
-          })}
+        <nav className="flex-1 p-2 space-y-4 overflow-y-auto">
+          {/* Store Operations */}
+          <div>
+            {!isCollapsed && (
+              <p className="px-3 pb-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground/70">
+                Store Operations
+              </p>
+            )}
+            <div className="space-y-0.5">
+              {storeNavItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = item.exact
+                  ? pathname === item.href
+                  : pathname === item.href || pathname?.startsWith(item.href + '/');
+
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setIsMobileOpen(false)}
+                    className={cn(
+                      'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+                      isCollapsed && 'justify-center',
+                      isActive
+                        ? 'bg-orange-50 text-orange-600 dark:bg-orange-950/20 dark:text-orange-400 font-semibold'
+                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                    )}
+                    title={isCollapsed ? item.label : undefined}
+                  >
+                    <Icon
+                      className={cn(
+                        'h-4 w-4 shrink-0',
+                        isCollapsed && 'h-5 w-5',
+                        isActive && 'text-orange-500'
+                      )}
+                    />
+                    {!isCollapsed && <span>{item.label}</span>}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Platform Governance (Super Admin Only) */}
+          {isSuperAdmin && (
+            <div className="pt-2 border-t border-border/60">
+              {!isCollapsed && (
+                <div className="flex items-center justify-between px-3 pb-1.5">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-violet-600 dark:text-violet-400">
+                    Governance
+                  </p>
+                  <span className="rounded-full bg-violet-100 dark:bg-violet-950/50 px-1.5 py-0.5 text-[9px] font-bold text-violet-700 dark:text-violet-300">
+                    Root
+                  </span>
+                </div>
+              )}
+              <div className="space-y-0.5">
+                {governanceNavItems.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = pathname === item.href || pathname?.startsWith(item.href + '/');
+
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      onClick={() => setIsMobileOpen(false)}
+                      className={cn(
+                        'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+                        isCollapsed && 'justify-center',
+                        isActive
+                          ? 'bg-violet-50 text-violet-700 dark:bg-violet-950/20 dark:text-violet-300 font-semibold'
+                          : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                      )}
+                      title={isCollapsed ? item.label : undefined}
+                    >
+                      <Icon
+                        className={cn(
+                          'h-4 w-4 shrink-0',
+                          isCollapsed && 'h-5 w-5',
+                          isActive && 'text-violet-600 dark:text-violet-400'
+                        )}
+                      />
+                      {!isCollapsed && <span>{item.label}</span>}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </nav>
 
-        {/* Quick Switchers & Storefront Link */}
+        {/* Storefront Link */}
         <div className="border-t p-2 space-y-1">
-          {isSuperAdmin && (
-            <Link
-              href="/superadmin"
-              className={cn(
-                'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors text-purple-600 hover:bg-purple-50 dark:text-purple-400 dark:hover:bg-purple-950/20',
-                isCollapsed && 'justify-center'
-              )}
-              title={isCollapsed ? 'Super Admin Console' : undefined}
-            >
-              <Shield className={cn('h-4 w-4 shrink-0', isCollapsed && 'h-5 w-5')} />
-              {!isCollapsed && <span>Super Admin</span>}
-            </Link>
-          )}
-
           <Link
             href="/"
             className={cn(

@@ -33,6 +33,9 @@ import { VendorService } from './vendor.service';
 import { BulkProductUploadDto } from './dto/bulk-product-upload.dto';
 import { BulkProductDeleteDto } from './dto/bulk-product-delete.dto';
 import { UpdateVendorProfileDto } from './dto/update-vendor-profile.dto';
+import { RequestPayoutDto } from './dto/request-payout.dto';
+import { ProcessPayoutDto } from './dto/process-payout.dto';
+import { PayoutStatus } from './vendor-payout.entity';
 
 @ApiTags('Vendor')
 @Controller('vendors')
@@ -377,5 +380,70 @@ export class VendorController {
       limitNum,
       ratingNum,
     );
+  }
+
+  // ============================================================
+  // VENDOR WALLET & BALANCES
+  // ============================================================
+
+  @Get('wallet')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.VENDOR)
+  @ApiOperation({ summary: 'Get vendor wallet balances and recent activity' })
+  @ApiResponse({ status: 200, description: 'Wallet retrieved successfully' })
+  async getWallet(@Request() req: { user: { id: number } }) {
+    return this.vendorService.getWalletOverview(req.user.id);
+  }
+
+  // ============================================================
+  // VENDOR PAYOUT REQUESTS
+  // ============================================================
+
+  @Post('payouts/request')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.VENDOR)
+  @ApiOperation({ summary: 'Request withdrawal of available funds' })
+  @ApiResponse({ status: 201, description: 'Payout requested successfully' })
+  async requestPayout(
+    @Request() req: { user: { id: number } },
+    @Body() dto: RequestPayoutDto,
+  ) {
+    return this.vendorService.requestPayout(req.user.id, dto);
+  }
+
+  @Get('payouts')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.VENDOR)
+  @ApiOperation({ summary: 'Get vendor payout withdrawal history' })
+  @ApiResponse({ status: 200, description: 'Payouts retrieved successfully' })
+  async getPayouts(@Request() req: { user: { id: number } }) {
+    return this.vendorService.getVendorPayouts(req.user.id);
+  }
+
+  // ============================================================
+  // ADMIN PAYOUT GOVERNANCE
+  // ============================================================
+
+  @Get('admin/payouts')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Admin: Get all vendor payout requests' })
+  @ApiResponse({ status: 200, description: 'Payout requests retrieved successfully' })
+  @ApiQuery({ name: 'status', required: false, enum: PayoutStatus })
+  async getAdminPayouts(@Query('status') status?: PayoutStatus) {
+    return this.vendorService.getAllPayoutRequests(status);
+  }
+
+  @Patch('admin/payouts/:id')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Admin: Approve or reject a vendor payout' })
+  @ApiResponse({ status: 200, description: 'Payout processed successfully' })
+  async processAdminPayout(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: ProcessPayoutDto,
+    @Request() req: { user: { id: number } },
+  ) {
+    return this.vendorService.processPayout(id, req.user.id, dto);
   }
 }

@@ -1,6 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, ManyToOne, Column } from 'typeorm';
 import { Order } from './order.entity';
 import { Product } from '../products/products.entity';
+import { VendorOrder } from './vendor-order.entity';
 import { Expose } from 'class-transformer';
 
 @Entity('order_items')
@@ -11,6 +12,16 @@ export class OrderItem {
 
   @ManyToOne(() => Order, (o) => o.items, { onDelete: 'CASCADE' })
   order!: Order;
+
+  @ManyToOne(() => VendorOrder, (vo) => vo.items, {
+    nullable: true,
+    onDelete: 'CASCADE',
+  })
+  vendorOrder?: VendorOrder;
+
+  @Column({ nullable: true })
+  @Expose()
+  vendorOrderId?: number;
 
   @ManyToOne(() => Product, { eager: true })
   @Expose()

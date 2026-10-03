@@ -7,6 +7,9 @@ import { User } from '../user/user.entity';
 import { Product } from '../products/products.entity';
 import { Order } from '../orders/order.entity';
 import { OrderItem } from '../orders/order-item.entity';
+import { VendorWallet } from './vendor-wallet.entity';
+import { VendorPayout } from './vendor-payout.entity';
+import { VendorOrder } from '../orders/vendor-order.entity';
 import { AuthModule } from '../auth/auth.module';
 import { UserModule } from '../user/user.module';
 import { ProductsModule } from '../products/products.module';
@@ -14,12 +17,19 @@ import { OrdersModule } from '../orders/orders.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User, Product, Order, OrderItem]),
+    TypeOrmModule.forFeature([
+      User,
+      Product,
+      Order,
+      OrderItem,
+      VendorWallet,
+      VendorPayout,
+      VendorOrder,
+    ]),
     AuthModule,
     UserModule,
     ProductsModule,
     OrdersModule,
-    // CacheModule, MonitoringModule, EventsModule are @Global()
   ],
   controllers: [VendorController],
   providers: [VendorService],

@@ -34,6 +34,9 @@ import {
   Minus,
   Plus,
   Loader2,
+  Store,
+  CheckCircle2,
+  ChevronRight,
 } from 'lucide-react';
 import { formatPrice, cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -539,6 +542,55 @@ function ProductDetailPageContent({ id }: { id: number }) {
                 </Button>
               </div>
             )}
+
+            {/* Marketplace Buy Box: Seller Info & Delivery */}
+            <div className="rounded-2xl border border-border/80 bg-muted/20 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="h-10 w-10 rounded-xl bg-orange-500/10 text-orange-600 flex items-center justify-center font-bold text-sm">
+                    <Store className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs text-muted-foreground">Sold by</span>
+                      <span className="text-sm font-bold text-foreground">
+                        {product.owner?.vendorBusinessName || product.owner?.name || 'SnapCart Official Store'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
+                      <CheckCircle2 className="h-3 w-3" />
+                      <span>Verified Marketplace Seller</span>
+                    </div>
+                  </div>
+                </div>
+
+                {product.owner?.id && (
+                  <Link href={`/stores/${product.owner.id}`}>
+                    <Button variant="outline" size="sm" className="h-8 rounded-full text-xs gap-1">
+                      Visit Store <ChevronRight className="h-3 w-3" />
+                    </Button>
+                  </Link>
+                )}
+              </div>
+
+              <div className="border-t border-border/60 pt-2.5 text-xs text-muted-foreground space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <Truck className="h-3.5 w-3.5 text-orange-600" />
+                    Delivery: <strong className="text-foreground font-semibold">FREE Standard Delivery</strong>
+                  </span>
+                  <span className="text-emerald-600 dark:text-emerald-400 font-medium text-[11px]">In 2–4 Business Days</span>
+                </div>
+                <div className="flex items-center justify-between text-[11px]">
+                  <span>Ships from</span>
+                  <span className="font-medium text-foreground">SnapCart Logistics Network</span>
+                </div>
+                <div className="flex items-center justify-between text-[11px]">
+                  <span>Buyer Protection</span>
+                  <span className="font-medium text-foreground">30-day hassle-free returns</span>
+                </div>
+              </div>
+            </div>
 
             {/* Product Features */}
             <div className="grid grid-cols-2 gap-3 border-t border-border pt-6 text-center sm:grid-cols-4">

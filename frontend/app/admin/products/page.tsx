@@ -61,19 +61,25 @@ export default function AdminProductsPage() {
               Add Product
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
+          <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden rounded-2xl">
+            <DialogHeader className="p-6 pb-4 border-b shrink-0">
               <DialogTitle>
                 {editingProduct ? 'Edit Product' : 'Add Product'}
               </DialogTitle>
             </DialogHeader>
-            <ProductForm
-              product={editingProduct}
-              onSuccess={() => {
-                setDialogOpen(false);
-                setEditingProduct(null);
-              }}
-            />
+            <div className="flex-1 overflow-y-auto p-6">
+              <ProductForm
+                product={editingProduct}
+                onSuccess={() => {
+                  setDialogOpen(false);
+                  setEditingProduct(null);
+                }}
+                onCancel={() => {
+                  setDialogOpen(false);
+                  setEditingProduct(null);
+                }}
+              />
+            </div>
           </DialogContent>
         </Dialog>
       </div>

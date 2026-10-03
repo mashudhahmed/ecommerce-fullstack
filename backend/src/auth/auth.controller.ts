@@ -104,6 +104,44 @@ export class AuthController {
     };
   }
 
+  private resolveFrontendUrl(req: any): string {
+    // 1. Explicit query origin (sent from frontend)
+    const queryOrigin = req.query?.origin || req.query?.frontendUrl;
+    if (
+      queryOrigin &&
+      typeof queryOrigin === 'string' &&
+      !queryOrigin.includes('localhost')
+    ) {
+      return queryOrigin.replace(/\/$/, '');
+    }
+
+    // 2. Referer or Origin headers
+    const origin = req.headers?.['origin'] as string;
+    const referer = req.headers?.['referer'] as string;
+
+    if (origin && !origin.includes('localhost')) {
+      return origin.replace(/\/$/, '');
+    }
+
+    if (referer) {
+      try {
+        const parsed = new URL(referer);
+        if (!parsed.hostname.includes('localhost')) {
+          return `${parsed.protocol}//${parsed.host}`;
+        }
+      } catch {}
+    }
+
+    // 3. Configured frontend URL
+    const configured = this.configService.get<string>('app.frontendUrl');
+    if (configured && !configured.includes('localhost')) {
+      return configured.replace(/\/$/, '');
+    }
+
+    // 4. Default to live Vercel production deployment
+    return 'https://snapcart-fullstack.vercel.app';
+  }
+
   // ============================================================
   // REGISTRATION
   // ============================================================
@@ -143,14 +181,16 @@ export class AuthController {
       !clientSecret?.includes('placeholder') &&
       !clientSecret?.includes('unconfigured');
 
-    const frontendUrl =
-      this.configService.get<string>('app.frontendUrl') ||
-      'https://snapcart-fullstack.vercel.app';
+    const frontendUrl = this.resolveFrontendUrl(req);
 
     const safeRedirect =
       redirect && redirect.startsWith('/') && !redirect.startsWith('//')
         ? redirect
         : '/';
+
+    const statePayload = Buffer.from(
+      JSON.stringify({ origin: frontendUrl, path: safeRedirect }),
+    ).toString('base64url');
 
     if (!isConfigured) {
       if (isProd) {
@@ -170,7 +210,7 @@ export class AuthController {
 
     return (passport.authenticate('google', {
       scope: ['email', 'profile'],
-      state: safeRedirect,
+      state: statePayload,
       prompt: 'select_account',
     }) as any)(req, res, (err: any) => {
       if (err) {
@@ -192,9 +232,7 @@ export class AuthController {
       );
     }
 
-    const frontendUrl =
-      this.configService.get<string>('app.frontendUrl') ||
-      'https://snapcart-fullstack.vercel.app';
+    const frontendUrl = this.resolveFrontendUrl(req);
 
     const email = (body?.email || '').toLowerCase().trim();
     if (!email || !email.includes('@')) {
@@ -249,16 +287,37 @@ export class AuthController {
     @Query('state') state?: string,
     @Query('error') oauthError?: string,
   ) {
-    const frontendUrl =
-      this.configService.get<string>('app.frontendUrl') ||
-      'https://snapcart-fullstack.vercel.app';
+    let targetOrigin = this.resolveFrontendUrl(req);
+    let targetPath = '/';
+
+    if (state) {
+      try {
+        const decoded = JSON.parse(
+          Buffer.from(state, 'base64url').toString('utf8'),
+        );
+        if (decoded.origin && !decoded.origin.includes('localhost')) {
+          targetOrigin = decoded.origin;
+        }
+        if (decoded.path && decoded.path.startsWith('/')) {
+          targetPath = decoded.path;
+        }
+      } catch {
+        if (state.startsWith('/') && !state.startsWith('//')) {
+          targetPath = state;
+        }
+      }
+    }
+
+    if (targetOrigin.includes('localhost')) {
+      targetOrigin = 'https://snapcart-fullstack.vercel.app';
+    }
 
     if (oauthError) {
       const errParam =
         oauthError === 'access_denied'
           ? 'google_cancelled'
           : 'google_auth_failed';
-      return res.redirect(`${frontendUrl}/login?error=${errParam}`);
+      return res.redirect(`${targetOrigin}/login?error=${errParam}`);
     }
 
     const clientId = this.configService.get<string>('google.clientId');
@@ -270,7 +329,7 @@ export class AuthController {
       !clientSecret?.includes('placeholder');
 
     if (!isConfigured) {
-      return res.redirect(`${frontendUrl}/login?error=google_not_configured`);
+      return res.redirect(`${targetOrigin}/login?error=google_not_configured`);
     }
 
     return new Promise<void>((resolve) => {
@@ -295,7 +354,7 @@ export class AuthController {
             this.logger.error(
               `❌ Google OAuth authentication failed: ${err?.message || 'No user profile received'}`,
             );
-            return safeRedirect(`${frontendUrl}/login?error=google_auth_failed`);
+            return safeRedirect(`${targetOrigin}/login?error=google_auth_failed`);
           }
 
           try {
@@ -312,17 +371,13 @@ export class AuthController {
               `✅ Google OAuth login successful for ${user.email} (ID: ${result.user?.id})`,
             );
 
-            const targetUrl =
-              state && state.startsWith('/') && !state.startsWith('//')
-                ? state
-                : '/';
-            return safeRedirect(`${frontendUrl}${targetUrl}`);
+            return safeRedirect(`${targetOrigin}${targetPath}`);
           } catch (error: any) {
             this.logger.error(
               `❌ Google OAuth user validation error: ${error?.message || String(error)}`,
             );
             return safeRedirect(
-              `${frontendUrl}/login?error=${encodeURIComponent(error?.message || 'google_auth_failed')}`,
+              `${targetOrigin}/login?error=${encodeURIComponent(error?.message || 'google_auth_failed')}`,
             );
           }
         },
@@ -334,7 +389,7 @@ export class AuthController {
           this.logger.error(
             `❌ Google OAuth middleware error: ${err?.message || String(err)}`,
           );
-          return safeRedirect(`${frontendUrl}/login?error=google_auth_failed`);
+          return safeRedirect(`${targetOrigin}/login?error=google_auth_failed`);
         }
       });
     });

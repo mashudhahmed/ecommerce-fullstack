@@ -63,6 +63,9 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1
 function buildGoogleAuthUrl(redirectUrl: string) {
   const url = new URL(`${API_URL}/auth/google`);
   url.searchParams.set('redirect', redirectUrl);
+  if (typeof window !== 'undefined' && window.location.origin) {
+    url.searchParams.set('origin', window.location.origin);
+  }
   return url.toString();
 }
 

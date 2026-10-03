@@ -814,6 +814,24 @@ export class AuthController {
     return this.authService.rejectVendor(id, req.user.sub, body.reason);
   }
 
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.VENDOR)
+  @Post('vendors/resubmit')
+  @ApiOperation({ summary: 'Vendor resubmits rejected KYC application' })
+  async resubmitVendorApplication(
+    @Req() req: Request & { user: { sub: number } },
+    @Body() body?: {
+      businessName?: string;
+      phoneNumber?: string;
+      address?: string;
+      businessRegistration?: string;
+      businessDescription?: string;
+    },
+  ) {
+    return this.authService.resubmitVendorApplication(req.user.sub, body);
+  }
+
   // ============================================================
   // TWO-FACTOR AUTHENTICATION (2FA) ENDPOINTS
   // ============================================================

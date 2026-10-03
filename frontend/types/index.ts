@@ -12,7 +12,8 @@ export interface User {
   isVerified: boolean;
   isVendorApproved?: boolean;
   isVendorRejected?: boolean;
-   avatar?: string; 
+  vendorRejectionReason?: string;
+  avatar?: string; 
   vendorBusinessName?: string;
   vendorBusinessDescription?: string;
   vendorPhoneNumber?: string;

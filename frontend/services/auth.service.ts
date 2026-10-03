@@ -79,6 +79,7 @@ interface BackendUser {
   isVerified: boolean;
   isVendorApproved?: boolean;
   isVendorRejected?: boolean;
+  vendorRejectionReason?: string;
   vendorBusinessName?: string;
   vendorBusinessDescription?: string;
   vendorPhoneNumber?: string;
@@ -135,6 +136,7 @@ function createUser(data: BackendUser): User {
     isVerified: data.isVerified,
     isVendorApproved: data.isVendorApproved || false,
     isVendorRejected: data.isVendorRejected || false,
+    vendorRejectionReason: data.vendorRejectionReason,
     vendorBusinessName: data.vendorBusinessName,
     vendorBusinessDescription: data.vendorBusinessDescription,
     vendorPhoneNumber: data.vendorPhoneNumber,
@@ -480,6 +482,22 @@ export const authService = {
       return unwrapData(response.data);
     } catch (error: any) {
       throw toAuthError(error, 'Failed to reject vendor.');
+    }
+  },
+
+  async resubmitVendorApplication(data?: {
+    businessName?: string;
+    phoneNumber?: string;
+    address?: string;
+    businessRegistration?: string;
+    businessDescription?: string;
+  }): Promise<{ message: string; vendor: User }> {
+    try {
+      const response = await apiClient.post('/auth/vendors/resubmit', data || {});
+      const resData = unwrapData<{ message: string; vendor: BackendUser }>(response.data);
+      return { message: resData.message, vendor: createUser(resData.vendor) };
+    } catch (error: any) {
+      throw toAuthError(error, 'Failed to resubmit application.');
     }
   },
 

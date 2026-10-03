@@ -829,7 +829,16 @@ export class AuthService {
     };
   }
 
-  async resubmitVendorApplication(vendorId: number) {
+  async resubmitVendorApplication(
+    vendorId: number,
+    data?: {
+      businessName?: string;
+      phoneNumber?: string;
+      address?: string;
+      businessRegistration?: string;
+      businessDescription?: string;
+    },
+  ) {
     this.logger.log(`🔄 Resubmitting vendor application: ${vendorId}`);
 
     const vendor = await this.userService.findByIdOrFail(vendorId);
@@ -844,11 +853,19 @@ export class AuthService {
       throw new BadRequestException('Vendor application is not rejected');
     }
 
-    await this.userService.update(vendor.id, {
+    const updatePayload: any = {
       isVendorRejected: false,
       vendorRejectionReason: null,
       isVendorApproved: false,
-    });
+    };
+
+    if (data?.businessName) updatePayload.vendorBusinessName = data.businessName;
+    if (data?.phoneNumber) updatePayload.vendorPhoneNumber = data.phoneNumber;
+    if (data?.address) updatePayload.vendorAddress = data.address;
+    if (data?.businessRegistration) updatePayload.vendorBusinessRegistration = data.businessRegistration;
+    if (data?.businessDescription) updatePayload.vendorBusinessDescription = data.businessDescription;
+
+    await this.userService.update(vendor.id, updatePayload);
 
     const updatedVendor = await this.userService.findByIdOrFail(vendorId);
     this.fireAndForget(

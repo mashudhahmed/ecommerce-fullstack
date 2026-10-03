@@ -27,6 +27,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { VendorOnboardingStatus } from '@/components/vendor/VendorOnboardingStatus';
 
 // ============================================================
 // NAVIGATION ITEMS
@@ -99,6 +100,15 @@ export default function VendorLayout({
   // ✅ Loading state
   if (isLoading) {
     return <VendorLayoutSkeleton />;
+  }
+
+  // ✅ If user is a vendor and not approved yet, intercept and render KYC Onboarding & Status pipeline
+  if (user && user.role === 'vendor' && !user.isVendorApproved) {
+    return (
+      <div className="min-h-screen bg-muted/20">
+        <VendorOnboardingStatus user={user} />
+      </div>
+    );
   }
 
   const sidebarWidth = isCollapsed ? 'w-16' : 'w-64';

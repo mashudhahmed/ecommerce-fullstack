@@ -159,7 +159,7 @@ export default function ProductsPage() {
               <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Departments
               </h3>
-              <div className="space-y-1 max-h-56 overflow-y-auto pr-1">
+              <div className="space-y-1 max-h-56 overflow-y-auto custom-scrollbar pr-1">
                 <button
                   onClick={() => setSelectedCategoryId(undefined)}
                   className={cn(

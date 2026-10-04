@@ -120,6 +120,11 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(156, 163, 175, 0.4) transparent;
+  }
+  *:hover {
+    scrollbar-color: rgba(234, 88, 12, 0.6) transparent;
   }
   body {
     @apply bg-background text-foreground;
@@ -128,3 +133,119 @@
     @apply font-sans;
   }
 }
+
+/* ==========================================================================
+   In-Theme Custom Scrollbars (WebKit / Blink: Chrome, Edge, Safari, Opera)
+   ========================================================================== */
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: rgba(156, 163, 175, 0.38);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  transition: background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: #ea580c; /* Primary theme orange-600 */
+}
+
+::-webkit-scrollbar-thumb:active {
+  background-color: #c2410c; /* Deep theme orange-700 */
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Dark Mode Scrollbars */
+.dark,
+.dark * {
+  scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
+}
+
+.dark *:hover {
+  scrollbar-color: rgba(249, 115, 22, 0.7) transparent;
+}
+
+.dark ::-webkit-scrollbar-thumb,
+.dark::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.22);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover,
+.dark::-webkit-scrollbar-thumb:hover {
+  background-color: #f97316; /* Theme orange-500 */
+}
+
+.dark ::-webkit-scrollbar-thumb:active,
+.dark::-webkit-scrollbar-thumb:active {
+  background-color: #ea580c; /* Theme orange-600 */
+}
+
+/* Scrollbar Utility Classes */
+@layer utilities {
+  /* Completely hide scrollbars while retaining scrolling ability */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  /* Ultra-sleek compact scrollbar (5px) for tight widgets/drawers */
+  .custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(156, 163, 175, 0.35) transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background-color: rgba(156, 163, 175, 0.35);
+    border-radius: 9999px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background-color: #ea580c;
+  }
+
+  .dark .custom-scrollbar {
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+  }
+  .dark .custom-scrollbar::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.2);
+  }
+  .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background-color: #f97316;
+  }
+
+  /* Theme orange scrollbar by default */
+  .scrollbar-orange::-webkit-scrollbar-thumb {
+    background-color: rgba(234, 88, 12, 0.6);
+  }
+  .scrollbar-orange::-webkit-scrollbar-thumb:hover {
+    background-color: #ea580c;
+  }
+  .dark .scrollbar-orange::-webkit-scrollbar-thumb {
+    background-color: rgba(249, 115, 22, 0.6);
+  }
+  .dark .scrollbar-orange::-webkit-scrollbar-thumb:hover {
+    background-color: #f97316;
+  }
+}

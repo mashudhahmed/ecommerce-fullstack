@@ -115,7 +115,7 @@ export function VendorChatDrawer({
       </div>
 
       {/* Message List */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-muted/10">
+      <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-3 bg-muted/10">
         {isLoading ? (
           <div className="flex h-full items-center justify-center text-muted-foreground">
             <Loader2 className="h-6 w-6 animate-spin" />

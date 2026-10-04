@@ -175,7 +175,7 @@ export default function AdminLayout({
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 p-2 space-y-4 overflow-y-auto">
+        <nav className="flex-1 p-2 space-y-4 overflow-y-auto custom-scrollbar">
           {/* Store Operations */}
           <div>
             {!isCollapsed && (

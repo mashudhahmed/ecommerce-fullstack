@@ -116,7 +116,7 @@ export function ReviewList({ productId }: ReviewListProps) {
             <p className="text-sm leading-relaxed">{review.comment}</p>
 
             {review.images && review.images.length > 0 && (
-              <div className="flex gap-2 pt-1 overflow-x-auto">
+              <div className="flex gap-2 pt-1 overflow-x-auto custom-scrollbar pb-1">
                 {review.images.map((img, idx) => (
                   <div key={idx} className="relative h-16 w-16 rounded-md overflow-hidden border shrink-0 bg-muted/20">
                     <Image src={img} alt="Customer photo" fill className="object-cover" />

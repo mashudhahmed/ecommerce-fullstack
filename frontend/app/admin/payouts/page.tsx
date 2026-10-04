@@ -130,7 +130,7 @@ export default function AdminPayoutsPage() {
 
       {/* Filter Bar */}
       <div className="flex flex-col md:flex-row gap-4 items-center justify-between bg-card p-3 rounded-2xl border border-border">
-        <div className="flex items-center gap-1.5 overflow-x-auto w-full md:w-auto pb-1 md:pb-0">
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar w-full md:w-auto pb-1 md:pb-0">
           {[
             { id: 'all', label: 'All Requests' },
             { id: 'pending', label: 'Pending Approval' },

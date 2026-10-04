@@ -473,7 +473,7 @@ export function Header() {
                       </div>
                     ) : (
                       <>
-                        <div className="max-h-72 divide-y divide-border overflow-y-auto p-2">
+                        <div className="max-h-72 divide-y divide-border overflow-y-auto custom-scrollbar p-2">
                           {cartItems.map((item) => (
                             <div key={item.id} className="flex items-center gap-3 p-2">
                               <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-muted/20">
@@ -597,7 +597,7 @@ export function Header() {
                     </div>
                   </div>
 
-                  <div className="max-h-80 overflow-y-auto">
+                  <div className="max-h-80 overflow-y-auto custom-scrollbar">
                     {isLoadingNotifications && notifications.length === 0 ? (
                       <div className="space-y-3 p-4">
                         {[...Array(3)].map((_, i) => (

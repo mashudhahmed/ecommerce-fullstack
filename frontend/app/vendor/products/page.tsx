@@ -99,7 +99,7 @@ export default function VendorProductsPage() {
               <DialogHeader className="p-6 pb-4 border-b shrink-0">
                 <DialogTitle>{editingProduct ? 'Edit Product' : 'Add Product'}</DialogTitle>
               </DialogHeader>
-              <div className="flex-1 overflow-y-auto p-6">
+              <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
                 <ProductForm
                   product={editingProduct}
                   onSuccess={() => {

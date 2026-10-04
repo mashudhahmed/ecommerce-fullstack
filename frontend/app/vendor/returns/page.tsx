@@ -161,7 +161,7 @@ export default function VendorReturnsPage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto">
+        <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto no-scrollbar">
           {['all', 'pending', 'refunded', 'rejected'].map((st) => (
             <Button
               key={st}

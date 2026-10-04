@@ -402,7 +402,7 @@ function ProductDetailPageContent({ id }: { id: number }) {
 
             {/* Thumbnails */}
             {images.length > 1 && (
-              <div className="flex gap-3 overflow-x-auto pb-1" role="tablist" aria-label="Product images">
+              <div className="flex gap-3 overflow-x-auto custom-scrollbar pb-1" role="tablist" aria-label="Product images">
                 {images.map((img: string, index: number) => (
                   <button
                     key={index}

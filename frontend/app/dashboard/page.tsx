@@ -90,7 +90,7 @@ export default function DashboardPage() {
   }, [products]);
 
   // Show loading while auth checks or if staff redirecting
-  if (authLoading || (user?.role && user.role !== 'customer' && user.role !== 'user')) {
+  if (authLoading || (user?.role && user.role !== 'user')) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
         <div className="flex flex-col items-center gap-3">

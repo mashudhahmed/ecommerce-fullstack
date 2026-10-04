@@ -174,8 +174,12 @@ export const authService = {
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
     try {
       const response = await apiClient.post('/auth/login', credentials);
-      const data = unwrapData<BackendAuthResponse>(response.data);
+      const data = unwrapData<BackendAuthResponse & { tokens?: { accessToken: string } }>(response.data);
       
+      if (typeof window !== 'undefined' && data?.tokens?.accessToken) {
+        localStorage.setItem('access_token', data.tokens.accessToken);
+      }
+
       return {
         message: data.message,
         user: createUser(data.user),
@@ -341,6 +345,9 @@ export const authService = {
 
   async logout(): Promise<{ message: string }> {
     try {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('access_token');
+      }
       const response = await apiClient.post('/auth/logout');
       return unwrapData(response.data);
     } catch {

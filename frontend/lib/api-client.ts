@@ -70,6 +70,12 @@ class ApiClient {
   private setupInterceptors() {
     this.instance.interceptors.request.use(
       (config) => {
+        if (typeof window !== 'undefined') {
+          const token = localStorage.getItem('access_token');
+          if (token && !config.headers['Authorization']) {
+            config.headers['Authorization'] = `Bearer ${token}`;
+          }
+        }
         if (config.url?.includes('/orders') && config.method?.toLowerCase() === 'post') {
           if (!config.headers['idempotency-key']) {
             config.headers['idempotency-key'] = this.generateIdempotencyKey();

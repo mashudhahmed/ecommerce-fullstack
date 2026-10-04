@@ -43,6 +43,7 @@ export const useAuthStore = create<AuthState>()(
         set({ user: null, isAuthenticated: false });
         // ✅ Clear localStorage
         localStorage.removeItem('auth-storage');
+        localStorage.removeItem('access_token');
       },
     }),
     {

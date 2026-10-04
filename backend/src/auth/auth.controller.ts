@@ -82,7 +82,6 @@ export class AuthController {
       secure: isSecureEnvironment,
       sameSite,
       path: '/',
-      ...(isSecureEnvironment ? { partitioned: true } : {}),
     };
 
     res.cookie(ACCESS_COOKIE, tokens.accessToken, {
@@ -108,7 +107,6 @@ export class AuthController {
     const clearOpts = {
       secure: isSecureEnvironment,
       sameSite,
-      ...(isSecureEnvironment ? { partitioned: true } : {}),
     };
     res.clearCookie(ACCESS_COOKIE, { ...clearOpts, path: '/' });
     res.clearCookie(REFRESH_COOKIE, { ...clearOpts, path: REFRESH_COOKIE_PATH });
@@ -478,11 +476,8 @@ export class AuthController {
 
             this.setAuthCookies(res, result.tokens);
 
-            this.logger.log(
-              `✅ Google OAuth login successful for ${user.email} (ID: ${result.user?.id})`,
-            );
-
-            return safeRedirect(finalRedirectUrl);
+            const callbackUrl = `${targetOrigin}/auth/callback?token=${encodeURIComponent(result.tokens.accessToken)}&redirect=${encodeURIComponent(targetPath)}`;
+            return safeRedirect(callbackUrl);
           } catch (error: any) {
             this.logger.error(
               `❌ Google OAuth user validation error: ${error?.message || String(error)}`,
@@ -864,7 +859,11 @@ export class AuthController {
   ) {
     const result = await this.authService.login(dto, this.requestMeta(req));
     this.setAuthCookies(res, result.tokens);
-    return { message: result.message, user: result.user };
+    return {
+      message: result.message,
+      user: result.user,
+      tokens: result.tokens,
+    };
   }
 
   @SkipThrottle()

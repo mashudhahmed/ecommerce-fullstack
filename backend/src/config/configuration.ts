@@ -5,7 +5,10 @@ export default () => ({
       process.env.FRONTEND_URL || 'https://snapcart-fullstack.vercel.app',
     backendUrl:
       process.env.BACKEND_URL ||
-      `http://localhost:${process.env.PORT || '3001'}`,
+      process.env.RENDER_EXTERNAL_URL ||
+      (process.env.NODE_ENV === 'production' || Boolean(process.env.RENDER)
+        ? 'https://snapcart-backend-kaf4.onrender.com'
+        : `http://localhost:${process.env.PORT || '3001'}`),
   },
   port: parseInt(process.env.PORT || '3000', 10),
   database: {
@@ -76,6 +79,8 @@ export default () => ({
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
     callbackUrl:
       process.env.GOOGLE_CALLBACK_URL ||
-      'http://localhost:3001/api/v1/auth/google/callback',
+      (process.env.NODE_ENV === 'production' || Boolean(process.env.RENDER)
+        ? 'https://snapcart-backend-kaf4.onrender.com/api/v1/auth/google/callback'
+        : 'http://localhost:3001/api/v1/auth/google/callback'),
   },
 });

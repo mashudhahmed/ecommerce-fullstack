@@ -97,8 +97,14 @@ export function UserRegistrationForm() {
   const { register, registerLoading } = useAuth();
 
   const handleGoogleRegister = () => {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1';
-    window.location.href = `${apiUrl}/auth/google?redirect=${encodeURIComponent('/')}`;
+    const apiUrl =
+      process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1';
+    const origin =
+      typeof window !== 'undefined' && window.location.origin
+        ? window.location.origin
+        : '';
+    const originParam = origin ? `&origin=${encodeURIComponent(origin)}` : '';
+    window.location.href = `${apiUrl}/auth/google?redirect=${encodeURIComponent('/')}${originParam}`;
   };
 
   const [showPassword, setShowPassword] = useState(false);

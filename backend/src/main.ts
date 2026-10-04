@@ -24,6 +24,8 @@ async function bootstrap() {
     logger: ['error', 'warn', 'log', 'debug', 'verbose'],
   });
 
+  app.set('trust proxy', 1);
+
   app.use(cookieParser());
 
   const configService = app.get(ConfigService);

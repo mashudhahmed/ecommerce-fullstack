@@ -47,7 +47,10 @@ import {
   DisableTwoFactorDto,
 } from './dto/enable-2fa.dto';
 
-const isProd = process.env.NODE_ENV === 'production';
+const isProd =
+  process.env.NODE_ENV === 'production' ||
+  Boolean(process.env.RENDER) ||
+  Boolean(process.env.RENDER_EXTERNAL_URL);
 const ACCESS_COOKIE = 'access_token';
 const REFRESH_COOKIE = 'refresh_token';
 const REFRESH_COOKIE_PATH = '/api/v1/auth/refresh';
@@ -67,12 +70,19 @@ export class AuthController {
   // COOKIE HELPERS
   // ============================================================
   private setAuthCookies(res: Response, tokens: any) {
-    const sameSite: 'none' | 'lax' = isProd ? 'none' : 'lax';
+    const isSecureEnvironment =
+      isProd ||
+      Boolean(process.env.RENDER) ||
+      Boolean(process.env.RENDER_EXTERNAL_URL) ||
+      Boolean(process.env.DATABASE_URL?.includes('neon.tech'));
+
+    const sameSite: 'none' | 'lax' = isSecureEnvironment ? 'none' : 'lax';
     const baseOpts = {
       httpOnly: true,
-      secure: isProd,
+      secure: isSecureEnvironment,
       sameSite,
       path: '/',
+      ...(isSecureEnvironment ? { partitioned: true } : {}),
     };
 
     res.cookie(ACCESS_COOKIE, tokens.accessToken, {
@@ -88,10 +98,17 @@ export class AuthController {
   }
 
   private clearAuthCookies(res: Response) {
-    const sameSite: 'none' | 'lax' = isProd ? 'none' : 'lax';
+    const isSecureEnvironment =
+      isProd ||
+      Boolean(process.env.RENDER) ||
+      Boolean(process.env.RENDER_EXTERNAL_URL) ||
+      Boolean(process.env.DATABASE_URL?.includes('neon.tech'));
+
+    const sameSite: 'none' | 'lax' = isSecureEnvironment ? 'none' : 'lax';
     const clearOpts = {
-      secure: isProd,
+      secure: isSecureEnvironment,
       sameSite,
+      ...(isSecureEnvironment ? { partitioned: true } : {}),
     };
     res.clearCookie(ACCESS_COOKIE, { ...clearOpts, path: '/' });
     res.clearCookie(REFRESH_COOKIE, { ...clearOpts, path: REFRESH_COOKIE_PATH });
@@ -104,42 +121,90 @@ export class AuthController {
     };
   }
 
+  private resolveCallbackUrl(req: any): string {
+    // 1. Explicit configured environment variable
+    const configuredCallback = this.configService.get<string>(
+      'google.callbackUrl',
+    );
+    if (configuredCallback && !configuredCallback.includes('localhost')) {
+      return configuredCallback;
+    }
+
+    // 2. Dynamic host from reverse proxy (Cloudflare/Render sets x-forwarded-host and x-forwarded-proto)
+    const host = req.headers?.['x-forwarded-host'] || req.headers?.['host'];
+    const proto =
+      req.headers?.['x-forwarded-proto'] || (req.secure ? 'https' : 'http');
+    if (host && !host.includes('localhost') && !host.includes('127.0.0.1')) {
+      return `${proto}://${host}/api/v1/auth/google/callback`;
+    }
+
+    // 3. Fallback for production or Render
+    if (isProd || Boolean(process.env.RENDER)) {
+      return 'https://snapcart-backend-kaf4.onrender.com/api/v1/auth/google/callback';
+    }
+
+    // 4. Local development
+    return (
+      configuredCallback || 'http://localhost:3001/api/v1/auth/google/callback'
+    );
+  }
+
   private resolveFrontendUrl(req: any): string {
     // 1. Explicit query origin (sent from frontend)
     const queryOrigin = req.query?.origin || req.query?.frontendUrl;
-    if (
-      queryOrigin &&
-      typeof queryOrigin === 'string' &&
-      !queryOrigin.includes('localhost')
-    ) {
-      return queryOrigin.replace(/\/$/, '');
+    if (queryOrigin && typeof queryOrigin === 'string') {
+      const clean = queryOrigin.trim().replace(/\/+$/, '');
+      if (
+        clean.includes('vercel.app') ||
+        (!isProd && clean.includes('localhost'))
+      ) {
+        return clean;
+      }
     }
 
     // 2. Referer or Origin headers
     const origin = req.headers?.['origin'] as string;
     const referer = req.headers?.['referer'] as string;
 
-    if (origin && !origin.includes('localhost')) {
-      return origin.replace(/\/$/, '');
+    if (origin) {
+      const clean = origin.trim().replace(/\/+$/, '');
+      if (
+        clean.includes('vercel.app') ||
+        (!isProd && clean.includes('localhost'))
+      ) {
+        return clean;
+      }
     }
 
     if (referer) {
       try {
         const parsed = new URL(referer);
-        if (!parsed.hostname.includes('localhost')) {
-          return `${parsed.protocol}//${parsed.host}`;
+        const refOrigin = `${parsed.protocol}//${parsed.host}`;
+        if (
+          refOrigin.includes('vercel.app') ||
+          (!isProd && refOrigin.includes('localhost'))
+        ) {
+          return refOrigin;
         }
       } catch {}
     }
 
     // 3. Configured frontend URL
     const configured = this.configService.get<string>('app.frontendUrl');
-    if (configured && !configured.includes('localhost')) {
-      return configured.replace(/\/$/, '');
+    if (configured) {
+      const clean = configured.trim().replace(/\/+$/, '');
+      if (
+        clean.includes('vercel.app') ||
+        (!isProd && clean.includes('localhost'))
+      ) {
+        return clean;
+      }
     }
 
     // 4. Default to live Vercel production deployment
-    return 'https://snapcart-fullstack.vercel.app';
+    return isProd
+      ? 'https://snapcart-fullstack.vercel.app'
+      : 'http://localhost:3000';
   }
 
   // ============================================================
@@ -208,12 +273,21 @@ export class AuthController {
       return;
     }
 
+    const callbackURL = this.resolveCallbackUrl(req);
+    this.logger.log(
+      `Initiating Google OAuth login with callbackURL: ${callbackURL}`,
+    );
+
     return (passport.authenticate('google', {
       scope: ['email', 'profile'],
       state: statePayload,
       prompt: 'select_account',
-    }) as any)(req, res, (err: any) => {
+      callbackURL,
+    } as any) as any)(req, res, (err: any) => {
       if (err) {
+        this.logger.error(
+          `❌ Google OAuth initiation failed: ${err?.message || err}`,
+        );
         return res.redirect(`${frontendUrl}/login?error=google_auth_failed`);
       }
     });
@@ -295,8 +369,14 @@ export class AuthController {
         const decoded = JSON.parse(
           Buffer.from(state, 'base64url').toString('utf8'),
         );
-        if (decoded.origin && !decoded.origin.includes('localhost')) {
-          targetOrigin = decoded.origin;
+        if (decoded.origin) {
+          const cleanOrigin = decoded.origin.trim().replace(/\/+$/, '');
+          if (
+            cleanOrigin.includes('vercel.app') ||
+            (!isProd && cleanOrigin.includes('localhost'))
+          ) {
+            targetOrigin = cleanOrigin;
+          }
         }
         if (decoded.path && decoded.path.startsWith('/')) {
           targetPath = decoded.path;
@@ -308,9 +388,13 @@ export class AuthController {
       }
     }
 
-    if (targetOrigin.includes('localhost')) {
+    if (isProd && targetOrigin.includes('localhost')) {
       targetOrigin = 'https://snapcart-fullstack.vercel.app';
     }
+
+    targetOrigin = targetOrigin.replace(/\/+$/, '');
+    targetPath = targetPath.startsWith('/') ? targetPath : `/${targetPath}`;
+    const finalRedirectUrl = `${targetOrigin}${targetPath}`;
 
     if (oauthError) {
       const errParam =
@@ -332,6 +416,11 @@ export class AuthController {
       return res.redirect(`${targetOrigin}/login?error=google_not_configured`);
     }
 
+    const callbackURL = this.resolveCallbackUrl(req);
+    this.logger.log(
+      `Exchanging Google OAuth code with callbackURL: ${callbackURL}`,
+    );
+
     return new Promise<void>((resolve) => {
       let isSettled = false;
       const safeRedirect = (url: string) => {
@@ -344,7 +433,7 @@ export class AuthController {
 
       (passport.authenticate(
         'google',
-        { session: false },
+        { session: false, callbackURL } as any,
         async (err: any, user: any) => {
           if (isSettled || res.headersSent) {
             return resolve();
@@ -371,7 +460,7 @@ export class AuthController {
               `✅ Google OAuth login successful for ${user.email} (ID: ${result.user?.id})`,
             );
 
-            return safeRedirect(`${targetOrigin}${targetPath}`);
+            return safeRedirect(finalRedirectUrl);
           } catch (error: any) {
             this.logger.error(
               `❌ Google OAuth user validation error: ${error?.message || String(error)}`,

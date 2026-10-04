@@ -6,6 +6,14 @@ import { ConfigService } from '@nestjs/config';
 @Injectable()
 export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
   constructor(private readonly configService: ConfigService) {
+    const isProd =
+      process.env.NODE_ENV === 'production' ||
+      Boolean(process.env.RENDER) ||
+      Boolean(process.env.RENDER_EXTERNAL_URL);
+    const defaultCallback = isProd
+      ? 'https://snapcart-backend-kaf4.onrender.com/api/v1/auth/google/callback'
+      : 'http://localhost:3001/api/v1/auth/google/callback';
+
     super({
       clientID:
         configService.get<string>('google.clientId') ||
@@ -14,8 +22,7 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
         configService.get<string>('google.clientSecret') ||
         'google-client-secret-unconfigured',
       callbackURL:
-        configService.get<string>('google.callbackUrl') ||
-        'http://localhost:3001/api/v1/auth/google/callback',
+        configService.get<string>('google.callbackUrl') || defaultCallback,
       scope: ['email', 'profile'],
     });
   }

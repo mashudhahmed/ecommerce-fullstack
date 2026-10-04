@@ -8,6 +8,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
+import { OrderStatusBadge } from '@/components/orders/OrderStatusBadge';
 import { Button } from '@/components/ui/button';
 import { 
   Package, 
@@ -346,9 +347,7 @@ export default function VendorDashboardPage() {
                   </div>
                   <div className="flex items-center gap-4">
                     <span className="font-semibold">{formatPrice(order.total)}</span>
-                    <Badge variant={order.status === 'delivered' ? 'default' : 'secondary'}>
-                      {order.status}
-                    </Badge>
+                    <OrderStatusBadge status={order.status as any} size="sm" />
                     <Button
                       variant="ghost"
                       size="icon"

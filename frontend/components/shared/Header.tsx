@@ -23,6 +23,7 @@ import {
   Plus,
   Minus,
   Trash2,
+  LayoutDashboard,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -753,6 +754,13 @@ export function Header() {
                   {/* ✅ Customer Account Navigation (Only shown for regular customers) */}
                   {!isAdminOrSuperAdmin && (
                     <>
+                      <DropdownMenuItem asChild>
+                        <Link href="/dashboard" className="flex cursor-pointer items-center gap-2">
+                          <LayoutDashboard className="h-4 w-4 text-orange-600" />
+                          Account Dashboard
+                        </Link>
+                      </DropdownMenuItem>
+
                       <DropdownMenuItem asChild>
                         <Link href="/profile" className="flex cursor-pointer items-center gap-2">
                           <User className="h-4 w-4" />

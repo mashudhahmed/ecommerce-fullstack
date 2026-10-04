@@ -15,7 +15,24 @@ import { parse } from 'cookie';
 
 @WebSocketGateway({
   cors: {
-    origin: '*',
+    origin: (
+      origin: string | undefined,
+      callback: (err: Error | null, allow?: boolean) => void,
+    ) => {
+      if (!origin) {
+        return callback(null, true);
+      }
+      const normalized = origin.trim().replace(/\/+$/, '');
+      const isAllowed =
+        normalized === 'https://snapcart-fullstack.vercel.app' ||
+        /\.vercel\.app$/.test(normalized) ||
+        /^https?:\/\/(localhost|127\.0\.0\.1)(:[0-9]+)?$/.test(normalized) ||
+        (process.env.CORS_ORIGIN &&
+          process.env.CORS_ORIGIN.split(',')
+            .map((o) => o.trim().replace(/\/+$/, ''))
+            .includes(normalized));
+      callback(null, Boolean(isAllowed));
+    },
     credentials: true,
   },
   namespace: '/',

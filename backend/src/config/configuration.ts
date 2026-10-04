@@ -42,8 +42,16 @@ export default () => ({
     adminEmails: process.env.ADMIN_NOTIFICATION_EMAILS,
   },
   cors: {
-    origin: process.env.CORS_ORIGIN?.split(',') || [
+    origin: [
       'https://snapcart-fullstack.vercel.app',
+      ...(process.env.FRONTEND_URL
+        ? [process.env.FRONTEND_URL.trim().replace(/\/+$/, '')]
+        : []),
+      ...(process.env.CORS_ORIGIN
+        ? process.env.CORS_ORIGIN.split(',')
+            .map((o) => o.trim().replace(/\/+$/, ''))
+            .filter(Boolean)
+        : []),
       'http://localhost:3000',
       'http://localhost:3001',
       'http://localhost:3002',

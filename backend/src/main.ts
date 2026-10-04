@@ -66,25 +66,62 @@ async function bootstrap() {
     }),
   );
 
-  // CORS
-  const corsOrigin = configService.get<string | string[]>('cors.origin') || [
+  // Dynamic CORS configuration supporting multiple origins, subdomains, and stripping trailing slashes
+  const rawCorsOrigins =
+    configService.get<string[] | string>('cors.origin') || [];
+  const configuredOrigins = (
+    Array.isArray(rawCorsOrigins) ? rawCorsOrigins : [rawCorsOrigins]
+  )
+    .map((o) => (typeof o === 'string' ? o.trim().replace(/\/+$/, '') : ''))
+    .filter(Boolean);
+
+  const defaultOrigins = [
+    'https://snapcart-fullstack.vercel.app',
     'http://localhost:3000',
+    'http://localhost:3001',
+    'http://localhost:3002',
   ];
+
+  const allowedOriginsSet = new Set([...defaultOrigins, ...configuredOrigins]);
+
   app.enableCors({
-    origin: corsOrigin,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: [
-      'Content-Type',
-      'Authorization',
-      'Accept',
-      'X-Requested-With',
-      'Origin',
+    origin: (origin, callback) => {
+      // Allow requests with no origin (e.g. mobile apps, curl, server-to-server)
+      if (!origin) {
+        return callback(null, true);
+      }
+
+      const normalizedOrigin = origin.trim().replace(/\/+$/, '');
+
+      // Check configured origins
+      if (allowedOriginsSet.has(normalizedOrigin)) {
+        return callback(null, true);
+      }
+
+      // Allow any Vercel domain (*.vercel.app)
+      if (/^https:\/\/[a-zA-Z0-9_\-]+\.vercel\.app$/.test(normalizedOrigin)) {
+        return callback(null, true);
+      }
+
+      // Allow localhost with any port
+      if (
+        /^https?:\/\/(localhost|127\.0\.0\.1)(:[0-9]+)?$/.test(normalizedOrigin)
+      ) {
+        return callback(null, true);
+      }
+
+      logger.warn(`CORS rejected for origin: ${origin}`);
+      return callback(null, false);
+    },
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'],
+    credentials: true,
+    exposedHeaders: [
       'idempotency-key',
       'Idempotency-Key',
+      'Content-Range',
+      'X-Total-Count',
     ],
-    exposedHeaders: ['idempotency-key', 'Idempotency-Key'],
-    credentials: true,
-    maxAge: 3600,
+    maxAge: 86400,
   });
 
   // API prefix

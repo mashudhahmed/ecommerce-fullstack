@@ -99,7 +99,7 @@ export const reviewsService = {
       formData.append('images', file);
     });
 
-    const { data } = await apiClient.post<ApiResponse<{ urls: string[] }>>(
+    const res = await apiClient.post<any>(
       '/files/upload-multiple',
       formData,
       {
@@ -108,7 +108,7 @@ export const reviewsService = {
         },
       }
     );
-    return data.data.urls;
+    return res.data?.data?.urls || res.data?.urls || [];
   },
 
   async updateReview(

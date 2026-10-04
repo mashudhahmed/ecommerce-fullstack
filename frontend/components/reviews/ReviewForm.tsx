@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { useDropzone } from 'react-dropzone';
 import Image from 'next/image';
 import { useReviews } from '@/hooks/useReviews';
+import { reviewsService } from '@/services/reviews.service';
 import { Button } from '@/components/ui/button';
 import {
   Form,
@@ -102,53 +103,21 @@ export function ReviewForm({ productId, onSuccess, initialData }: ReviewFormProp
     if (newImageFiles.length === 0) return uploadedImages;
 
     setIsUploading(true);
-    setUploadProgress(0);
+    setUploadProgress(15);
 
     try {
-      const formData = new FormData();
-      newImageFiles.forEach((file) => {
-        formData.append('images', file);
-      });
+      const interval = setInterval(() => {
+        setUploadProgress((prev) => (prev >= 85 ? 85 : prev + 15));
+      }, 150);
 
-      // Use the existing review endpoint with multipart
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1';
-      
-      const xhr = new XMLHttpRequest();
-      
-      const uploadPromise = new Promise<string[]>((resolve, reject) => {
-        xhr.upload.addEventListener('progress', (e) => {
-          if (e.lengthComputable) {
-            const progress = Math.round((e.loaded / e.total) * 100);
-            setUploadProgress(progress);
-          }
-        });
+      const imageUrls = await reviewsService.uploadReviewImages(newImageFiles);
+      clearInterval(interval);
+      setUploadProgress(100);
 
-        xhr.onload = () => {
-          if (xhr.status === 201 || xhr.status === 200) {
-            const response = JSON.parse(xhr.responseText);
-            const imageUrls = response.data?.images || response.images || [];
-            const allImages = [...uploadedImages, ...imageUrls];
-            resolve(allImages);
-          } else {
-            reject(new Error('Upload failed'));
-          }
-        };
-
-        xhr.onerror = () => reject(new Error('Network error'));
-
-        // For new review, we need to create the review first then add images
-        // For simplicity, we'll return the uploaded URLs
-        // The actual review creation will be handled by the backend
-        const url = `${apiUrl}/files/upload`;
-        xhr.open('POST', url);
-        xhr.withCredentials = true;
-        xhr.send(formData);
-      });
-
-      const results = await uploadPromise;
-      return results;
+      const allImages = [...uploadedImages, ...imageUrls];
+      return allImages;
     } catch (error: any) {
-      toast.error(`Failed to upload images: ${error.message}`);
+      toast.error(`Failed to upload images: ${error?.message || 'Upload failed'}`);
       return uploadedImages;
     } finally {
       setIsUploading(false);

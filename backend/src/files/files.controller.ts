@@ -4,10 +4,11 @@ import {
   Post,
   UseInterceptors,
   UploadedFile,
+  UploadedFiles,
   BadRequestException,
   UseGuards,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor, AnyFilesInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiBearerAuth, ApiConsumes, ApiBody } from '@nestjs/swagger';
 import { FilesService } from './files.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -43,6 +44,36 @@ export class FilesController {
       url: result.url,
       filename: result.filename,
       publicId: result.publicId,
+    };
+  }
+
+  @Post('upload-multiple')
+  @UseInterceptors(AnyFilesInterceptor())
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        images: {
+          type: 'array',
+          items: {
+            type: 'string',
+            format: 'binary',
+          },
+        },
+      },
+    },
+  })
+  async uploadMultipleFiles(@UploadedFiles() files: MulterFile[]) {
+    if (!files || files.length === 0) {
+      throw new BadRequestException('No files uploaded');
+    }
+    const results = await Promise.all(
+      files.map((file) => this.filesService.uploadFile(file, { folder: 'snapcart/reviews' })),
+    );
+    return {
+      urls: results.map((r) => r.url),
+      files: results,
     };
   }
 }

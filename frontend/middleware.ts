@@ -97,27 +97,10 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // ✅ Check for session cookie (set by backend after login)
-  const accessToken = request.cookies.get('access_token')?.value;
-  const isAuthenticated = !!accessToken;
-
-  // ✅ If authenticated and trying to access auth pages, redirect to home
-  if (isAuthenticated && isAuthRoute(pathname)) {
-    return NextResponse.redirect(new URL('/', request.url));
-  }
-
-  // ✅ If not authenticated and trying to access protected routes, redirect to login
-  if (!isAuthenticated && isProtectedRoute(pathname)) {
-    const loginUrl = new URL('/login', request.url);
-    loginUrl.searchParams.set('redirect', pathname);
-    return NextResponse.redirect(loginUrl);
-  }
-
-  // ✅ If authenticated and trying to access admin routes, check role via API
-  // We'll let the client-side handle admin authorization
-  // The backend will enforce proper role checks
-
-  // ✅ For all other cases, proceed
+  // Note: The frontend (Vercel) and backend API (Render) are hosted on separate domains.
+  // HttpOnly session cookies from Render are cross-origin and never sent to Vercel Edge runtime.
+  // Protected route authorization and role-based access control are enforced on the client side
+  // via layout guards (AdminLayout, VendorLayout, ProfilePage, etc.) and backed by API JWT checks.
   return NextResponse.next();
 }
 

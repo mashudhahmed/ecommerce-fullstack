@@ -84,7 +84,7 @@ export function useAuth() {
         return null;
       }
     },
-    enabled: isHydrated && !storeIsAuthenticated,
+    enabled: isHydrated,
     retry: 1,
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
@@ -101,17 +101,29 @@ export function useAuth() {
       setUser(userData);
       setAuthenticated(true);
       setLoading(false);
-    }
-  }, [userData, setUser, setAuthenticated, setLoading]);
-
-  useEffect(() => {
-    if (!isUserLoading && userData === undefined && isHydrated && !storeIsAuthenticated) {
-      console.log('No user found, clearing store');
+    } else if (userData === null && !isUserLoading) {
+      console.log('No user session found, clearing store');
       setUser(null);
       setAuthenticated(false);
       setLoading(false);
     }
-  }, [isUserLoading, userData, isHydrated, storeIsAuthenticated, setUser, setAuthenticated, setLoading]);
+  }, [userData, isUserLoading, setUser, setAuthenticated, setLoading]);
+
+  useEffect(() => {
+    if (!isUserLoading && isHydrated) {
+      setLoading(false);
+    }
+  }, [isUserLoading, isHydrated, setLoading]);
+
+  // Safety fallback timeout: ensure loading state is never indefinitely stuck
+  useEffect(() => {
+    if (isHydrated) {
+      const timer = setTimeout(() => {
+        setLoading(false);
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [isHydrated, setLoading]);
 
   // ============================================================
   // LOGIN MUTATION

@@ -176,7 +176,8 @@ export class AuthController {
       const clean = queryOrigin.trim().replace(/\/+$/, '');
       if (
         clean.includes('vercel.app') ||
-        (!isProd && clean.includes('localhost'))
+        clean.includes('localhost') ||
+        clean.includes('127.0.0.1')
       ) {
         return clean;
       }
@@ -190,7 +191,8 @@ export class AuthController {
       const clean = origin.trim().replace(/\/+$/, '');
       if (
         clean.includes('vercel.app') ||
-        (!isProd && clean.includes('localhost'))
+        clean.includes('localhost') ||
+        clean.includes('127.0.0.1')
       ) {
         return clean;
       }
@@ -202,7 +204,8 @@ export class AuthController {
         const refOrigin = `${parsed.protocol}//${parsed.host}`;
         if (
           refOrigin.includes('vercel.app') ||
-          (!isProd && refOrigin.includes('localhost'))
+          refOrigin.includes('localhost') ||
+          refOrigin.includes('127.0.0.1')
         ) {
           return refOrigin;
         }
@@ -215,7 +218,8 @@ export class AuthController {
       const clean = configured.trim().replace(/\/+$/, '');
       if (
         clean.includes('vercel.app') ||
-        (!isProd && clean.includes('localhost'))
+        clean.includes('localhost') ||
+        clean.includes('127.0.0.1')
       ) {
         return clean;
       }
@@ -393,7 +397,8 @@ export class AuthController {
           const cleanOrigin = decoded.origin.trim().replace(/\/+$/, '');
           if (
             cleanOrigin.includes('vercel.app') ||
-            (!isProd && cleanOrigin.includes('localhost'))
+            cleanOrigin.includes('localhost') ||
+            cleanOrigin.includes('127.0.0.1')
           ) {
             targetOrigin = cleanOrigin;
           }
@@ -406,10 +411,6 @@ export class AuthController {
           targetPath = state;
         }
       }
-    }
-
-    if (isProd && targetOrigin.includes('localhost')) {
-      targetOrigin = 'https://snapcart-fullstack.vercel.app';
     }
 
     targetOrigin = targetOrigin.replace(/\/+$/, '');

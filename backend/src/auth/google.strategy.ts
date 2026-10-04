@@ -14,6 +14,12 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
       ? 'https://snapcart-backend-kaf4.onrender.com/api/v1/auth/google/callback'
       : 'http://localhost:3001/api/v1/auth/google/callback';
 
+    const configuredCallback = configService.get<string>('google.callbackUrl');
+    const validCallback =
+      configuredCallback && !configuredCallback.includes('vercel.app')
+        ? configuredCallback
+        : defaultCallback;
+
     super({
       clientID:
         configService.get<string>('google.clientId') ||
@@ -21,8 +27,7 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
       clientSecret:
         configService.get<string>('google.clientSecret') ||
         'google-client-secret-unconfigured',
-      callbackURL:
-        configService.get<string>('google.callbackUrl') || defaultCallback,
+      callbackURL: validCallback,
       scope: ['email', 'profile'],
     });
   }

@@ -4,7 +4,10 @@ export default () => ({
     frontendUrl:
       process.env.FRONTEND_URL || 'https://snapcart-fullstack.vercel.app',
     backendUrl:
-      process.env.BACKEND_URL ||
+      (process.env.BACKEND_URL &&
+      !process.env.BACKEND_URL.includes('vercel.app')
+        ? process.env.BACKEND_URL.trim().replace(/\/+$/, '')
+        : null) ||
       process.env.RENDER_EXTERNAL_URL ||
       (process.env.NODE_ENV === 'production' || Boolean(process.env.RENDER)
         ? 'https://snapcart-backend-kaf4.onrender.com'
@@ -78,7 +81,10 @@ export default () => ({
     clientId: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
     callbackUrl:
-      process.env.GOOGLE_CALLBACK_URL ||
+      (process.env.GOOGLE_CALLBACK_URL &&
+      !process.env.GOOGLE_CALLBACK_URL.includes('vercel.app')
+        ? process.env.GOOGLE_CALLBACK_URL.trim()
+        : null) ||
       (process.env.NODE_ENV === 'production' || Boolean(process.env.RENDER)
         ? 'https://snapcart-backend-kaf4.onrender.com/api/v1/auth/google/callback'
         : 'http://localhost:3001/api/v1/auth/google/callback'),

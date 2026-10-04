@@ -123,19 +123,43 @@ export class AuthController {
 
   private resolveCallbackUrl(req: any): string {
     // 1. Explicit configured environment variable
-    const configuredCallback = this.configService.get<string>(
+    let configuredCallback = this.configService.get<string>(
       'google.callbackUrl',
     );
-    if (configuredCallback && !configuredCallback.includes('localhost')) {
-      return configuredCallback;
+
+    // If configuredCallback points to Vercel (frontend) or localhost in production, discard it
+    if (
+      configuredCallback &&
+      (configuredCallback.includes('vercel.app') ||
+        (isProd && configuredCallback.includes('localhost')))
+    ) {
+      this.logger.warn(
+        `⚠️ Invalid GOOGLE_CALLBACK_URL configured (${configuredCallback}): points to frontend/localhost. Overriding with backend URL.`,
+      );
+      configuredCallback = undefined;
+    }
+
+    if (configuredCallback) {
+      let clean = configuredCallback.trim();
+      if (isProd && clean.startsWith('http://')) {
+        clean = clean.replace('http://', 'https://');
+      }
+      clean = clean.replace(/([^:]\/)\/+/g, '$1');
+      return clean;
     }
 
     // 2. Dynamic host from reverse proxy (Cloudflare/Render sets x-forwarded-host and x-forwarded-proto)
     const host = req.headers?.['x-forwarded-host'] || req.headers?.['host'];
     const proto =
       req.headers?.['x-forwarded-proto'] || (req.secure ? 'https' : 'http');
-    if (host && !host.includes('localhost') && !host.includes('127.0.0.1')) {
-      return `${proto}://${host}/api/v1/auth/google/callback`;
+    if (
+      host &&
+      !host.includes('localhost') &&
+      !host.includes('127.0.0.1') &&
+      !host.includes('vercel.app')
+    ) {
+      const cleanProto = isProd ? 'https' : proto;
+      return `${cleanProto}://${host}/api/v1/auth/google/callback`;
     }
 
     // 3. Fallback for production or Render
@@ -144,9 +168,7 @@ export class AuthController {
     }
 
     // 4. Local development
-    return (
-      configuredCallback || 'http://localhost:3001/api/v1/auth/google/callback'
-    );
+    return 'http://localhost:3001/api/v1/auth/google/callback';
   }
 
   private resolveFrontendUrl(req: any): string {

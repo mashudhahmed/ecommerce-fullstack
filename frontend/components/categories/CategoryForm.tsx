@@ -151,10 +151,8 @@ export function CategoryForm({ category, onSuccess, onCancel }: CategoryFormProp
 
       if (category) {
         await updateCategory({ id: category.id, data: categoryData });
-        toast.success('Category updated successfully');
       } else {
         await createCategory(categoryData);
-        toast.success('Category created successfully');
       }
 
       form.reset();
@@ -162,7 +160,10 @@ export function CategoryForm({ category, onSuccess, onCancel }: CategoryFormProp
       setImagePreview('');
       onSuccess?.();
     } catch (error: any) {
-      toast.error(error?.message || 'Failed to save category');
+      // Image upload errors happen before mutation; mutation errors handled centrally in hook
+      if (uploadProgress < 100) {
+        toast.error(error?.message || 'Failed to upload category image');
+      }
     } finally {
       setUploading(false);
       setUploadProgress(0);

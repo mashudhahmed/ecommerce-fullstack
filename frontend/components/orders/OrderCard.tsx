@@ -8,7 +8,6 @@ import { Button } from '@/components/ui/button';
 import { OrderStatusBadge } from '@/components/orders/OrderStatusBadge';
 import { formatPrice, formatDate } from '@/lib/utils';
 import { useOrders } from '@/hooks/useOrders';
-import { toast } from 'sonner';
 import { Eye, ChevronRight } from 'lucide-react';
 import { useMemo } from 'react';
 
@@ -27,9 +26,8 @@ export function OrderCard({ order, viewMode = 'list', onViewDetails }: OrderCard
     if (!confirm('Are you sure you want to cancel this order?')) return;
     try {
       await cancelOrder(order.id);
-      toast.success('Order cancelled successfully');
-    } catch (error: any) {
-      toast.error(error?.message || 'Failed to cancel order');
+    } catch {
+      // Handled centrally in useOrders hook
     }
   };
 

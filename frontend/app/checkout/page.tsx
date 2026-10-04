@@ -154,11 +154,7 @@ export default function CheckoutPage() {
     } catch (error: any) {
       isOrderPlacedRef.current = false;
       setIsPlacing(false);
-      const message =
-        error?.response?.data?.message ||
-        error?.message ||
-        'Failed to place order. Please try again.';
-      toast.error(message);
+      // Error toast handled centrally in useOrders hook
     }
   };
 

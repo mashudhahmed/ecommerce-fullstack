@@ -47,10 +47,6 @@ export function useVendor() {
     mutationFn: vendorService.bulkUploadProducts,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['vendor', 'products'] });
-      toast.success('Products uploaded successfully');
-    },
-    onError: (error: any) => {
-      toast.error(error?.message || 'Failed to upload products');
     },
   });
 

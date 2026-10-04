@@ -39,9 +39,9 @@ export function useAdmin() {
   const updateOrderStatusMutation = useMutation({
     mutationFn: ({ id, status }: { id: number; status: string }) =>
       adminService.updateOrderStatus(id, status),
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'orders'] });
-      toast.success('Order status updated successfully');
+      toast.success(`Order #${variables.id} status updated to ${variables.status}`);
     },
     onError: (error: any) => {
       toast.error(error?.response?.data?.message || 'Failed to update order status');

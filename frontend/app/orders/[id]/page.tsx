@@ -188,11 +188,10 @@ export default function OrderDetailPage() {
         ? `${cancelReason}: ${cancelNotes.trim()}`
         : cancelReason;
       await cancelOrder(orderId, fullReason);
-      toast.success('Order cancelled successfully. Any locked funds will be refunded.');
       setIsCancelModalOpen(false);
       refetch();
-    } catch (error: any) {
-      toast.error(error?.message || 'Failed to cancel order');
+    } catch {
+      // Handled centrally in useOrders hook
     }
   };
 

@@ -19,7 +19,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { formatPrice, formatDate } from '@/lib/utils';
-import { toast } from 'sonner';
 import { useMemo, useState } from 'react';
 import type { Order } from '@/types';
 
@@ -52,9 +51,8 @@ export default function AdminOrdersPage() {
     try {
       setUpdatingId(orderId);
       await updateOrderStatus({ id: orderId, status });
-      toast.success(`Order #${orderId} status updated to ${status}`);
-    } catch (error: any) {
-      toast.error(error?.message || 'Failed to update order status');
+    } catch {
+      // Handled centrally in useAdmin hook
     } finally {
       setUpdatingId(null);
     }

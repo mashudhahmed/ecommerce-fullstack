@@ -26,7 +26,6 @@ import Link from 'next/link';
 import { formatPrice } from '@/lib/utils';
 import { Plus, Pencil, Trash2, Upload, FileUp, ExternalLink } from 'lucide-react';
 import { ProductForm } from '@/components/products/ProductForm';
-import { toast } from 'sonner';
 
 export default function VendorProductsPage() {
   const { productsData, productsLoading, bulkDeleteProducts, bulkDeleteLoading } = useVendor();
@@ -47,8 +46,8 @@ export default function VendorProductsPage() {
     try {
       await bulkDeleteProducts(selectedProducts);
       setSelectedProducts([]);
-    } catch (error: any) {
-      toast.error(error?.message || 'Failed to delete products');
+    } catch {
+      // Handled centrally in useVendor hook
     }
   };
 

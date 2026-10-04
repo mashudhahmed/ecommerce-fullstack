@@ -14,7 +14,6 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { formatDate } from '@/lib/utils';
 import { Trash2 } from 'lucide-react';
-import { toast } from 'sonner';
 
 export default function AdminUsersPage() {
   const { user } = useAuth();
@@ -28,9 +27,8 @@ export default function AdminUsersPage() {
     if (!confirm(`Delete user "${name}"?`)) return;
     try {
       await deleteUser(id);
-      toast.success('User deleted');
-    } catch (error: any) {
-      toast.error(error?.message || 'Failed to delete user');
+    } catch {
+      // Handled centrally in useAdmin hook
     }
   };
 

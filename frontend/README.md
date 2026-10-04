@@ -7,13 +7,14 @@ SnapCart Frontend is a modern, production-grade e-commerce storefront built with
 ### Key Highlights
 
 - Modern Next.js 15 with App Router architecture
-- Server-side rendering (SSR) and static site generation (SSG)
-- Real-time updates via WebSocket
-- Optimistic UI updates for instant feedback
-- Responsive design for all devices
-- Dark mode support
-- Accessibility-first approach
-- Comprehensive role-based dashboards
+- Production Live Deployment on Vercel: [https://snapcart-fullstack.vercel.app](https://snapcart-fullstack.vercel.app)
+- Real-time buyer–seller inquiry chat drawer and WebSocket notifications
+- Multi-vendor package group order splitting & live 4-step package journey tracker
+- Customer self-service order cancellation with automated stock & escrow restoration
+- Faceted catalog search and discovery (departments, price tiers, star ratings, in-stock toggle)
+- Google OAuth 2.0 with dynamic origin resolution & TOTP/Email 2FA
+- Responsive design with dark mode and accessibility-first navigation
+- Comprehensive role-based dashboards (Customer, Vendor, Admin, SuperAdmin)
 
 ---
 
@@ -25,89 +26,70 @@ SnapCart Frontend is a modern, production-grade e-commerce storefront built with
 - TypeScript — Type-safe development
 
 ### State Management
-- Zustand — Client-side state management
-- TanStack Query (v5) — Server-state management and caching
-- Persist middleware — Zustand persistence
+- Zustand — Client-side persistent state (Auth, Cart, Preferences)
+- TanStack Query (v5) — Server-state management and query caching
 
 ### Styling
 - Tailwind CSS (v4) — Utility-first CSS framework
-- shadcn/ui — Reusable component library
-- tw-animate-css — Animation utilities
-- clsx + tailwind-merge — Conditional class names
+- shadcn/ui — High quality accessible component primitives
+- tw-animate-css — Micro-animations
+- clsx + tailwind-merge — Conditional class utility
 
 ### Forms and Validation
-- React Hook Form — Form handling
-- Zod — Schema validation
-- @hookform/resolvers — Zod integration
+- React Hook Form — Form state handling
+- Zod — Declarative runtime schema validation
+- @hookform/resolvers — Form resolver integration
 
 ### API and Networking
-- Axios — HTTP client with interceptors
-- Socket.io-client — Real-time WebSocket communication
-- cookies-next + js-cookie — Cookie management
+- Axios — HTTP client with auth refresh interceptors and idempotency key injection
+- Socket.io-client — Real-time WebSocket event streaming
+- cookies-next + js-cookie — Cookie handling
 
 ### UI Components
-- Lucide React — Icon library
-- Radix UI — Accessible primitives
-- CMDK — Command palette
-- Sonner — Toast notifications
-- Recharts — Charting library
-- @hello-pangea/dnd — Drag and drop
-
-### Animations
-- Framer Motion — Animation library
-
-### Utilities
-- date-fns — Date formatting
-- UUID — Unique ID generation
+- Lucide React — UI icon system
+- Radix UI — Accessible headless components
+- Sonner — High-performance toast notifications
+- Recharts — Analytics charting library
+- @hello-pangea/dnd — Drag-and-drop interactions
 
 ---
 
 ## Core Features
 
-### Authentication
+### Authentication & Security
 - User and vendor registration
 - Login with email/password
-- Two-factor authentication (2FA)
-- Email verification
-- Password reset flow
-- Session management with refresh tokens
-- Role-based access control
+- Google OAuth 2.0 social sign-in with automatic client origin return
+- Two-factor authentication (TOTP Authenticator apps & Email OTP)
+- Email verification & password recovery
+- Session refresh rotation with HttpOnly cross-site cookies
+- Role-based route guards (Customer, Vendor, Admin, SuperAdmin)
 
-### Product Experience
-- Product listing with filters and search
-- Product detail page with image gallery
-- Product reviews and ratings
-- Related products
-- Wishlist management
-- Category browsing
+### Product Experience & Discovery
+- Faceted search: filter by category/departments, price slider, star rating, and in-stock toggles
+- Product detail view with multi-image gallery
+- Product reviews, ratings, and sentiment breakdown
+- Wishlist management and synchronization
+- Direct seller contact button with floating live chat drawer
 
 ### Shopping Cart
-- Add, remove, and update items
-- Optimistic updates
-- Cart persistence
-- Merge guest cart on login
-- Cart summary and totals
+- Multi-vendor item grouping into distinct seller shipment packages
+- Optimistic updates and persistent cart storage
+- Seamless guest cart merging on login
+- Real-time stock reservation validation
 
-### Checkout and Orders
-- Secure checkout process
-- Order placement with idempotency
-- Order history and tracking
-- Order cancellation
-- Order status updates
+### Checkout & Order Lifecycle
+- Idempotent order checkout with address validation
+- Multi-vendor package order splitting with individual tracking
+- Live 4-step package journey tracker (Placed ➔ Processing ➔ Shipped ➔ Delivered)
+- Customer order cancellation modal with stock & escrow restoration
+- Printable PDF invoices and packing slips
 
-### User Dashboard
-- Profile management with avatar upload
-- Order summary and statistics
-- Recent orders
-- Wishlist management
-- Account settings
-
-### Vendor Dashboard
-- Product management (CRUD with bulk operations)
-- Order management and status updates
-- Analytics and performance metrics
-- Revenue tracking
-- Bulk product upload
+### Role-Based Portals
+- **Customer Account**: Order tracking, profile management, returns, addresses (`/profile`, `/orders`)
+- **Vendor Central**: Product catalog management, order fulfillment, balance & payout requests (`/vendor/dashboard`)
+- **Admin Portal**: Operational catalog oversight, customer management, financial reports (`/admin`)
+- **SuperAdmin Governance**: Administrator staff management, vendor KYC verification, payout approval (`/superadmin`)
 - Vendor profile management
 
 ### Admin Dashboard
@@ -351,15 +333,29 @@ Order pages provide:
 
 ## Environment Variables
 
-Create a `.env.local` file:
+Create a `.env.local` file based on `.env.example`:
 
+### Development (`.env.local`)
 ```env
-# API Configuration
+# API Configuration (NestJS backend running on port 3001)
 NEXT_PUBLIC_API_URL=http://localhost:3001/api/v1
 NEXT_PUBLIC_WS_URL=ws://localhost:3001
 
-# App Configuration
-NEXT_PUBLIC_APP_URL=http://localhost:3000
+# App Configuration (Next.js running on port 3002)
+NEXT_PUBLIC_APP_URL=http://localhost:3002
+
+# Features
+NEXT_PUBLIC_ENABLE_2FA=true
+```
+
+### Production (Configured in Vercel Dashboard)
+```env
+# API Configuration (Render Backend)
+NEXT_PUBLIC_API_URL=https://your-backend-service.onrender.com/api/v1
+NEXT_PUBLIC_WS_URL=wss://your-backend-service.onrender.com
+
+# App Configuration (Vercel Production Domain)
+NEXT_PUBLIC_APP_URL=https://snapcart-fullstack.vercel.app
 
 # Features
 NEXT_PUBLIC_ENABLE_2FA=true
@@ -372,8 +368,8 @@ NEXT_PUBLIC_ENABLE_2FA=true
 ### 1. Clone the Repository
 
 ```bash
-git clone <repository-url>
-cd ecommerce-frontend
+git clone https://github.com/mashudhahmed/ecommerce-fullstack.git
+cd ecommerce-fullstack/frontend
 ```
 
 ### 2. Install Dependencies
@@ -384,13 +380,17 @@ npm install
 
 ### 3. Configure Environment Variables
 
-Create a `.env.local` file based on the template above.
+```bash
+cp .env.example .env.local
+```
 
 ### 4. Start the Development Server
 
 ```bash
 npm run dev
 ```
+
+The application will be running at [http://localhost:3002](http://localhost:3002).
 
 ### 5. Build for Production
 
@@ -405,32 +405,31 @@ npm start
 
 | Command | Description |
 |---------|-------------|
-| `npm run dev` | Start development server |
-| `npm run build` | Build for production |
+| `npm run dev` | Start development server on port 3002 |
+| `npm run build` | Build optimized production bundle |
 | `npm run start` | Start production server |
-| `npm run lint` | Run ESLint |
-| `npm run clean` | Clean build artifacts |
+| `npm run lint` | Run ESLint check |
+| `npm run clean` | Clean `.next` and build caches |
 
 ---
 
 ## Key Features in Detail
 
 ### Authentication Flow
-1. User registers with email and password
-2. Verification email sent with 6-digit code
-3. User verifies email
-4. User logs in
-5. 2FA verification (if enabled)
-6. Redirect to appropriate dashboard
+1. User registers or signs in with email/password or Google OAuth
+2. Google OAuth passes origin directly to preserve Vercel production destination
+3. Verification email sent with 6-digit code for self-serve recovery
+4. 2FA verification modal (TOTP Authenticator or Email OTP)
+5. Automatic role-based navigation based on account capabilities
 
-### Role-Based Dashboards
+### Role-Based Portals
 
-| Role | Dashboard Access | Features |
+| Role | Primary Portal | Available Features |
 |------|-------------------|----------|
-| User | `/dashboard` | Orders, Profile, Wishlist |
-| Vendor | `/vendor` | Products, Orders, Analytics |
-| Admin | `/admin` | Users, Vendors, Orders, Products |
-| SuperAdmin | `/superadmin` | Admins, Users, Vendors, Statistics |
+| Customer | `/profile`, `/orders` | Order History, Package Tracker, Address Book, Wishlist |
+| Vendor | `/vendor/dashboard` | Product Catalog, Multi-Image Upload, Orders, Wallet & Payouts |
+| Store Admin | `/admin` | Store Operations, Catalog Moderation, Order Status, Reports |
+| SuperAdmin | `/superadmin` | Platform Governance, Admin Management, Vendor KYC Approvals |
 
 ### Real-Time Features
 - WebSocket connection established on login
@@ -492,35 +491,26 @@ npm run test:cov
 
 ## Deployment
 
-### Vercel (Recommended)
+### Vercel Deployment (Production)
 
-```bash
-# Install Vercel CLI
-npm i -g vercel
+The storefront is deployed and optimized for Vercel:
 
-# Deploy
-vercel
-```
+1. **Import Git Repository**:
+   - In the [Vercel Dashboard](https://vercel.com), import `ecommerce-fullstack`.
+   - Set **Root Directory** to `frontend`.
+   - Leave **Framework Preset** as `Next.js`.
 
-### Docker
+2. **Configure Environment Variables**:
+   Add the following under **Project Settings > Environment Variables**:
+   | Variable | Value Description |
+   |---|---|
+   | `NEXT_PUBLIC_API_URL` | Your Render backend API URL (e.g. `https://your-backend.onrender.com/api/v1`) |
+   | `NEXT_PUBLIC_WS_URL` | Your Render WebSocket URL (e.g. `wss://your-backend.onrender.com`) |
+   | `NEXT_PUBLIC_APP_URL` | Your Vercel frontend URL (`https://snapcart-fullstack.vercel.app`) |
+   | `NEXT_PUBLIC_ENABLE_2FA` | `true` |
 
-```dockerfile
-FROM node:22-alpine AS builder
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci
-COPY . .
-RUN npm run build
-
-FROM node:22-alpine AS runner
-WORKDIR /app
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/package.json ./package.json
-COPY --from=builder /app/node_modules ./node_modules
-EXPOSE 3000
-CMD ["npm", "start"]
-```
+3. **Deploy**:
+   - Click **Deploy**. Subsequent pushes to `main` will trigger automated zero-downtime previews and production releases.
 
 ---
 
@@ -536,12 +526,10 @@ CMD ["npm", "start"]
 
 ## Future Improvements
 
-- PWA support
-- Offline mode
-- Advanced search filters
-- Product comparison
-- Social login (Google, Facebook)
+- Progressive Web App (PWA) with offline caching
+- Additional payment gateways (Stripe, PayPal, SSLCommerz)
+- Product comparison side-by-side modal
 - Multi-language support (i18n)
-- Automated accessibility testing
-- End-to-end testing with Playwright
+- Automated visual regression testing
+- End-to-end test suite with Playwright
 - Performance monitoring with Lighthouse CI

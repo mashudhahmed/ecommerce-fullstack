@@ -7,12 +7,15 @@ SnapCart is a production-grade, enterprise-level e-commerce backend built with N
 ### Key Highlights
 
 - Production-ready with monitoring, logging, and health checks
-- Enterprise security with 2FA, rate limiting, and JWT
-- Multi-vendor marketplace with vendor approval workflow
-- Real-time updates via WebSocket
-- Search powered by Elasticsearch
-- File upload with Cloudinary and local fallback
+- Enterprise security with 2FA, rate limiting, cross-site cookies, and JWT
+- Multi-vendor marketplace with KYC onboarding and vendor approval workflow
+- Escrow balance hold and payout withdrawal request management
+- Real-time buyer-seller inquiry chat and order status updates via WebSocket
+- Search powered by Elasticsearch and dynamic TypeORM faceted filters
+- File uploads with Cloudinary CDN streaming and local disk fallback
 - Email templating with Handlebars
+- Google OAuth 2.0 with dynamic origin resolution
+- Pre-seeded test accounts across SuperAdmin, Admin, Vendor, and Customer roles
 - Interactive API documentation with Swagger UI
 
 ---
@@ -21,29 +24,28 @@ SnapCart is a production-grade, enterprise-level e-commerce backend built with N
 
 ### Backend Framework
 - NestJS (v10) — Modular, TypeScript-first framework
-- Node.js (v22) — Latest LTS version
+- Node.js (v22) — High-performance runtime
 
 ### Database and ORM
-- PostgreSQL — Primary database
-- TypeORM (v0.3) — ORM with migrations
-- Redis — Caching and session management
+- PostgreSQL — Local PostgreSQL or Neon Serverless PostgreSQL
+- TypeORM (v0.3) — Schema synchronization and migration runner
+- Redis — Optional caching and session management
 
 ### Authentication and Security
-- JWT — Stateless authentication
+- JWT — Stateless authentication with HttpOnly cross-site cookies
+- Google OAuth 2.0 — Social sign-in with client origin return
 - BCrypt — Password hashing (12 rounds)
 - 2FA — Two-factor authentication (TOTP + Email)
-- Rate Limiting — Per-user and global rate limits
-- Helmet — Security headers
-- CORS — Configurable CORS policy
+- Rate Limiting — Throttler guards for brute-force protection
+- Helmet & CORS — Secure headers and multi-origin allowlists
 
 ### Email and Notifications
-- Nodemailer — SMTP email sending
-- Handlebars — Email templating with layouts
-- WebSocket (Socket.io) — Real-time notifications
+- Nodemailer — SMTP email delivery with HTML Handlebars templates
+- WebSocket (Socket.io) — Real-time notification and inquiry chat rooms
 
 ### File Storage
-- Cloudinary — Cloud image storage
-- Local Storage — Fallback file storage
+- Cloudinary — Cloud image storage with automatic optimization
+- Local Storage — Fallback file storage for offline development
 
 ### Monitoring and Observability
 - Prometheus — Metrics collection
@@ -521,21 +523,28 @@ Create a `.env` file based on `.env.example`:
 # Application
 NODE_ENV=development
 PORT=3001
+FRONTEND_URL=https://snapcart-fullstack.vercel.app
 
-# Database
+# Database (Neon Serverless PostgreSQL or Local)
+# Option 1: Neon Connection String
+DATABASE_URL=postgresql://[user]:[password]@[endpoint].neon.tech/ecommerce_db?sslmode=require
+DATABASE_SSL=true
+DB_SYNCHRONIZE=true
+
+# Option 2: Standard Local Host
 DATABASE_HOST=localhost
-DATABASE_PORT=5434
+DATABASE_PORT=5432
 DATABASE_USER=postgres
 DATABASE_PASSWORD=your_password
 DATABASE_NAME=ecommerce_db
 
-# JWT
+# Security & JWT
 JWT_SECRET=your_super_secret_jwt_key_min_32_characters
 JWT_EXPIRES_IN=7d
 
-# Super Admin
-SUPERADMIN_EMAIL=admin@example.com
-SUPERADMIN_PASSWORD=Admin@123456
+# Super Admin Initial Seeder
+SUPERADMIN_EMAIL=superadmin@marketplace.com
+SUPERADMIN_PASSWORD=Password@123
 
 # Email (SMTP)
 SMTP_HOST=smtp.gmail.com
@@ -543,37 +552,72 @@ SMTP_PORT=587
 SMTP_USER=your_email@gmail.com
 SMTP_PASS=your_app_password
 SMTP_FROM_NAME=SnapCart
-ADMIN_NOTIFICATION_EMAILS=admin@example.com
+ADMIN_NOTIFICATION_EMAILS=superadmin@marketplace.com
 
-# Cloudinary
-CLOUDINARY_CLOUD_NAME=your_cloud_name
-CLOUDINARY_API_KEY=your_api_key
-CLOUDINARY_API_SECRET=your_api_secret
+# CORS Configuration
+CORS_ORIGIN=https://snapcart-fullstack.vercel.app,http://localhost:3002
 
-# Redis
-REDIS_URL=redis://localhost:6379
+# Cloudinary (Media Storage)
+CLOUDINARY_URL=cloudinary://api_key:api_secret@cloud_name
+# Or individual keys:
+# CLOUDINARY_CLOUD_NAME=your_cloud_name
+# CLOUDINARY_API_KEY=your_api_key
+# CLOUDINARY_API_SECRET=your_api_secret
 
-# Elasticsearch
-ELASTICSEARCH_NODE=http://localhost:9200
-ELASTICSEARCH_INDEX=products
+# Google OAuth 2.0 (Optional)
+GOOGLE_CLIENT_ID=your_google_client_id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=GOCSPX-your_google_client_secret
+GOOGLE_CALLBACK_URL=http://localhost:3001/api/v1/auth/google/callback
 ```
 
-### 4. Run Database Migrations
+### 4. Start the Server
 
 ```bash
-npm run migration:run
-```
-
-### 5. Start the Server
-
-```bash
-# Development
+# Development (Auto-reloading on port 3001)
 npm run start:dev
 
-# Production
+# Production Build & Run
 npm run build
 npm run start:prod
 ```
+
+---
+
+## Deploying to Render
+
+To deploy the backend API as a Render Web Service:
+
+1. **Create Web Service**:
+   - **Root Directory**: `backend`
+   - **Environment**: `Node`
+   - **Build Command**: `npm install && npm run build`
+   - **Start Command**: `npm run start:prod`
+2. **Configure Environment Variables in Render**:
+   - `NODE_ENV`: `production`
+   - `DATABASE_URL`: Your Neon PostgreSQL connection string (`?sslmode=require`)
+   - `DATABASE_SSL`: `true`
+   - `DB_SYNCHRONIZE`: `true` (auto-creates tables on first connect)
+   - `FRONTEND_URL`: `https://snapcart-fullstack.vercel.app`
+   - `CORS_ORIGIN`: `https://snapcart-fullstack.vercel.app`
+   - `JWT_SECRET`: Random 32+ character string
+   - `SUPERADMIN_EMAIL`: `superadmin@marketplace.com`
+   - `SUPERADMIN_PASSWORD`: `Password@123`
+   - `CLOUDINARY_URL`: `cloudinary://api_key:api_secret@cloud_name`
+3. **Port Binding**:
+   - The application automatically binds to `0.0.0.0:$PORT` which Render detects automatically.
+
+---
+
+## Pre-Seeded Test Accounts
+
+When the application boots with database connection, the database seeders initialize the following verified test accounts (Default password: `Password@123`):
+
+| Account | Email | Password | Role & Scope |
+|---|---|---|---|
+| **Super Admin** | `superadmin@marketplace.com` | `Password@123` | Platform-wide administrative governance (`/superadmin`) |
+| **Store Admin** | `admin@marketplace.com` | `Password@123` | Store operations, order status, catalog moderation (`/admin`) |
+| **Verified Vendor** | `vendor@marketplace.com` | `Password@123` | ElectroTech Solutions seller ($1,250 balance, `/vendor/dashboard`) |
+| **Customer** | `customer@marketplace.com` | `Password@123` | Verified shopper, order history, cancellation, package tracking |
 
 ---
 

@@ -137,7 +137,8 @@ export function useAuth() {
       console.log('Store updated - isAuthenticated:', true);
     },
     onError: (error: any) => {
-      if (error?.message?.toLowerCase().includes('2fa') || error?.statusCode === 401) {
+      const msg = error?.message?.toLowerCase() || '';
+      if (msg.includes('2fa token required') || msg.includes('2fa required')) {
         console.log('2FA required for this account');
         setTwoFactorRequired(true);
         setLoading(false);

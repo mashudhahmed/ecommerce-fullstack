@@ -38,6 +38,7 @@ import { validationSchema } from './config/validation.config';
 import { CacheModule } from './common/cache/cache.module';
 import { User } from './user/user.entity';
 import { Product } from './products/products.entity';
+import { VendorWallet } from './vendor/vendor-wallet.entity';
 import { SampleDataSeeder } from './database/sample-data.seeder';
 import { WishlistModule } from './wishlist/wishlist.module';
 import { NotificationsModule } from './notifications/notifications.module';
@@ -119,7 +120,7 @@ import { ChatModule } from './chat/chat.module';
       },
       inject: [ConfigService],
     }),
-    TypeOrmModule.forFeature([User, Category, Product]),
+    TypeOrmModule.forFeature([User, Category, Product, VendorWallet]),
 
     // Global Modules (only need to import once)
     CacheModule,
@@ -161,8 +162,6 @@ export class AppModule implements NestModule, OnApplicationBootstrap {
   }
 
   async onApplicationBootstrap() {
-    if (process.env.NODE_ENV !== 'production') {
-      await this.databaseSeeder.runSeeders();
-    }
+    await this.databaseSeeder.runSeeders();
   }
 }

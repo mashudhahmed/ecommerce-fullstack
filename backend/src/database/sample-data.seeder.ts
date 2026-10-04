@@ -24,12 +24,6 @@ export class SampleDataSeeder implements OnApplicationBootstrap {
   ) {}
 
   async onApplicationBootstrap() {
-    // Only seed in non-production environments
-    if (process.env.NODE_ENV === 'production') {
-      this.logger.log('Skipping sample data seeding in production');
-      return;
-    }
-
     // Check if we already have products – if yes, skip
     const productCount = await this.productRepo.count();
     if (productCount > 0) {
@@ -44,26 +38,32 @@ export class SampleDataSeeder implements OnApplicationBootstrap {
     this.logger.log('🌱 Seeding sample products and categories...');
 
     try {
-      // 1. Create a sample vendor user (if not exists)
+      // 1. Find or create a vendor user
       let vendor = await this.userRepo.findOne({
-        where: { email: 'sample-vendor@example.com' },
+        where: { email: 'vendor@marketplace.com' },
       });
       if (!vendor) {
-        const hashedPassword = await bcrypt.hash('Vendor123!', 12);
+        vendor = await this.userRepo.findOne({
+          where: { email: 'sample-vendor@example.com' },
+        });
+      }
+      if (!vendor) {
+        const hashedPassword = await bcrypt.hash('Password@123', 12);
         vendor = this.userRepo.create({
-          name: 'Sample Vendor',
-          email: 'sample-vendor@example.com',
+          name: 'ElectroTech Verified Store',
+          email: 'vendor@marketplace.com',
           password: hashedPassword,
           role: UserRole.VENDOR,
           isVerified: true,
           isVendorApproved: true,
-          vendorBusinessName: 'Sample Store',
-          vendorBusinessDescription: 'A sample store for demo purposes',
-          vendorPhoneNumber: '+1234567890',
-          vendorAddress: '123 Demo St, Sample City',
+          vendorBusinessName: 'ElectroTech Solutions',
+          vendorBusinessDescription:
+            'Premier authorized merchant for smartphones, computing hardware, and accessories.',
+          vendorPhoneNumber: '+1 (555) 019-8234',
+          vendorAddress: '450 Innovation Way, Tech District, CA',
         });
         vendor = await this.userRepo.save(vendor);
-        this.logger.log('✅ Sample vendor created');
+        this.logger.log('✅ Vendor created');
       }
 
       // 2. Create categories

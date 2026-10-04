@@ -194,11 +194,28 @@ function ProductDetailPageContent({ id }: { id: number }) {
     [product?.compareAtPrice, product?.price]
   );
 
-  const images = useMemo(
-    () =>
-      Array.isArray(product?.images) ? product.images : product?.imageUrl ? [product.imageUrl] : [],
-    [product]
-  );
+  const images = useMemo(() => {
+    const list: string[] = [];
+    if (product?.imageUrl && typeof product.imageUrl === 'string') {
+      list.push(product.imageUrl);
+    }
+    if (Array.isArray(product?.additionalImages)) {
+      product.additionalImages.forEach((img) => {
+        if (img && typeof img === 'string' && !list.includes(img)) {
+          list.push(img);
+        }
+      });
+    }
+    if (Array.isArray(product?.images)) {
+      product.images.forEach((img: any) => {
+        const url = typeof img === 'string' ? img : img?.url;
+        if (url && typeof url === 'string' && !list.includes(url)) {
+          list.push(url);
+        }
+      });
+    }
+    return list;
+  }, [product]);
 
   const averageRating = useMemo(
     () => (typeof product?.averageRating === 'number' ? product.averageRating : Number(product?.averageRating) || 0),

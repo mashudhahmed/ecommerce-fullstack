@@ -66,13 +66,14 @@ export interface AuthResponseWithToken extends AuthResponse {
 // ============================================================
 
 export interface Product {
-  images: boolean;
+  images?: any;
   id: number;
   title: string;
   price: number;
   description: string;
   stock: number;
   imageUrl?: string;
+  additionalImages?: string[];
   compareAtPrice?: number;
   isActive?: boolean;
   averageRating?: number;
@@ -91,6 +92,7 @@ export interface CreateProductData {
   description: string;
   stock: number;
   imageUrl?: string;
+  additionalImages?: string[];
   categoryId?: number;
 }
 

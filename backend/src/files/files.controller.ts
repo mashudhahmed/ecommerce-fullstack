@@ -7,6 +7,7 @@ import {
   UploadedFiles,
   BadRequestException,
   UseGuards,
+  Query,
 } from '@nestjs/common';
 import { FileInterceptor, AnyFilesInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiBearerAuth, ApiConsumes, ApiBody } from '@nestjs/swagger';
@@ -64,12 +65,16 @@ export class FilesController {
       },
     },
   })
-  async uploadMultipleFiles(@UploadedFiles() files: MulterFile[]) {
+  async uploadMultipleFiles(
+    @UploadedFiles() files: MulterFile[],
+    @Query('folder') folder?: string,
+  ) {
     if (!files || files.length === 0) {
       throw new BadRequestException('No files uploaded');
     }
+    const targetFolder = folder || 'snapcart/products';
     const results = await Promise.all(
-      files.map((file) => this.filesService.uploadFile(file, { folder: 'snapcart/reviews' })),
+      files.map((file) => this.filesService.uploadFile(file, { folder: targetFolder })),
     );
     return {
       urls: results.map((r) => r.url),

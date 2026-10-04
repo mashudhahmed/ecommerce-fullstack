@@ -68,17 +68,69 @@ export const reviewsService = {
     params.append('limit', String(limit));
     if (rating) params.append('rating', String(rating));
     
-    const { data } = await apiClient.get<ApiResponse<ReviewResponse>>(
+    const res = await apiClient.get<any>(
       `/reviews/product/${productId}?${params.toString()}`
     );
-    return data.data;
+    const body = res.data;
+
+    // Support both direct array and nested paginated data structures
+    const items: Review[] = Array.isArray(body?.data)
+      ? body.data
+      : Array.isArray(body?.data?.data)
+        ? body.data.data
+        : Array.isArray(body)
+          ? body
+          : [];
+
+    const pagination = body?.meta?.pagination || body?.meta || body?.data?.meta || {};
+    const total = Number(pagination.total ?? items.length);
+    const pageNum = Number(pagination.page ?? page);
+    const limitNum = Number(pagination.limit ?? limit);
+    const totalPages = Number(pagination.totalPages ?? Math.max(1, Math.ceil(total / (limitNum || 10))));
+
+    return {
+      data: items,
+      meta: {
+        total,
+        page: pageNum,
+        limit: limitNum,
+        totalPages,
+        averageRating: Number(body?.meta?.average ?? body?.meta?.averageRating ?? 0),
+        ratingDistribution: body?.meta?.distribution ?? body?.meta?.ratingDistribution ?? {
+          1: 0,
+          2: 0,
+          3: 0,
+          4: 0,
+          5: 0,
+        },
+      },
+    };
   },
 
   async getProductReviewStats(productId: number): Promise<ReviewStats> {
-    const { data } = await apiClient.get<ApiResponse<ReviewStats>>(
+    const res = await apiClient.get<any>(
       `/reviews/product/${productId}/stats`
     );
-    return data.data;
+    const raw = res.data?.data || res.data || {};
+    const distribution = raw.distribution || raw.ratingDistribution || {
+      1: 0,
+      2: 0,
+      3: 0,
+      4: 0,
+      5: 0,
+    };
+
+    return {
+      average: Number(raw.average ?? raw.averageRating ?? 0),
+      total: Number(raw.total ?? raw.totalReviews ?? 0),
+      distribution: {
+        1: Number(distribution[1] ?? 0),
+        2: Number(distribution[2] ?? 0),
+        3: Number(distribution[3] ?? 0),
+        4: Number(distribution[4] ?? 0),
+        5: Number(distribution[5] ?? 0),
+      },
+    };
   },
 
   async createReview(reviewData: {

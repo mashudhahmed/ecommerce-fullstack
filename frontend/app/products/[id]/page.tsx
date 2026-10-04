@@ -16,7 +16,6 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ReviewList } from '@/components/reviews/ReviewList';
-import { ReviewForm } from '@/components/reviews/ReviewForm';
 import { RelatedProducts } from '@/components/products/RelatedProducts';
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
 import {
@@ -668,15 +667,7 @@ function ProductDetailPageContent({ id }: { id: number }) {
               </TabsTrigger>
             </TabsList>
             <TabsContent value="reviews" className="mt-8">
-              <div className="space-y-6">
-                <ReviewList productId={product.id} />
-                {mounted && isAuthenticated && (
-                  <div className="mt-8 border-t border-border pt-8">
-                    <h3 className="mb-4 text-lg font-semibold">Write a review</h3>
-                    <ReviewForm productId={product.id} />
-                  </div>
-                )}
-              </div>
+              <ReviewList productId={product.id} />
             </TabsContent>
             <TabsContent value="details" className="mt-8">
               <div className="max-w-2xl space-y-4">

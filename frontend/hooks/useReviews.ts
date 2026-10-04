@@ -22,12 +22,12 @@ export function useReviews(productId: number) {
     queryKey: ['reviews', 'list', productId],
     queryFn: ({ pageParam = 1 }) =>
       reviewsService.getProductReviews(productId, pageParam, 10),
-    // ✅ Safe check: ensure lastPage and meta exist
-    getNextPageParam: (lastPage) => {
-      if (!lastPage || !lastPage.meta) return undefined;
-      return lastPage.meta.page < lastPage.meta.totalPages 
-        ? lastPage.meta.page + 1 
-        : undefined;
+    getNextPageParam: (lastPage: any) => {
+      const meta = lastPage?.meta;
+      if (!meta || typeof meta.page !== 'number' || typeof meta.totalPages !== 'number') {
+        return undefined;
+      }
+      return meta.page < meta.totalPages ? meta.page + 1 : undefined;
     },
     enabled: !!productId,
     initialPageParam: 1,
@@ -64,8 +64,13 @@ export function useReviews(productId: number) {
     },
   });
 
-  // ✅ Safe: ensure data.pages exists before flattening
-  const allReviews = data?.pages?.flatMap((page) => page?.data || []) || [];
+  // ✅ Safe: support both { data: Review[] } and direct Review[] array pages
+  const allReviews =
+    data?.pages?.flatMap((page: any) => {
+      if (Array.isArray(page?.data)) return page.data;
+      if (Array.isArray(page)) return page;
+      return [];
+    }) || [];
 
   return {
     reviews: allReviews,

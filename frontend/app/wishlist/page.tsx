@@ -1,6 +1,7 @@
 // app/wishlist/page.tsx
 'use client';
 
+import { useState, useEffect } from 'react';
 import { useWishlist } from '@/hooks/useWishlist';
 import { useAuth } from '@/hooks/useAuth';
 import { ProductCard } from '@/components/products/ProductCard';
@@ -12,7 +13,13 @@ import { Skeleton } from '@/components/ui/skeleton';
 export default function WishlistPage() {
   const { wishlist, isLoading, total, clearWishlist, clearLoading } = useWishlist();
   const { user, isAuthenticated } = useAuth();
-  const isAdminOrSuperAdmin = user?.role === 'admin' || user?.role === 'superadmin';
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const isAdminOrSuperAdmin = mounted && (user?.role === 'admin' || user?.role === 'superadmin');
 
   if (isAdminOrSuperAdmin) {
     const dashboardHref = user?.role === 'superadmin' ? '/superadmin' : '/admin';
@@ -105,7 +112,7 @@ export default function WishlistPage() {
         )}
       </div>
 
-      {!isAuthenticated && (
+      {mounted && !isAuthenticated && (
         <div className="flex items-center gap-2.5 rounded-xl border border-orange-200 bg-orange-50/80 p-3.5 text-sm text-orange-900 dark:border-orange-900/50 dark:bg-orange-950/30 dark:text-orange-200">
           <Info className="h-4 w-4 shrink-0 text-orange-600 dark:text-orange-400" />
           <p className="flex-1">

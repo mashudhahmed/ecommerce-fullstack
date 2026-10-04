@@ -138,14 +138,20 @@ function ProductDetailPageContent({ id }: { id: number }) {
   const { addToWishlist, removeFromWishlist } = useWishlist();
   const { reviews, stats, statsLoading } = useReviews(id);
 
+  const [mounted, setMounted] = useState(false);
   const [quantity, setQuantity] = useState(1);
   const [selectedImage, setSelectedImage] = useState(0);
   const isInWishlist = useWishlistStore((state) =>
     state.items.some((item) => item.id === id)
   );
+  const isItemInWishlist = mounted && isInWishlist;
   const [isWishlistLoading, setIsWishlistLoading] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // ============================================================
   // FETCH PRODUCT - Optimized with staleTime
@@ -531,12 +537,12 @@ function ProductDetailPageContent({ id }: { id: number }) {
                     className="h-12 w-12 rounded-full hover:border-orange-300 hover:bg-orange-50 dark:hover:bg-orange-950/20"
                     onClick={handleWishlistToggle}
                     disabled={isWishlistLoading}
-                    aria-label={isInWishlist ? 'Remove from wishlist' : 'Add to wishlist'}
+                    aria-label={isItemInWishlist ? 'Remove from wishlist' : 'Add to wishlist'}
                   >
                     <Heart
                       className={cn(
                         'h-5 w-5 transition-colors',
-                        isInWishlist ? 'fill-orange-600 text-orange-600' : 'text-muted-foreground'
+                        isItemInWishlist ? 'fill-orange-600 text-orange-600' : 'text-muted-foreground'
                       )}
                     />
                   </Button>
@@ -664,7 +670,7 @@ function ProductDetailPageContent({ id }: { id: number }) {
             <TabsContent value="reviews" className="mt-8">
               <div className="space-y-6">
                 <ReviewList productId={product.id} />
-                {isAuthenticated && (
+                {mounted && isAuthenticated && (
                   <div className="mt-8 border-t border-border pt-8">
                     <h3 className="mb-4 text-lg font-semibold">Write a review</h3>
                     <ReviewForm productId={product.id} />

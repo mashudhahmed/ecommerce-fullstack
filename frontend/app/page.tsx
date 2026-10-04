@@ -28,7 +28,6 @@ import {
   CheckCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useAuth } from '@/hooks/useAuth';
 
 // ============================================================
 // MARKET PULSE — signature ticker
@@ -91,8 +90,6 @@ const MarketPulse = () => (
 // ============================================================
 
 const HeroSection = () => {
-  const { isAuthenticated } = useAuth();
-
   return (
     <section className="grid grid-cols-1 items-center gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:gap-6">
       <div className="space-y-6">
@@ -124,14 +121,12 @@ const HeroSection = () => {
               <ArrowRight className="h-4 w-4" />
             </Button>
           </Link>
-          {!isAuthenticated && (
-            <Link
-              href="/register"
-              className="text-[15px] font-medium text-foreground underline decoration-muted-foreground/40 underline-offset-4 transition-colors hover:decoration-foreground"
-            >
-              Become a vendor →
-            </Link>
-          )}
+          <Link
+            href="/register"
+            className="text-[15px] font-medium text-foreground underline decoration-muted-foreground/40 underline-offset-4 transition-colors hover:decoration-foreground"
+          >
+            Become a vendor →
+          </Link>
         </div>
 
         <div className="flex items-center gap-5 pt-4">

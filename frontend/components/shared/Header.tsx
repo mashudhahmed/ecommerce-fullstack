@@ -92,6 +92,7 @@ export function Header() {
   const { count: wishlistCount } = useWishlist();
 
   // State
+  const [mounted, setMounted] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -104,6 +105,10 @@ export function Header() {
   // Refs
   const notificationInterval = useRef<NodeJS.Timeout | null>(null);
   const mountedRef = useRef(true);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // ============================================================
   // WEBSOCKET - Production Grade (No UI Indicator)
@@ -427,7 +432,7 @@ export function Header() {
                     aria-label={`Wishlist${wishlistCount > 0 ? ` (${wishlistCount} items)` : ''}`}
                   >
                     <Heart className="h-5 w-5" />
-                    {wishlistCount > 0 && (
+                    {mounted && wishlistCount > 0 && (
                       <span className="absolute -top-1 -right-1 flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-orange-600 px-1 text-[10px] font-semibold tabular-nums text-white">
                         {wishlistCount}
                       </span>
@@ -445,7 +450,7 @@ export function Header() {
                       aria-label={`Shopping cart${totalItems > 0 ? ` (${totalItems} items)` : ''}`}
                     >
                       <ShoppingCart className="h-5 w-5" />
-                      {totalItems > 0 && (
+                      {mounted && totalItems > 0 && (
                         <span className="absolute -top-1 -right-1 flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-orange-600 px-1 text-[10px] font-semibold tabular-nums text-white">
                           {totalItems}
                         </span>
@@ -554,7 +559,7 @@ export function Header() {
             )}
 
             {/* Notifications */}
-            {isAuthenticated && (
+            {mounted && isAuthenticated && (
               <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
                 <PopoverTrigger asChild>
                   <Button
@@ -683,7 +688,12 @@ export function Header() {
             )}
 
             {/* User Menu */}
-            {isAuthenticated ? (
+            {!mounted ? (
+              <div className="flex items-center gap-2">
+                <div className="h-8 w-16 animate-pulse rounded-full bg-muted/40" />
+                <div className="h-8 w-18 animate-pulse rounded-full bg-muted/40" />
+              </div>
+            ) : isAuthenticated ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button

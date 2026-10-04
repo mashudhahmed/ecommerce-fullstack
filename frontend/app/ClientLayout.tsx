@@ -1,6 +1,5 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { Header } from '@/components/shared/Header';
 import { AuthHeader } from '@/components/shared/AuthHeader';
 import { Footer } from '@/components/shared/Footer';
@@ -12,13 +11,7 @@ export default function ClientLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const [mounted, setMounted] = useState(false);
   const pathname = usePathname();
-
-  // Fix hydration mismatch
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   const isAdminRoute =
     pathname?.startsWith('/admin') || pathname?.startsWith('/superadmin');
@@ -33,10 +26,6 @@ export default function ClientLayout({
   ].some((p) => pathname?.startsWith(p));
 
   const showFooter = !isAdminRoute && !isVendorRoute && !isAuthPage;
-
-  if (!mounted) {
-    return null;
-  }
 
   // Admin & Superadmin / Vendor routes have their own specialized dashboard layout and sidebars
   if (isAdminRoute || isVendorRoute) {

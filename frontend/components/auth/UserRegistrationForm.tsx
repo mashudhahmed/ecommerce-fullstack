@@ -140,7 +140,6 @@ export function UserRegistrationForm() {
       };
 
       const result = await register(payload);
-      toast.success(result.message || 'Registration successful!');
       router.push(`/verify-email?email=${encodeURIComponent(data.email)}`);
     } catch (error: any) {
       let message = 'Registration failed. Please try again.';

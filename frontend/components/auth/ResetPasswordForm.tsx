@@ -115,7 +115,6 @@ export function ResetPasswordForm() {
       console.log('✅ Code verified');
       setVerificationToken(result.verificationToken);
       setStep('password');
-      toast.success('Code verified successfully!');
       setCode('');
       
     } catch (error: any) {
@@ -151,7 +150,6 @@ export function ResetPasswordForm() {
       });
       
       console.log('✅ Password reset successfully');
-      toast.success('Password reset successfully!');
       localStorage.removeItem('reset_email');
       
       setTimeout(() => {
@@ -181,7 +179,6 @@ export function ResetPasswordForm() {
     try {
       console.log('📧 Resending code to:', email);
       await forgotPassword(email);
-      toast.success('New code sent to your email!');
       
       const interval = setInterval(() => {
         setResendCooldown((prev) => {

@@ -122,7 +122,6 @@ export function VendorRegistrationForm() {
       };
 
       const result = await registerVendor(payload);
-      toast.success(result.message || 'Vendor registration successful!');
       router.push(`/verify-email?email=${encodeURIComponent(data.email)}`);
     } catch (error: any) {
       let message = 'Registration failed. Please try again.';

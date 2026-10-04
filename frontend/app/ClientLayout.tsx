@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import { Header } from '@/components/shared/Header';
 import { AuthHeader } from '@/components/shared/AuthHeader';
 import { Footer } from '@/components/shared/Footer';
-import { Toaster } from 'sonner';
 import { usePathname } from 'next/navigation';
 import { SkipToContent } from '@/components/shared/SkipToContent';
 
@@ -47,7 +46,6 @@ export default function ClientLayout({
         <main id="main-content" className="flex-1">
           {children}
         </main>
-        <Toaster position="top-right" richColors />
       </div>
     );
   }
@@ -61,7 +59,6 @@ export default function ClientLayout({
         <main id="main-content" className="flex flex-1 items-center justify-center px-4 py-10">
           {children}
         </main>
-        <Toaster position="top-right" richColors />
       </div>
     );
   }
@@ -75,7 +72,6 @@ export default function ClientLayout({
         {children}
       </main>
       {showFooter && <Footer />}
-      <Toaster position="top-right" richColors />
     </div>
   );
 }

@@ -54,7 +54,6 @@ export default function ProfilePage() {
   const handleLogout = async () => {
     try {
       await logout();
-      toast.success('Logged out successfully');
       router.push('/login');
     } catch (error) {
       toast.error('Failed to logout');

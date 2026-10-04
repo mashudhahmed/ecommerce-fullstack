@@ -77,7 +77,6 @@ export function VendorOnboardingStatus({ user }: VendorOnboardingStatusProps) {
   const handleLogout = async () => {
     try {
       await logout();
-      toast.success('Signed out successfully');
       router.push('/login');
     } catch {
       toast.error('Failed to log out');

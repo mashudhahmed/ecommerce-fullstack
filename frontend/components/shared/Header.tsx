@@ -269,7 +269,6 @@ export function Header() {
   const handleLogout = useCallback(async () => {
     try {
       await logout();
-      toast.success('Logged out successfully');
       router.push('/');
     } catch (error) {
       toast.error('Failed to logout');

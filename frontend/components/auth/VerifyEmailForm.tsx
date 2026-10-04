@@ -48,7 +48,6 @@ export function VerifyEmailForm() {
   const onSubmit = async (data: VerifyEmailInput) => {
     try {
       await verifyEmail({ email, code: data.code });
-      toast.success('Email verified successfully!');
       router.push('/');
     } catch (error: any) {
       toast.error(error?.response?.data?.message || 'Invalid verification code.');
@@ -59,7 +58,6 @@ export function VerifyEmailForm() {
     try {
       setResendLoading(true);
       await resendVerification(email);
-      toast.success('New verification code sent to your email.');
     } catch (error: any) {
       toast.error('Failed to resend verification code.');
     } finally {

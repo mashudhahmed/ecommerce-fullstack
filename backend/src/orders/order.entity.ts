@@ -55,7 +55,7 @@ export class Order {
   @Expose()
   status!: OrderStatus;
 
-  @Column({ nullable: true })
+  @Column({ type: 'text', nullable: true })
   @Expose()
   shippingAddress?: string;
 

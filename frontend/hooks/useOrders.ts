@@ -116,11 +116,27 @@ export function useOrders() {
         toast.error(`Too many orders. Please wait ${retryAfter} seconds.`);
         return;
       }
-      const message =
-        error?.response?.data?.message ||
-        error?.message ||
-        'Failed to create order';
-      toast.error(message);
+
+      const raw = error?.response?.data?.message || error?.message;
+      let displayMessage = 'Unable to place order. Please check your delivery details.';
+
+      if (Array.isArray(raw)) {
+        // If multiple technical messages returned, check for key friendly concepts
+        const hasAddressIssue = raw.some((m: string) => /address/i.test(m));
+        if (hasAddressIssue) {
+          displayMessage = 'Please enter a complete delivery address to place your order.';
+        } else if (raw[0]) {
+          displayMessage = String(raw[0]);
+        }
+      } else if (typeof raw === 'string') {
+        if (/address|shipping/i.test(raw)) {
+          displayMessage = 'Please enter a complete delivery address to place your order.';
+        } else {
+          displayMessage = raw;
+        }
+      }
+
+      toast.error(displayMessage);
     },
   });
 

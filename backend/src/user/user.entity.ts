@@ -87,6 +87,15 @@ export class User {
   @Expose()
   avatar?: string;
 
+  // ✅ Customer address & phone fields
+  @Column({ nullable: true, type: 'text' })
+  @Expose()
+  address?: string;
+
+  @Column({ nullable: true })
+  @Expose()
+  phoneNumber?: string;
+
   // ✅ Google OAuth ID for social sign-in
   @Column({ nullable: true })
   @Index()

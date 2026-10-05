@@ -14,6 +14,8 @@ export interface User {
   isVendorRejected?: boolean;
   vendorRejectionReason?: string;
   avatar?: string; 
+  address?: string;
+  phoneNumber?: string;
   vendorBusinessName?: string;
   vendorBusinessDescription?: string;
   vendorPhoneNumber?: string;
@@ -320,7 +322,7 @@ export interface CreateOrderData {
     productId: number;
     quantity: number;
   }[];
-  shippingAddress?: string;
+  shippingAddress: string;
 }
 
 export interface UpdateOrderStatusData {

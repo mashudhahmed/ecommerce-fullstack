@@ -674,6 +674,8 @@ export class UserService {
       isVendorApproved: user.isVendorApproved,
       isVendorRejected: user.isVendorRejected,
       avatar: user.avatar,
+      address: user.address,
+      phoneNumber: user.phoneNumber,
       vendorBusinessName: user.vendorBusinessName,
       vendorBusinessDescription: user.vendorBusinessDescription,
       vendorPhoneNumber: user.vendorPhoneNumber,

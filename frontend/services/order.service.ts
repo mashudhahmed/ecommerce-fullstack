@@ -7,7 +7,7 @@ export interface CreateOrderData {
     productId: number;
     quantity: number;
   }[];
-  shippingAddress?: string;
+  shippingAddress: string;
   idempotencyKey?: string;
 }
 

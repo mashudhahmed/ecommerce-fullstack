@@ -123,9 +123,7 @@ export class OrdersService {
       order.user = user;
       order.total = total;
       order.status = OrderStatus.PENDING;
-      if (createOrderDto.shippingAddress) {
-        order.shippingAddress = createOrderDto.shippingAddress;
-      }
+      order.shippingAddress = createOrderDto.shippingAddress?.trim() || '';
 
       const savedOrder = await queryRunner.manager.save(order);
       const commissionRate = 10; // Standard 10% platform commission

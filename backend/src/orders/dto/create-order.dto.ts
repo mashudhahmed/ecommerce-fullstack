@@ -11,6 +11,8 @@ import {
   ArrayMaxSize,
   IsOptional,
   IsString,
+  MinLength,
+  MaxLength,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
@@ -42,10 +44,12 @@ export class CreateOrderDto {
 
   @ApiProperty({
     example: '123 Main St, New York, NY 10001',
-    description: 'Shipping address',
-    required: false,
+    description: 'Shipping delivery address',
+    required: true,
   })
-  @IsOptional()
-  @IsString()
-  shippingAddress?: string;
+  @IsString({ message: 'Please provide a valid delivery address' })
+  @IsNotEmpty({ message: 'Delivery address is required to place your order' })
+  @MinLength(5, { message: 'Please provide a complete delivery address' })
+  @MaxLength(1000, { message: 'Delivery address is too long' })
+  shippingAddress!: string;
 }

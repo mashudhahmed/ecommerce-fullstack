@@ -13,7 +13,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
-import { formatPrice } from '@/lib/utils';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Badge } from '@/components/ui/badge';
+import { formatPrice, cn } from '@/lib/utils';
+import { apiClient } from '@/lib/api-client';
 import {
   ArrowLeft,
   ShoppingBag,
@@ -24,6 +27,9 @@ import {
   MapPin,
   Store,
   Truck,
+  User as UserIcon,
+  CheckCircle2,
+  AlertCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -68,13 +74,33 @@ function CheckoutItemRow({ item }: { item: any }) {
 
 export default function CheckoutPage() {
   const router = useRouter();
-  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
+  const { user, isAuthenticated, isLoading: authLoading, refetchUser } = useAuth();
   const { items, totalPrice, clearCart, isLoading: cartLoading } = useCart();
   const { createOrder, isCreatingOrder } = useOrders();
 
   const isAdminOrSuperAdmin = user?.role === 'admin' || user?.role === 'superadmin';
 
-  const [shippingAddress, setShippingAddress] = useState('');
+  // Recipient & Contact Details State
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
+
+  // Structured Delivery Address State
+  const [streetAddress, setStreetAddress] = useState('');
+  const [city, setCity] = useState('');
+  const [state, setState] = useState('');
+  const [postalCode, setPostalCode] = useState('');
+  const [country, setCountry] = useState('United States');
+  const [deliveryNotes, setDeliveryNotes] = useState('');
+
+  // Profile Sync
+  const [saveToProfile, setSaveToProfile] = useState(true);
+  const [isProfileSynced, setIsProfileSynced] = useState(false);
+  const hasSyncedFromProfileRef = useRef(false);
+
+  // Field validation error states
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
   const [isPlacing, setIsPlacing] = useState(false);
   const isOrderPlacedRef = useRef(false);
 
@@ -106,6 +132,40 @@ export default function CheckoutPage() {
     return Array.from(map.values());
   }, [items]);
 
+  // Sync profile data on mount / when user loads
+  useEffect(() => {
+    if (user && !hasSyncedFromProfileRef.current) {
+      if (user.name) setFullName(user.name);
+      if (user.email) setEmail(user.email);
+      if (user.phoneNumber || user.vendorPhoneNumber) {
+        setPhoneNumber(user.phoneNumber || user.vendorPhoneNumber || '');
+      }
+
+      const existingAddress = user.address || user.vendorAddress;
+      if (existingAddress) {
+        const parts = existingAddress.split(',').map((p) => p.trim());
+        if (parts.length >= 3) {
+          setStreetAddress(parts[0] || '');
+          setCity(parts[1] || '');
+          const stateZip = parts[2] || '';
+          const stateZipMatch = stateZip.match(/^([A-Za-z\s]+)\s+([A-Za-z0-9-]+)$/);
+          if (stateZipMatch) {
+            setState(stateZipMatch[1].trim());
+            setPostalCode(stateZipMatch[2].trim());
+          } else {
+            setState(stateZip);
+          }
+          if (parts[3]) setCountry(parts[3]);
+        } else {
+          setStreetAddress(existingAddress);
+        }
+      }
+
+      setIsProfileSynced(Boolean(user.name && user.email));
+      hasSyncedFromProfileRef.current = true;
+    }
+  }, [user]);
+
   // Redirect to login if not authenticated
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -113,15 +173,92 @@ export default function CheckoutPage() {
     }
   }, [authLoading, isAuthenticated, router]);
 
-  // Redirect to cart if cart is empty (only if NOT currently placing an order and NOT admin)
+  // Redirect to cart if cart is empty
   useEffect(() => {
     if (!cartLoading && items.length === 0 && isAuthenticated && !isOrderPlacedRef.current && !isAdminOrSuperAdmin) {
       router.push('/cart');
     }
   }, [cartLoading, items.length, isAuthenticated, isAdminOrSuperAdmin, router]);
 
+  // Input change handler with real-time error clearance
+  const handleInputChange = (field: string, setter: (val: string) => void) => (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    setter(e.target.value);
+    if (errors[field]) {
+      setErrors((prev) => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+    }
+  };
+
+  // Form validator for mandatory fields
+  const validateDeliveryForm = (): boolean => {
+    const errs: Record<string, string> = {};
+
+    if (!fullName.trim()) {
+      errs.fullName = 'Recipient name is required';
+    } else if (fullName.trim().length < 2) {
+      errs.fullName = 'Please enter a valid full name';
+    }
+
+    if (!email.trim()) {
+      errs.email = 'Email address is required for receipts';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      errs.email = 'Please enter a valid email address';
+    }
+
+    if (!phoneNumber.trim()) {
+      errs.phoneNumber = 'Phone number is required for courier alerts';
+    } else if (phoneNumber.replace(/[^\d+]/g, '').length < 7) {
+      errs.phoneNumber = 'Please enter a valid phone number (min 7 digits)';
+    }
+
+    if (!streetAddress.trim()) {
+      errs.streetAddress = 'Street address is required';
+    } else if (streetAddress.trim().length < 5) {
+      errs.streetAddress = 'Please enter a complete street address';
+    }
+
+    if (!city.trim()) {
+      errs.city = 'City is required';
+    }
+
+    if (!state.trim()) {
+      errs.state = 'State / Province is required';
+    }
+
+    if (!postalCode.trim()) {
+      errs.postalCode = 'Postal / ZIP code is required';
+    } else if (postalCode.trim().length < 3) {
+      errs.postalCode = 'Please enter a valid postal code';
+    }
+
+    setErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
+  // Formatted shipping address combining contact and physical destination
+  const formattedShippingAddress = useMemo(() => {
+    const addressLine = `${streetAddress.trim()}, ${city.trim()}, ${state.trim()} ${postalCode.trim()}, ${country.trim()}`;
+    const contactLine = `${fullName.trim()} (Phone: ${phoneNumber.trim()} | Email: ${email.trim()})`;
+    const notesLine = deliveryNotes.trim() ? ` [Delivery Note: ${deliveryNotes.trim()}]` : '';
+    return `${contactLine}\n${addressLine}${notesLine}`;
+  }, [fullName, phoneNumber, email, streetAddress, city, state, postalCode, country, deliveryNotes]);
+
   const handlePlaceOrder = async () => {
     if (items.length === 0 || isPlacing || isCreatingOrder) return;
+
+    if (!validateDeliveryForm()) {
+      toast.error('Please enter a complete delivery address to place your order.');
+      const addressSection = document.getElementById('delivery-section');
+      if (addressSection) {
+        addressSection.scrollIntoView({ behavior: 'smooth' });
+      }
+      return;
+    }
 
     // Filter only valid items with valid IDs
     const validOrderItems = items
@@ -140,9 +277,26 @@ export default function CheckoutPage() {
     isOrderPlacedRef.current = true;
 
     try {
+      // Sync address & contact info back to profile if user selected it
+      if (saveToProfile) {
+        try {
+          const profileAddress = `${streetAddress.trim()}, ${city.trim()}, ${state.trim()} ${postalCode.trim()}, ${country.trim()}`;
+          await apiClient.patch('/users/profile', {
+            name: fullName.trim(),
+            phoneNumber: phoneNumber.trim(),
+            address: profileAddress,
+          });
+          if (refetchUser) {
+            await refetchUser();
+          }
+        } catch (profileErr) {
+          console.warn('Profile auto-sync notice:', profileErr);
+        }
+      }
+
       await createOrder({
         items: validOrderItems,
-        shippingAddress: shippingAddress.trim() || undefined,
+        shippingAddress: formattedShippingAddress,
       });
 
       // Clear cart silently so it doesn't trigger a separate "Cart cleared" toast
@@ -256,29 +410,225 @@ export default function CheckoutPage() {
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
         {/* Left Column: Shipping Address & Order Items */}
         <div className="space-y-6 lg:col-span-2">
-          {/* Shipping Address Card */}
-          <div className="rounded-2xl border border-border p-6 shadow-sm">
-            <h2 className="mb-4 flex items-center gap-2 text-lg font-bold tracking-tight">
-              <MapPin className="h-5 w-5 text-orange-600" />
-              Delivery Address
-            </h2>
-            <div className="space-y-3">
+          {/* Delivery & Contact Information Card */}
+          <div id="delivery-section" className="rounded-2xl border border-border p-6 shadow-sm space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border/60 pb-4">
               <div>
-                <Label htmlFor="shippingAddress" className="text-sm font-medium">
-                  Shipping Address
-                </Label>
-                <Input
-                  id="shippingAddress"
-                  placeholder="Street address, City, State, ZIP code"
-                  value={shippingAddress}
-                  onChange={(e) => setShippingAddress(e.target.value)}
-                  className="mt-1.5"
-                  disabled={isBusy}
-                />
+                <h2 className="flex items-center gap-2 text-lg font-bold tracking-tight">
+                  <MapPin className="h-5 w-5 text-orange-600" />
+                  Delivery & Contact Information
+                </h2>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Mandatory destination and contact details required for dispatch and delivery
+                </p>
               </div>
-              <p className="text-xs text-muted-foreground">
-                Delivering to: <span className="font-medium text-foreground">{user?.name}</span> ({user?.email})
-              </p>
+
+              {isProfileSynced ? (
+                <Badge variant="secondary" className="gap-1.5 py-1 px-2.5 text-xs bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border-emerald-200">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  Synced with profile
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="gap-1.5 py-1 px-2.5 text-xs text-amber-700 bg-amber-50 dark:bg-amber-950/40 dark:text-amber-400 border-amber-300">
+                  <AlertCircle className="h-3.5 w-3.5" />
+                  Enter recipient info
+                </Badge>
+              )}
+            </div>
+
+            {/* Recipient Contact Section */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                <UserIcon className="h-4 w-4 text-muted-foreground" />
+                <span>Recipient Contact Details</span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                <div>
+                  <Label htmlFor="fullName" className="text-xs font-semibold">
+                    Full Name <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    id="fullName"
+                    placeholder="Recipient's full name"
+                    value={fullName}
+                    onChange={handleInputChange('fullName', setFullName)}
+                    className={cn('mt-1.5 h-10', errors.fullName && 'border-destructive focus-visible:ring-destructive')}
+                    disabled={isBusy}
+                  />
+                  {errors.fullName && (
+                    <p className="mt-1 text-xs text-destructive">{errors.fullName}</p>
+                  )}
+                </div>
+
+                <div>
+                  <Label htmlFor="email" className="text-xs font-semibold">
+                    Email Address <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="For order receipts"
+                    value={email}
+                    onChange={handleInputChange('email', setEmail)}
+                    className={cn('mt-1.5 h-10', errors.email && 'border-destructive focus-visible:ring-destructive')}
+                    disabled={isBusy}
+                  />
+                  {errors.email && (
+                    <p className="mt-1 text-xs text-destructive">{errors.email}</p>
+                  )}
+                </div>
+
+                <div className="sm:col-span-2 md:col-span-1">
+                  <Label htmlFor="phoneNumber" className="text-xs font-semibold">
+                    Phone Number <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    id="phoneNumber"
+                    type="tel"
+                    placeholder="Courier contact e.g. +1..."
+                    value={phoneNumber}
+                    onChange={handleInputChange('phoneNumber', setPhoneNumber)}
+                    className={cn('mt-1.5 h-10', errors.phoneNumber && 'border-destructive focus-visible:ring-destructive')}
+                    disabled={isBusy}
+                  />
+                  {errors.phoneNumber && (
+                    <p className="mt-1 text-xs text-destructive">{errors.phoneNumber}</p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* Shipping Destination Section */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                <MapPin className="h-4 w-4 text-muted-foreground" />
+                <span>Shipping Destination</span>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="streetAddress" className="text-xs font-semibold">
+                    Street Address & Apartment / Unit <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    id="streetAddress"
+                    placeholder="e.g. 742 Evergreen Terrace, Apt 4B"
+                    value={streetAddress}
+                    onChange={handleInputChange('streetAddress', setStreetAddress)}
+                    className={cn('mt-1.5 h-10', errors.streetAddress && 'border-destructive focus-visible:ring-destructive')}
+                    disabled={isBusy}
+                  />
+                  {errors.streetAddress && (
+                    <p className="mt-1 text-xs text-destructive">{errors.streetAddress}</p>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div>
+                    <Label htmlFor="city" className="text-xs font-semibold">
+                      City <span className="text-destructive">*</span>
+                    </Label>
+                    <Input
+                      id="city"
+                      placeholder="e.g. Springfield"
+                      value={city}
+                      onChange={handleInputChange('city', setCity)}
+                      className={cn('mt-1.5 h-10', errors.city && 'border-destructive focus-visible:ring-destructive')}
+                      disabled={isBusy}
+                    />
+                    {errors.city && (
+                      <p className="mt-1 text-xs text-destructive">{errors.city}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <Label htmlFor="state" className="text-xs font-semibold">
+                      State / Province <span className="text-destructive">*</span>
+                    </Label>
+                    <Input
+                      id="state"
+                      placeholder="e.g. Oregon or OR"
+                      value={state}
+                      onChange={handleInputChange('state', setState)}
+                      className={cn('mt-1.5 h-10', errors.state && 'border-destructive focus-visible:ring-destructive')}
+                      disabled={isBusy}
+                    />
+                    {errors.state && (
+                      <p className="mt-1 text-xs text-destructive">{errors.state}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <Label htmlFor="postalCode" className="text-xs font-semibold">
+                      ZIP / Postal Code <span className="text-destructive">*</span>
+                    </Label>
+                    <Input
+                      id="postalCode"
+                      placeholder="e.g. 97477"
+                      value={postalCode}
+                      onChange={handleInputChange('postalCode', setPostalCode)}
+                      className={cn('mt-1.5 h-10', errors.postalCode && 'border-destructive focus-visible:ring-destructive')}
+                      disabled={isBusy}
+                    />
+                    {errors.postalCode && (
+                      <p className="mt-1 text-xs text-destructive">{errors.postalCode}</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="country" className="text-xs font-semibold">
+                      Country
+                    </Label>
+                    <Input
+                      id="country"
+                      value={country}
+                      onChange={handleInputChange('country', setCountry)}
+                      className="mt-1.5 h-10"
+                      disabled={isBusy}
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="deliveryNotes" className="text-xs font-semibold">
+                      Delivery Instructions (Optional)
+                    </Label>
+                    <Input
+                      id="deliveryNotes"
+                      placeholder="Gate code, leave at porch, etc."
+                      value={deliveryNotes}
+                      onChange={handleInputChange('deliveryNotes', setDeliveryNotes)}
+                      className="mt-1.5 h-10"
+                      disabled={isBusy}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Profile Sync Checkbox */}
+            <div className="pt-2">
+              <div className="flex items-start gap-3 rounded-xl border border-border/80 bg-muted/30 p-3.5">
+                <Checkbox
+                  id="saveToProfile"
+                  checked={saveToProfile}
+                  onCheckedChange={(checked) => setSaveToProfile(Boolean(checked))}
+                  disabled={isBusy}
+                  className="mt-0.5 cursor-pointer"
+                />
+                <div className="space-y-0.5">
+                  <Label htmlFor="saveToProfile" className="text-xs font-semibold cursor-pointer">
+                    Save this address and contact information to my profile
+                  </Label>
+                  <p className="text-[11px] text-muted-foreground">
+                    Automatically pre-fill these details for faster, 1-click checkouts in future sessions.
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -357,7 +707,7 @@ export default function CheckoutPage() {
             </div>
 
             <Button
-              className="w-full rounded-full bg-orange-600 text-white hover:bg-orange-700"
+              className="w-full rounded-full bg-orange-600 text-white hover:bg-orange-700 cursor-pointer"
               size="lg"
               onClick={handlePlaceOrder}
               disabled={isBusy}
@@ -374,7 +724,7 @@ export default function CheckoutPage() {
 
             <p className="flex items-center justify-center gap-1.5 text-center text-xs text-muted-foreground">
               <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
-              By placing your order, you agree to our Terms of Service.
+              Verified checkout · 100% Buyer Protection
             </p>
           </div>
         </div>

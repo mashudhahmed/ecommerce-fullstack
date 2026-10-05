@@ -126,8 +126,13 @@
   *:hover {
     scrollbar-color: rgba(234, 88, 12, 0.6) transparent;
   }
+  html, body {
+    overflow-x: clip;
+    max-width: 100vw;
+    -webkit-tap-highlight-color: transparent;
+  }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground min-h-screen;
   }
   html {
     @apply font-sans;
@@ -247,5 +252,17 @@
   }
   .dark .scrollbar-orange::-webkit-scrollbar-thumb:hover {
     background-color: #f97316;
+  }
+
+  /* Responsive container max width controls for ultra-wide displays (2xl+) */
+  @media (min-width: 1536px) {
+    .container {
+      max-width: 1400px;
+    }
+  }
+
+  /* Safe area padding for modern notched / home indicator devices */
+  .safe-bottom {
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
   }
 }

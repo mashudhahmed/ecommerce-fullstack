@@ -332,14 +332,14 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border bg-background/80 backdrop-blur-sm">
-      <div className="container mx-auto px-4">
-        <div className="flex h-16 items-center justify-between gap-3">
+      <div className="container mx-auto px-2.5 sm:px-4">
+        <div className="flex h-15 sm:h-16 items-center justify-between gap-1.5 sm:gap-3">
           {/* Logo */}
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 items-center gap-1 sm:gap-2">
             <Button
               variant="ghost"
               size="icon"
-              className="rounded-full lg:hidden"
+              className="h-8 w-8 sm:h-9 sm:w-9 rounded-full lg:hidden"
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
               aria-label="Toggle menu"
             >
@@ -836,14 +836,14 @@ export function Header() {
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 sm:gap-2">
                 <Link href="/login">
-                  <Button variant="ghost" size="sm" className="rounded-full">
+                  <Button variant="ghost" size="sm" className="h-8 sm:h-9 px-2.5 sm:px-3 text-xs sm:text-sm rounded-full">
                     Login
                   </Button>
                 </Link>
                 <Link href="/register">
-                  <Button size="sm" className="rounded-full bg-zinc-950 text-white hover:bg-zinc-800">
+                  <Button size="sm" className="h-8 sm:h-9 px-2.5 sm:px-3 text-xs sm:text-sm rounded-full bg-zinc-950 text-white hover:bg-zinc-800">
                     Sign up
                   </Button>
                 </Link>

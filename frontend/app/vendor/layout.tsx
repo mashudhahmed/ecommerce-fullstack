@@ -258,7 +258,7 @@ export default function VendorLayout({
             </Link>
           </Button>
         </div>
-        <div className="p-4 md:p-8">
+        <div className="p-3 sm:p-4 md:p-6 lg:p-8 max-w-7xl mx-auto w-full">
           {children}
         </div>
       </main>

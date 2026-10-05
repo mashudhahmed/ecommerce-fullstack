@@ -147,9 +147,15 @@ function ProductDetailPageContent({ id }: { id: number }) {
   const [isWishlistLoading, setIsWishlistLoading] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [showStickyBar, setShowStickyBar] = useState(false);
 
   useEffect(() => {
     setMounted(true);
+    const handleScroll = () => {
+      setShowStickyBar(window.scrollY > 480);
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
   // ============================================================
@@ -353,7 +359,7 @@ function ProductDetailPageContent({ id }: { id: number }) {
 
   return (
     <ErrorBoundary>
-      <div className="container mx-auto px-4 py-6 md:py-10">
+      <div className="space-y-8 max-w-7xl mx-auto">
         {/* Breadcrumb */}
         <nav className="mb-6 flex items-center gap-2 text-sm text-muted-foreground" aria-label="Breadcrumb">
           <Link href="/" className="transition-colors hover:text-foreground">
@@ -718,6 +724,33 @@ function ProductDetailPageContent({ id }: { id: number }) {
             onClose={() => setIsChatOpen(false)}
           />
         )}
+
+        {/* Sticky Mobile Bottom Bar — Industry standard for high mobile conversions (Amazon / Nike) */}
+        {showStickyBar && !isOutOfStock && (
+          <div className="fixed bottom-0 inset-x-0 z-40 border-t border-border bg-background/95 backdrop-blur-md p-3 px-4 shadow-xl md:hidden safe-bottom transition-all duration-300">
+            <div className="flex items-center justify-between gap-3 max-w-md mx-auto">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-semibold">{product.title}</p>
+                <p className="text-sm font-black text-orange-600 tabular-nums">
+                  {formatPrice(product.price)}
+                </p>
+              </div>
+              <Button
+                size="sm"
+                className="h-10 px-5 rounded-full bg-zinc-950 text-white hover:bg-zinc-800 text-xs font-bold gap-1.5 shrink-0"
+                onClick={handleAddToCart}
+                disabled={addToCartLoading}
+              >
+                {addToCartLoading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <ShoppingCart className="h-3.5 w-3.5" />
+                )}
+                Add to cart
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
     </ErrorBoundary>
   );
@@ -729,7 +762,7 @@ function ProductDetailPageContent({ id }: { id: number }) {
 
 function ProductDetailSkeleton() {
   return (
-    <div className="container mx-auto px-4 py-6 md:py-10">
+    <div className="space-y-8 max-w-7xl mx-auto">
       <Skeleton className="mb-6 h-4 w-56 rounded-full" />
       <div className="grid grid-cols-1 gap-10 lg:grid-cols-2 lg:gap-14">
         <div className="space-y-4">

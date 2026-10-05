@@ -98,7 +98,7 @@ const HeroSection = () => {
           Marketplace · Est. 2024
         </div>
 
-        <h1 className="text-[2.75rem] font-black leading-[1.02] tracking-tight text-foreground sm:text-6xl lg:text-[4.5rem]">
+        <h1 className="text-[2rem] min-[380px]:text-[2.5rem] sm:text-5xl md:text-6xl lg:text-[4.5rem] font-black leading-[1.04] tracking-tight text-foreground">
           Shop the internet&apos;s
           <br />
           best <span className="font-serif font-medium italic text-orange-600">independent</span>
@@ -199,7 +199,7 @@ const FeaturesSection = () => {
   return (
     <section className="grid grid-cols-2 divide-x divide-y divide-border overflow-hidden rounded-2xl border border-border md:grid-cols-4 md:divide-y-0">
       {features.map((feature) => (
-        <div key={feature.label} className="flex items-center gap-3 p-5 md:p-6">
+        <div key={feature.label} className="flex items-center gap-2.5 sm:gap-3 p-3.5 min-[380px]:p-5 md:p-6">
           <feature.icon className="h-5 w-5 shrink-0 text-orange-600" />
           <div>
             <p className="text-sm font-semibold leading-tight">{feature.label}</p>

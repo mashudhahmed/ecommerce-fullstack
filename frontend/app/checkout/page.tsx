@@ -396,10 +396,10 @@ export default function CheckoutPage() {
   const isBusy = isPlacing || isCreatingOrder;
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="space-y-6 max-w-7xl mx-auto">
       <Link
         href="/cart"
-        className="mb-6 inline-flex items-center text-sm text-muted-foreground transition-colors hover:text-foreground"
+        className="inline-flex items-center text-sm text-muted-foreground transition-colors hover:text-foreground"
       >
         <ArrowLeft className="mr-2 h-4 w-4" />
         Back to cart

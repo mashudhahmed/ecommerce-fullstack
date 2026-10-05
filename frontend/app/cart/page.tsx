@@ -124,8 +124,8 @@ export default function CartPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-7xl">
-      <div className="flex items-center justify-between mb-8">
+    <div className="space-y-8 max-w-7xl mx-auto">
+      <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-black tracking-tight">Shopping Cart</h1>
           <p className="text-sm text-muted-foreground mt-1">

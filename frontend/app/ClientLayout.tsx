@@ -54,10 +54,10 @@ export default function ClientLayout({
 
   // Regular Storefront pages (Home, Products, Categories, Cart, Checkout, Orders, Wishlist, Profile)
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex min-h-screen flex-col overflow-x-clip">
       <SkipToContent />
       <Header />
-      <main id="main-content" className="container mx-auto flex-1 px-4 py-8">
+      <main id="main-content" className="container mx-auto flex-1 px-3 sm:px-4 md:px-6 lg:px-8 py-6 md:py-8">
         {children}
       </main>
       {showFooter && <Footer />}

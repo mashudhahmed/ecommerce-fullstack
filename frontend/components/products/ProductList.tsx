@@ -23,11 +23,11 @@ export function ProductList({
   if (isLoading) {
     return (
       <div className={cn(
-        "grid gap-3 sm:gap-4 md:gap-5",
-        columns === 2 && "grid-cols-2",
-        columns === 3 && "grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4",
-        columns === 4 && "grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4",
-        columns === 5 && "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5"
+        "grid gap-2.5 min-[380px]:gap-3.5 sm:gap-4 md:gap-5",
+        columns === 2 && "grid-cols-1 min-[340px]:grid-cols-2",
+        columns === 3 && "grid-cols-1 min-[340px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4",
+        columns === 4 && "grid-cols-1 min-[340px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-5",
+        columns === 5 && "grid-cols-1 min-[340px]:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5"
       )}>
         {Array.from({ length: 8 }).map((_, i) => (
           <div key={i} className="space-y-2 rounded-xl sm:rounded-2xl border border-border/40 p-2.5 sm:p-3.5 bg-card">
@@ -51,14 +51,16 @@ export function ProductList({
     );
   }
 
+  const gridClasses = cn(
+    "grid gap-2.5 min-[380px]:gap-3.5 sm:gap-4 md:gap-5",
+    columns === 2 && "grid-cols-1 min-[340px]:grid-cols-2",
+    columns === 3 && "grid-cols-1 min-[340px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4",
+    columns === 4 && "grid-cols-1 min-[340px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-5",
+    columns === 5 && "grid-cols-1 min-[340px]:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5"
+  );
+
   return (
-    <div className={cn(
-      "grid gap-3 sm:gap-4 md:gap-5",
-      columns === 2 && "grid-cols-2",
-      columns === 3 && "grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4",
-      columns === 4 && "grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4",
-      columns === 5 && "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5"
-    )}>
+    <div className={gridClasses}>
       {products.map((product) => (
         <ProductCard key={product.id} product={product} variant={variant} />
       ))}

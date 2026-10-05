@@ -28,9 +28,9 @@ export function RelatedProducts({ currentProductId, categoryId }: RelatedProduct
     return (
       <div className="mt-12">
         <h2 className="text-2xl font-bold mb-6">You May Also Like</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-5">
           {[...Array(4)].map((_, i) => (
-            <Skeleton key={i} className="h-80 w-full rounded-xl" />
+            <Skeleton key={i} className="aspect-square w-full rounded-xl" />
           ))}
         </div>
       </div>
@@ -44,7 +44,7 @@ export function RelatedProducts({ currentProductId, categoryId }: RelatedProduct
   return (
     <div className="mt-12">
       <h2 className="text-2xl font-bold mb-6">You May Also Like</h2>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-5">
         {products.map((product) => (
           <ProductCard key={product.id} product={product} />
         ))}

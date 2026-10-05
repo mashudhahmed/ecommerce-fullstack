@@ -98,22 +98,35 @@ export class SampleDataSeeder implements OnApplicationBootstrap {
 
       // 3. Create products (20 sample products)
 
-      // ✅ Category-relevant placeholder photos.
-      // LoremFlickr returns real, tagged stock photography (not random noise),
-      // and `lock=<n>` pins a deterministic image per product so re-seeding
-      // (or re-running tests against the same rows) always yields the same
-      // photo instead of a new random one each time.
-      const categoryImageKeywords: Record<string, string> = {
-        Electronics: 'electronics,gadget',
-        Clothing: 'fashion,apparel',
-        Books: 'book,reading',
-        'Home & Garden': 'garden,homedecor',
-        'Toys & Games': 'toys,boardgame',
+      // ✅ High-resolution, reliable Unsplash product photography
+      const productImagesMap: Record<string, string> = {
+        'Smartphone X': 'https://images.unsplash.com/photo-1510557880182-3d4d3cba35a5?w=800&auto=format&fit=crop&q=80',
+        'Wireless Headphones': 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&auto=format&fit=crop&q=80',
+        'Smartwatch Pro': 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800&auto=format&fit=crop&q=80',
+        'Bluetooth Speaker': 'https://images.unsplash.com/photo-1545454675-3531b543be5d?w=800&auto=format&fit=crop&q=80',
+        'Laptop Stand': 'https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?w=800&auto=format&fit=crop&q=80',
+        'T-Shirt (Cotton)': 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=800&auto=format&fit=crop&q=80',
+        'Jeans (Slim Fit)': 'https://images.unsplash.com/photo-1541099649105-f69ad21f3246?w=800&auto=format&fit=crop&q=80',
+        'Jacket (Waterproof)': 'https://images.unsplash.com/photo-1551028719-00167b16eac5?w=800&auto=format&fit=crop&q=80',
+        'Sneakers (Running)': 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=800&auto=format&fit=crop&q=80',
+        'Sunglasses': 'https://images.unsplash.com/photo-1511499767150-a48a237f0083?w=800&auto=format&fit=crop&q=80',
+        'Fiction Novel': 'https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=800&auto=format&fit=crop&q=80',
+        'Cookbook': 'https://images.unsplash.com/photo-1497633762265-9d179a990aa6?w=800&auto=format&fit=crop&q=80',
+        'Science Textbook': 'https://images.unsplash.com/photo-1457369804613-52c61a468e7d?w=800&auto=format&fit=crop&q=80',
+        "Children's Picture Book": 'https://images.unsplash.com/photo-1512820790803-83ca734da794?w=800&auto=format&fit=crop&q=80',
+        'Gardening Tools Set': 'https://images.unsplash.com/photo-1617576683096-00fc8eecb3af?w=800&auto=format&fit=crop&q=80',
+        'Plant Pots (Set of 3)': 'https://images.unsplash.com/photo-1485955900006-10f4d324d411?w=800&auto=format&fit=crop&q=80',
+        'Outdoor String Lights': 'https://images.unsplash.com/photo-1519741497674-611481863552?w=800&auto=format&fit=crop&q=80',
+        'Board Game': 'https://images.unsplash.com/photo-1610890716171-6b1bb98ffd09?w=800&auto=format&fit=crop&q=80',
+        'Puzzle (1000 pieces)': 'https://images.unsplash.com/photo-1588702547919-26089e690ecc?w=800&auto=format&fit=crop&q=80',
+        'Action Figure': 'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=800&auto=format&fit=crop&q=80',
       };
 
-      const buildImageUrl = (category: string, seed: number): string => {
-        const keywords = categoryImageKeywords[category] || 'product';
-        return `https://loremflickr.com/400/400/${encodeURIComponent(keywords)}?lock=${seed}`;
+      const buildImageUrl = (title: string): string => {
+        return (
+          productImagesMap[title] ||
+          'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&auto=format&fit=crop&q=80'
+        );
       };
 
       const productsData = [
@@ -236,7 +249,7 @@ export class SampleDataSeeder implements OnApplicationBootstrap {
           isActive: true,
           averageRating: 0,
           totalReviews: 0,
-          imageUrl: buildImageUrl(p.category, index),
+          imageUrl: buildImageUrl(p.title),
         });
       });
 
